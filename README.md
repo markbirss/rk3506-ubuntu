@@ -12,7 +12,7 @@ BOARD | Tested OK with luckfox-config |
 | Luckfox Lyra Pi W emmc| Yes |
 | ArmSoM Forge 1 | Still need to modify luckfox-config for the availabe RM_IO gpio for this board - see below *|
 
-Suppored Boards
+Supported Boards
 1. luckfox_lyra_pi-w_ubuntu_emmc_defconfig
 2. luckfox_lyra_pi-w_ubuntu_sdmmc_defconfig
 3. luckfox_lyra_plus_ubuntu_sdmmc_defconfig
