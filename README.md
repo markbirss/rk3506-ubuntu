@@ -27,6 +27,7 @@ Forge1 RM_IO pinout
 
 <img width="1178" height="985" alt="Screenshot_20250822_114824" src="https://github.com/user-attachments/assets/567eced2-b9ec-4428-b498-12ce52f47dac" />
 
+Key: Green=GPIO, Blue=RM_IO, Red=Power, Black=GND
 
 ```
 [Wireless still requires wifi kernel modules installed]
