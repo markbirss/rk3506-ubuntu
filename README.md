@@ -1,6 +1,14 @@
 # rk3506-ubuntu
 Ubuntu 24.04.3 OS image builder for various RK3506 SBC
 
+BOARD | Tested OK |
+|:--|:--|
+| Luckfox Lyra | Yes |
+| Luckfox Lyra PLUS | Yes | 
+| Luckfox Lyra Zero W | Yes |
+| Luckfox Lyra Pi W emmc| Yes |
+| ArmSoM Forge 1 | Still need to modify luckfox-config for the usable RM_IO gpio - see below *|
+
 Suppored Boards
 1. luckfox_lyra_pi-w_ubuntu_emmc_defconfig
 2. luckfox_lyra_pi-w_ubuntu_sdmmc_defconfig
@@ -9,6 +17,9 @@ Suppored Boards
 5. luckfox_lyra_ultra-w_ubuntu_emmc_defconfig
 6. luckfox_lyra_zero-w_ubuntu_sdmmc_defconfig
 7. rk3506-armsom-forge1_ubuntu_sdmmc_defconfig
+
+Forge1 RM_IO pinout
+<img width="1178" height="985" alt="Screenshot_20250822_114824" src="https://github.com/user-attachments/assets/567eced2-b9ec-4428-b498-12ce52f47dac" />
 
 ```
 git clone https://github.com/markbirss/rk3506-ubuntu.git
@@ -38,4 +49,6 @@ mv ubuntu_24.04.3.tar.gz ubuntu
 # sudo rkflash.sh update
 
 ```
+Support my work and considder **buying  me a coffee**
 
+https://buymeacoffee.com/mark.birss
