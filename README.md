@@ -24,6 +24,9 @@ Suppored Boards
 
 <img width="1044" height="810" alt="Screenshot_20250811_221648" src="https://github.com/user-attachments/assets/b02b38e1-ece0-4d57-887b-de53b5d9d7d0" />
 
+Luckfox Lyra pinout
+
+https://wiki.luckfox.com/Luckfox-Lyra/Pinout/
 
 Forge1 RM_IO pinout
 
