@@ -24,7 +24,7 @@ Forge1 RM_IO pinout
 ```
 git clone https://github.com/markbirss/rk3506-ubuntu.git
 
-cd lyra-ubuntu/device/rockchip/.chips/rk3506
+cd rk3506-ubuntu/device/rockchip/.chips/rk3506
 ln -s .chips/rk3506 ../../rk3506
 ln -s .chips/rk3506 ../../.chip
 cd ../../../../
