@@ -19,6 +19,10 @@ Suppored Boards
 7. rk3506-armsom-forge1_ubuntu_sdmmc_defconfig
 
 Forge1 RM_IO pinout
+
+<img width="599" height="456" alt="ArmSoM-Forge1-RockChip-RK3506J-SBC" src="https://github.com/user-attachments/assets/0cdb2628-1c2d-4dca-ab5a-171c4b9258f1" />
+
+
 <img width="1178" height="985" alt="Screenshot_20250822_114824" src="https://github.com/user-attachments/assets/567eced2-b9ec-4428-b498-12ce52f47dac" />
 
 ```
