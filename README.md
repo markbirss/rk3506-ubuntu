@@ -18,6 +18,11 @@ Suppored Boards
 6. luckfox_lyra_zero-w_ubuntu_sdmmc_defconfig
 7. rk3506-armsom-forge1_ubuntu_sdmmc_defconfig
 
+<img width="1044" height="810" alt="Screenshot_20250811_221618" src="https://github.com/user-attachments/assets/6ddc87d3-118e-4c18-bd1b-7213a583ea9d" />
+
+<img width="1044" height="810" alt="Screenshot_20250811_221640" src="https://github.com/user-attachments/assets/243fcbed-6f48-4417-ba7e-6a6203df4d14" />
+
+<img width="1044" height="810" alt="Screenshot_20250811_221648" src="https://github.com/user-attachments/assets/b02b38e1-ece0-4d57-887b-de53b5d9d7d0" />
 
 
 Forge1 RM_IO pinout
