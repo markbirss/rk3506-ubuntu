@@ -61,8 +61,8 @@ mkdir ubuntu
 mv ubuntu_24.04.3.tar.gz ubuntu
 
 #./build.sh lunch
-# sudo build.sh
-# sudo rkflash.sh update
+# sudo ./build.sh
+# sudo ./rkflash.sh update
 
 ```
 Support my work and considder **buying  me a coffee**
