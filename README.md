@@ -1,4 +1,6 @@
 # rk3506-ubuntu
+<img width="141" height="113" alt="image" src="https://github.com/user-attachments/assets/5892e750-fe4c-450c-ae79-890676f01448" />
+
 Ubuntu 24.04.3 OS image builder for various RK3506 SBC
 
 BOARD | Tested OK with luckfox-config |
