@@ -1,0 +1,10 @@
+config BR2_PACKAGE_RKWIFIBT
+	bool "rkwifibt"
+
+if BR2_PACKAGE_RKWIFIBT
+
+config BR2_PACKAGE_RKWIFIBT_STATIC
+	bool "Enable static"
+	default y if BR2_STATIC_LIBS
+
+endif

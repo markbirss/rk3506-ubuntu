@@ -1,0 +1,126 @@
+From 6a0bbb2ff3623925cd1a3d7337be072ca78c6f83 Mon Sep 17 00:00:00 2001
+From: Liang Chen <cl@rock-chips.com>
+Date: Fri, 8 Dec 2023 17:35:13 +0800
+Subject: [PATCH 5/5] net: wireless: rockchip_wlan: bcmdhd: fix schedule bug
+ for PREEMPT_RT
+
+Signed-off-by: Liang Chen <cl@rock-chips.com>
+Change-Id: If3bf2c5cb50a068709d1bd248ea091293f0fc5af
+---
+ .../rockchip_wlan/rkwifi/bcmdhd/dhd_msgbuf.c  | 12 ++++++++--
+ .../rockchip_wlan/rkwifi/bcmdhd/linux_osl.c   | 12 ++++++++--
+ .../rockchip_wlan/rkwifi/bcmdhd/wl_cfgscan.c  | 24 +++++++++++++++----
+ 3 files changed, 40 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/net/wireless/rockchip_wlan/rkwifi/bcmdhd/dhd_msgbuf.c b/drivers/net/wireless/rockchip_wlan/rkwifi/bcmdhd/dhd_msgbuf.c
+index 2262533f53a53..28a8f0158e3cf 100755
+--- a/drivers/net/wireless/rockchip_wlan/rkwifi/bcmdhd/dhd_msgbuf.c
++++ b/drivers/net/wireless/rockchip_wlan/rkwifi/bcmdhd/dhd_msgbuf.c
+@@ -10887,11 +10887,19 @@ dhd_fillup_ioct_reqst(dhd_pub_t *dhd, uint16 len, uint cmd, void* buf, int ifidx
+ 		return BCME_ERROR;
+ 
+ #ifdef DBG_DW_CHK_PCIE_READ_LATENCY
+-	preempt_disable();
++	//preempt_disable();
++	if (IS_ENABLED(CONFIG_PREEMPT_RT))
++		migrate_disable();
++	else
++		preempt_disable();
+ 	begin_time = ktime_get();
+ 	R_REG(dhd->osh, (volatile uint16 *)(dhd->bus->tcm + addr));
+ 	end_time = ktime_get();
+-	preempt_enable();
++	//preempt_enable();
++	if (IS_ENABLED(CONFIG_PREEMPT_RT))
++		migrate_enable();
++	else
++		preempt_enable();
+ 	diff_ns = ktime_to_ns(ktime_sub(end_time, begin_time));
+ 	/* Check if the delta is greater than 1 msec */
+ 	if (diff_ns > (1 * NSEC_PER_MSEC)) {
+diff --git a/drivers/net/wireless/rockchip_wlan/rkwifi/bcmdhd/linux_osl.c b/drivers/net/wireless/rockchip_wlan/rkwifi/bcmdhd/linux_osl.c
+index 621d3dae5dbcf..58f4b6f04cbac 100755
+--- a/drivers/net/wireless/rockchip_wlan/rkwifi/bcmdhd/linux_osl.c
++++ b/drivers/net/wireless/rockchip_wlan/rkwifi/bcmdhd/linux_osl.c
+@@ -1259,12 +1259,20 @@ BCMFASTPATH(osl_cpu_relax)(void)
+ 
+ extern void osl_preempt_disable(osl_t *osh)
+ {
+-	preempt_disable();
++	//preempt_disable();
++	if (IS_ENABLED(CONFIG_PREEMPT_RT))
++		migrate_disable();
++	else
++		preempt_disable();
+ }
+ 
+ extern void osl_preempt_enable(osl_t *osh)
+ {
+-	preempt_enable();
++	//preempt_enable();
++	if (IS_ENABLED(CONFIG_PREEMPT_RT))
++		migrate_enable();
++	else
++		preempt_enable();
+ }
+ 
+ #if defined(BCMDBG_ASSERT) || defined(BCMASSERT_LOG)
+diff --git a/drivers/net/wireless/rockchip_wlan/rkwifi/bcmdhd/wl_cfgscan.c b/drivers/net/wireless/rockchip_wlan/rkwifi/bcmdhd/wl_cfgscan.c
+index d2a2bf1cb454a..25d1fc2edc450 100755
+--- a/drivers/net/wireless/rockchip_wlan/rkwifi/bcmdhd/wl_cfgscan.c
++++ b/drivers/net/wireless/rockchip_wlan/rkwifi/bcmdhd/wl_cfgscan.c
+@@ -575,7 +575,11 @@ s32 wl_inform_bss_cache(struct bcm_cfg80211 *cfg)
+ 
+ 	WL_SCAN(("scanned AP count (%d)\n", bss_list->count));
+ 	bss_list = cfg->bss_list;
+-	preempt_disable();
++	//preempt_disable();
++	if (IS_ENABLED(CONFIG_PREEMPT_RT))
++		migrate_disable();
++	else
++		preempt_disable();
+ 	bi = next_bss(bss_list, bi);
+ 	for_each_bss(bss_list, bi, i) {
+ 		err = wl_inform_single_bss(cfg, bi, false);
+@@ -594,7 +598,11 @@ s32 wl_inform_bss_cache(struct bcm_cfg80211 *cfg)
+ 		}
+ 		node = node->next;
+ 	}
+-	preempt_enable();
++	//preempt_enable();
++	if (IS_ENABLED(CONFIG_PREEMPT_RT))
++		migrate_enable();
++	else
++		preempt_enable();
+ 
+ 	return err;
+ }
+@@ -628,7 +636,11 @@ wl_inform_bss(struct bcm_cfg80211 *cfg)
+ #ifdef ESCAN_CHANNEL_CACHE
+ 	reset_roam_cache(cfg);
+ #endif /* ESCAN_CHANNEL_CACHE */
+-	preempt_disable();
++	//preempt_disable();
++	if (IS_ENABLED(CONFIG_PREEMPT_RT))
++		migrate_disable();
++	else
++		preempt_disable();
+ 	bi = next_bss(bss_list, bi);
+ 	for_each_bss(bss_list, bi, i) {
+ #ifdef ESCAN_CHANNEL_CACHE
+@@ -639,7 +651,11 @@ wl_inform_bss(struct bcm_cfg80211 *cfg)
+ 			WL_ERR(("bss inform failed\n"));
+ 		}
+ 	}
+-	preempt_enable();
++	//preempt_enable();
++	if (IS_ENABLED(CONFIG_PREEMPT_RT))
++		migrate_enable();
++	else
++		preempt_enable();
+ #endif
+ 
+ 	if (cfg->autochannel && ndev) {
+-- 
+2.38.5
+

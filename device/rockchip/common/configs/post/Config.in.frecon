@@ -1,0 +1,74 @@
+#
+
+menuconfig RK_ROOTFS_FRECON
+	bool "frecon virtual terminal (VT)"
+
+if RK_ROOTFS_FRECON
+
+config RK_ROOTFS_FRECON_SHELL
+	string
+	default "getty" if RK_ROOTFS_FRECON_SHELL_GETTY
+	default "bash" if RK_ROOTFS_FRECON_SHELL_BASH
+	default "sh"
+
+choice
+	prompt "shell"
+	default RK_ROOTFS_FRECON_SHELL_GETTY
+
+config RK_ROOTFS_FRECON_SHELL_GETTY
+	bool "getty"
+
+config RK_ROOTFS_FRECON_SHELL_BASH
+	bool "bash"
+
+config RK_ROOTFS_FRECON_SHELL_SH
+	bool "sh"
+
+endchoice # shell
+
+config RK_ROOTFS_FRECON_VTS
+	bool "enable vts"
+	default y
+
+config RK_ROOTFS_FRECON_VT1
+	bool "enable vt1"
+
+config RK_ROOTFS_FRECON_ROTATE
+	int
+	default 270 if RK_ROOTFS_FRECON_ROTATE_270
+	default 180 if RK_ROOTFS_FRECON_ROTATE_180
+	default 90 if RK_ROOTFS_FRECON_ROTATE_90
+	default 0
+
+choice
+	prompt "rotate"
+	default RK_ROOTFS_FRECON_ROTATE_0
+
+config RK_ROOTFS_FRECON_ROTATE_0
+	bool "0"
+
+config RK_ROOTFS_FRECON_ROTATE_90
+	bool "90"
+
+config RK_ROOTFS_FRECON_ROTATE_180
+	bool "180"
+
+config RK_ROOTFS_FRECON_ROTATE_270
+	bool "270"
+
+endchoice # rotate
+
+config RK_ROOTFS_FRECON_OUTPUT_CONFIG
+	string "custom output configs"
+	help
+	  <monitor name>=<fit|strech>:<0|90|180|270>:<width>x<height>
+	  For example:
+	    DSI-1=fit:90,HDMI-A-2=strech:270:1280x800
+
+config RK_ROOTFS_FRECON_SCALE
+	int "scale (1-100)"
+	range 1 100
+	default 1
+
+endif # Frecon
+endmenuconfig # Frecon

@@ -1,0 +1,51 @@
+from building import *
+Import("SOC")
+
+cwd     = GetCurrentDir()
+src     = Split('''
+test_mpi_mb.c
+test_mpi_sys.c
+rt_kernel_main.c
+''')
+
+if GetDepend('RT_USING_ROCKIT_VI'):
+    src += ['test_mpi_vi.cpp']
+
+if GetDepend('RT_USING_ROCKIT_AI'):
+    src += ['test_mpi_ai.c']
+
+if GetDepend('RT_USING_ROCKIT_AENC'):
+    src += ['test_mpi_aenc.c']
+
+if GetDepend('RT_USING_ROCKIT_ADEC'):
+    src += ['test_mpi_adec.c']
+
+if GetDepend('RT_USING_ROCKIT_AO'):
+    src += ['test_mpi_ao.c']
+
+if GetDepend('RT_USING_ROCKIT_TDE'):
+    src += ['../common/test_comm_imgproc.c']
+    src += ['../common/test_comm_utils.c']
+    src += ['../common/test_comm_sys.c']
+    src += ['../common/test_comm_tde.c']
+    src += ['test_mpi_tde.c']
+
+CPPPATH = [cwd]
+CPPPATH += ["../../sdk/include"]
+CPPPATH += ["../include"]
+
+CPPDEFINES = ['OS_RTT']
+libs = ['rockit']
+
+if SOC == 'RK3308':
+    CPPPATH += ["../../sdk/lib/arm/rk3308"]
+    libpath = [cwd + '/../../sdk/lib/arm/rk3308/rtt']
+elif SOC == 'RK3506':
+    CPPPATH += ["../../sdk/lib/arm/rk3506"]
+    libpath = [cwd + '/../../sdk/lib/arm/rk3506/rtt']
+else:
+    print("Unknown SOC.")
+
+group = DefineGroup('rockit', src, depend = ['RT_USING_ROCKIT'], CPPPATH = CPPPATH, CPPDEFINES=CPPDEFINES, LIBS = libs, LIBPATH = libpath)
+
+Return('group')

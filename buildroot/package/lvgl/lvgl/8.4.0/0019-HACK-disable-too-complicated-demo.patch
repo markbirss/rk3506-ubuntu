@@ -1,0 +1,35 @@
+From d9996d085fe698412884f1d31835f6773155ce49 Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Thu, 15 Dec 2022 17:07:57 +0800
+Subject: [PATCH 19/35] HACK: disable too complicated demo
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ demos/benchmark/lv_demo_benchmark.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/demos/benchmark/lv_demo_benchmark.c b/demos/benchmark/lv_demo_benchmark.c
+index 76047f3e6..9041e0287 100644
+--- a/demos/benchmark/lv_demo_benchmark.c
++++ b/demos/benchmark/lv_demo_benchmark.c
+@@ -607,7 +607,7 @@ static scene_dsc_t scenes[] = {
+     {.name = "Text large compressed",        .weight = 10, .create_cb = txt_large_compr_cb},
+ 
+     {.name = "Line",                         .weight = 10, .create_cb = line_cb},
+-
++#if 0
+     {.name = "Arc think",                    .weight = 10, .create_cb = arc_think_cb},
+     {.name = "Arc thick",                    .weight = 10, .create_cb = arc_thick_cb},
+ 
+@@ -618,7 +618,7 @@ static scene_dsc_t scenes[] = {
+     {.name = "Substr. line",                 .weight = 10, .create_cb = sub_line_cb},
+     {.name = "Substr. arc",                  .weight = 10, .create_cb = sub_arc_cb},
+     {.name = "Substr. text",                 .weight = 10, .create_cb = sub_text_cb},
+-
++#endif
+     {.name = "", .create_cb = NULL}
+ };
+ 
+-- 
+2.25.1
+

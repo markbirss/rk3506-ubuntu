@@ -1,0 +1,68 @@
+From dda0098c757d94b4c0ea78a28ea4db517991c6e2 Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Mon, 18 Sep 2023 18:32:44 +0800
+Subject: [PATCH 12/16] drm: Improve display performance
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ display/drm.c | 17 +++++++++++------
+ 1 file changed, 11 insertions(+), 6 deletions(-)
+
+diff --git a/display/drm.c b/display/drm.c
+index 709b31ff..e8ca9667 100644
+--- a/display/drm.c
++++ b/display/drm.c
+@@ -96,7 +96,9 @@ static int quit = 0;
+ static pthread_t drm_thread_pid;
+ static pthread_mutex_t draw_mutex;
+ static int draw_update = 0;
++#if USE_RGA
+ static struct drm_bo *gbo;
++#endif
+ static struct drm_bo *vop_buf[2];
+ 
+ struct device *pdev;
+@@ -951,7 +953,7 @@ static void *drm_thread(void *arg)
+             if (ret)
+                 printf("c_RkRgaBlit error : %s\n", strerror(errno));
+ #else
+-            memcpy(bo->ptr, gbo->ptr, bo->size);
++            memcpy(bo->ptr, drm_buff, bo->size);
+ #endif
+             setdrmdisp(bo);
+             draw_update = 0;
+@@ -1015,7 +1017,8 @@ void drm_flush(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *color
+         color_p += area_w;
+     }
+ #endif
+-    draw_update = 1;
++    if(lv_disp_flush_is_last(disp_drv))
++        draw_update = 1;
+     pthread_mutex_unlock(&draw_mutex);
+     /*IMPORTANT!!!
+      *Inform the graphics library that you are ready with the flushing*/
+@@ -1034,15 +1037,17 @@ void disp_init(void)
+     } else {
+         format = DRM_FORMAT_ARGB8888;
+     }
++#if USE_RGA
+     gbo = malloc_drm_bo(lcd_w, lcd_h, format);
+-    vop_buf[0] = malloc_drm_bo(lcd_w, lcd_h, format);
+-    vop_buf[1] = malloc_drm_bo(lcd_w, lcd_h, format);
+     drm_buff = gbo->ptr;
+     lcd_sw = gbo->pitch / (LV_COLOR_DEPTH >> 3);
+-
+-#if USE_RGA
+     c_RkRgaInit();
++#else
++    drm_buff = malloc(lcd_w * lcd_h * (LV_COLOR_DEPTH >> 3));
++    lcd_sw = lcd_w;
+ #endif
++    vop_buf[0] = malloc_drm_bo(lcd_w, lcd_h, format);
++    vop_buf[1] = malloc_drm_bo(lcd_w, lcd_h, format);
+ 
+     printf("DRM subsystem and buffer mapped successfully\n");
+ }
+-- 
+2.25.1
+

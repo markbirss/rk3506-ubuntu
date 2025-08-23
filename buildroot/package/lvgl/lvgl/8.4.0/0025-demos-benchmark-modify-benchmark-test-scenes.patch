@@ -1,0 +1,29 @@
+From 32dce283c778d5979c688f60c397076c97b76a22 Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Wed, 26 Apr 2023 16:44:45 +0800
+Subject: [PATCH 25/35] demos: benchmark: modify benchmark test scenes
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ demos/benchmark/lv_demo_benchmark.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/demos/benchmark/lv_demo_benchmark.c b/demos/benchmark/lv_demo_benchmark.c
+index 9041e0287..473825811 100644
+--- a/demos/benchmark/lv_demo_benchmark.c
++++ b/demos/benchmark/lv_demo_benchmark.c
+@@ -602,9 +602,11 @@ static scene_dsc_t scenes[] = {
+     {.name = "Text medium",                  .weight = 30, .create_cb = txt_medium_cb},
+     {.name = "Text large",                   .weight = 20, .create_cb = txt_large_cb},
+ 
++#if 0
+     {.name = "Text small compressed",        .weight = 3, .create_cb = txt_small_compr_cb},
+     {.name = "Text medium compressed",       .weight = 5, .create_cb = txt_medium_compr_cb},
+     {.name = "Text large compressed",        .weight = 10, .create_cb = txt_large_compr_cb},
++#endif
+ 
+     {.name = "Line",                         .weight = 10, .create_cb = line_cb},
+ #if 0
+-- 
+2.25.1
+

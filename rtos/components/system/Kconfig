@@ -1,0 +1,20 @@
+menu "System"
+
+config RT_USING_LVGL
+	bool "LVGL: Light and Versatile Graphics Library"
+	default n
+	help
+	  Enable LVGL.
+
+if RT_USING_LVGL
+	source "$RTT_DIR/components/system/lvgl/Kconfig"
+	source "$RTT_DIR/components/system/lvgl/Kconfig.rtt"
+endif
+
+config RT_USING_FREETYPE
+	bool "FreeType Font Library Enable"
+	default n
+	help
+	  Enable Freetype.
+
+endmenu

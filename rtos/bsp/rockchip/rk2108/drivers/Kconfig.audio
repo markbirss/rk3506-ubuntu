@@ -1,0 +1,261 @@
+if RT_USING_AUDIO
+menu "Enable Audio"
+    source "$BSP_DIR/../common/drivers/audio/codecs/Kconfig"
+    source "$BSP_DIR/../common/drivers/audio/pcm/Kconfig"
+
+    menu "Audio Cards"
+
+    config RT_USING_AUDIO_CARD
+        bool "Audio Cards"
+        select RT_USING_CODEC
+        default n
+
+    config RT_USING_AUDIO_CARD_ACDCDIG
+        bool "Enable Internal ADC audio card"
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_ACDCDIG
+        default n
+        help
+          Say Y if you want to use internal adc card
+          which support stereo differential analog mics.
+
+    choice
+        prompt "iface type"
+        depends on RT_USING_AUDIO_CARD_ACDCDIG
+        default RT_USING_ACDCDIG_PDM0
+        help
+          The internal ADC is wired to and PDM0, PDM0_SDI2
+          choice one for it.
+
+        config RT_USING_ACDCDIG_PDM0
+            bool "PDM0"
+            select RT_USING_PDM0
+
+        config RT_USING_ACDCDIG_PDM0_SDI2
+            bool "PDM0 SDI2"
+            select RT_USING_PDM0
+    endchoice
+
+    config RT_USING_AUDIO_CARD_AUDIOPWM
+        bool "Enable AUDIOPWM audio card"
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_AUDIOPWM
+        default n
+        help
+          Say Y if you want to use audiopwm card
+          which can drive PA for middle quality sound.
+
+    config RT_USING_AUDIO_CARD_I2S_MIC
+        bool "Enable I2S Ditigal Mic audio card"
+        depends on RT_USING_AUDIO_CARD
+        default n
+        help
+          Say Y if you want to use i2s digital mics.
+
+    choice
+        prompt "i2s select"
+        depends on RT_USING_AUDIO_CARD_I2S_MIC
+        default RT_USING_I2STDM1_MIC
+        help
+          Choice the i2s which wired to external i2s mics.
+
+        config RT_USING_I2STDM0_MIC
+            bool "I2STDM0"
+            select RT_USING_I2STDM0
+
+        config RT_USING_I2STDM1_MIC
+            bool "I2STDM1"
+            select RT_USING_I2STDM1
+    endchoice
+
+    config RT_USING_AUDIO_CARD_PDM_MIC
+        bool "Enable PDM Digital Mic audio card"
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_PDM0
+        help
+          Say Y if you want to use pdm digital mics card.
+
+    config RT_USING_AUDIO_CARD_PCM_BT
+        bool "Enable PCM BT audio card"
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_I2STDM0
+        help
+          Say Y if you want to use pcm bt card.
+
+    choice
+        prompt "pcm iomux select"
+        depends on RT_USING_AUDIO_CARD_PCM_BT
+        default RT_USING_PCM_M1
+        help
+          Choice the pcm iomux which wired to external bt.
+
+        config RT_USING_PCM_M0
+            bool "pcm m0"
+            select RT_USING_I2STDM0
+
+        config RT_USING_PCM_M1
+            bool "pcm m1"
+            select RT_USING_I2STDM0
+    endchoice
+
+    config RT_USING_AUDIO_CARD_AW8896
+        bool "Enable AWINIC AW8896 audio card"
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_I2STDM1
+        select RT_USING_CODEC_AW8896
+        default n
+        help
+          Say Y if you want to use AWINIC AW8896 audio card.
+
+    config RT_USING_AUDIO_CARD_ES7243
+        bool "Enable Everest Semi ES7243 audio card"
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_I2STDM1
+        select RT_USING_CODEC_ES7243
+        default n
+        help
+          Say Y if you want to use Everest Semi ES7243 audio card.
+
+    config RT_USING_AUDIO_CARD_ES8156
+        bool "Enable Everest Semi ES8156 audio card"
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_I2STDM1
+        select RT_USING_CODEC_ES8156
+        default n
+        help
+          Say Y if you want to use Everest Semi ES8156 audio card.
+
+    config RT_USING_AUDIO_CARD_ES8311
+        bool "Enable Everest Semi ES8311 audio card"
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_I2STDM1
+        select RT_USING_CODEC_ES8311
+        default n
+        help
+          Say Y if you want to use Everest Semi ES8311 audio card.
+
+    config RT_USING_AUDIO_CARD_ES8388
+        bool "Enable Everest Semi ES8388 audio card"
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_I2STDM1
+        select RT_USING_CODEC_ES8388
+        default n
+        help
+          Say Y if you want to use Everest Semi ES8388 audio card.
+
+    config RT_USING_AUDIO_CARD_ADC_ES8311_ECHO
+        bool "Enable mix audio card with Interal ADC + ES8311"
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_I2STDM1
+        select RT_USING_PDM0
+        select RT_USING_MULTI_DAIS
+        select RT_USING_MULTI_PCM
+        select RT_USING_CODEC_ES8311
+        select RT_USING_ACDCDIG
+        default n
+        help
+          Say Y if you want to use mix audio card which support quad channels
+          capture and stereo channels playback.
+
+          Stereo Playback - ES8388
+          Quad Capture - Internal ADC + External ES8311
+
+          Internal ADC - stereo analog mics
+          External ES8311 - stereo loopback
+
+    config RT_USING_AUDIO_CARD_PDM_ES8388_ECHO
+        bool "Enable mix audio card with PDM Mics + ES8388"
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_I2STDM1
+        select RT_USING_PDM0
+        select RT_USING_MULTI_DAIS
+        select RT_USING_MULTI_PCM
+        select RT_USING_CODEC_ES8388
+        default n
+        help
+          Say Y if you want to use mix audio card which support quad channels
+          capture and stereo channels playback.
+
+          Stereo Playback - ES8388
+          Quad Capture - PDM mics + External ES8388
+
+          PDM - stereo pdm digital mics
+          External ES8388 - stereo loopback
+
+    config RT_USING_AUDIO_CARD_ES7202_ACDCDIG_COMBINE
+        bool "Enable mix audio card with ES7202 + ADC"
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_PDM0
+        select RT_USING_MULTI_CODECS
+        select RT_USING_CODEC_ES7202
+        select RT_USING_AUDIO_CARD_ACDCDIG
+        select RT_USING_ACDCDIG_PDM0_SDI2
+        default n
+        help
+          Say Y if you want to use mix audio card which support six channels
+          capture.
+
+          The first four channels come from ES7202(SDI0 SDI1)
+          The last two channels come from ADC(SDI2)
+
+    endmenu
+
+    menu "Audio Interfaces"
+
+    config RT_USING_PCM
+        bool
+        select RT_USING_DMA
+        default y
+
+    config RT_USING_MULTI_CODECS
+        bool
+
+    config RT_USING_MULTI_DAIS
+        bool
+
+    config RT_USING_MULTI_PCM
+        bool
+
+    config RT_USING_AUDIOPWM
+        bool
+
+    config RT_USING_I2STDM
+        bool
+
+    config RT_USING_I2STDM0
+        bool
+        select RT_USING_I2STDM
+
+    config RT_USING_I2STDM1
+        bool
+        select RT_USING_I2STDM
+
+    config RT_USING_PDM
+        bool
+
+    config RT_USING_PDM0
+        bool
+        select RT_USING_PDM
+
+    config RT_USING_VAD
+        bool "Enable VAD"
+        default n
+
+    choice
+        prompt "VAD irq handler"
+        depends on RT_USING_VAD
+        default RT_VAD_IRQ_HANDLED_BY_DSP
+
+        config RT_VAD_IRQ_HANDLED_BY_DSP
+            bool "handled by DSP"
+
+        config RT_VAD_IRQ_HANDLED_BY_CPU
+            bool "handled by CPU"
+
+    endchoice
+
+    endmenu
+
+endmenu
+
+endif

@@ -1,0 +1,7 @@
+config BR2_PACKAGE_MUPEN64PLUS_RSP_CXD4
+        bool "mupen64plus-video-rsp-cxd4"
+	depends on BR2_PACKAGE_MUPEN64PLUS_CORE
+        help
+          mupen64plus rsp cxd4.
+
+	  https://mupen64plus.org/

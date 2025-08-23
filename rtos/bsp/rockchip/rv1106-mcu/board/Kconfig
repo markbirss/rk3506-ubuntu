@@ -1,0 +1,9 @@
+menu "RT-Thread board config"
+
+config RT_BOARD_NAME
+    string "the board name of you use"
+    default "rv1106_evb"
+
+source "$BSP_DIR/board/$RT_BOARD_NAME/Kconfig"
+
+endmenu

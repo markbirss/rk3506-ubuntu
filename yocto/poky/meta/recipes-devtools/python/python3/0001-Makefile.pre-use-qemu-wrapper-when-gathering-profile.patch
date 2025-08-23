@@ -1,0 +1,25 @@
+From 38278339832a57dbf5fa3ef21accaa03e2c814d7 Mon Sep 17 00:00:00 2001
+From: Alexander Kanavin <alex.kanavin@gmail.com>
+Date: Wed, 30 Jan 2019 12:41:04 +0100
+Subject: [PATCH] Makefile.pre: use qemu wrapper when gathering profile data
+
+Upstream-Status: Inappropriate [oe-core specific]
+Signed-off-by: Alexander Kanavin <alex.kanavin@gmail.com>
+---
+ Makefile.pre.in | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/Makefile.pre.in b/Makefile.pre.in
+index dd5e69f..381feb0 100644
+--- a/Makefile.pre.in
++++ b/Makefile.pre.in
+@@ -658,8 +658,7 @@ profile-run-stamp:
+ 	# enabled.
+ 	$(MAKE) profile-gen-stamp
+ 	# Next, run the profile task to generate the profile information.
+-	@ # FIXME: can't run for a cross build
+-	$(LLVM_PROF_FILE) $(RUNSHARED) ./$(BUILDPYTHON) $(PROFILE_TASK) || true
++	./pgo-wrapper ./python -m test.regrtest --pgo test_grammar test_opcodes test_dict test_builtin test_exceptions test_types test_support || true
+ 	$(LLVM_PROF_MERGER)
+ 	# Remove profile generation binary since we are done with it.
+ 	$(MAKE) clean-retain-profile

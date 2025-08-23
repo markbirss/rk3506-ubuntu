@@ -1,0 +1,15 @@
+config BR2_PACKAGE_LIBLOCKFILE
+	bool "liblockfile"
+	depends on BR2_USE_MMU # fork()
+	help
+	  NFS-safe locking library.
+
+	  https://github.com/miquels/liblockfile
+
+if BR2_PACKAGE_LIBLOCKFILE
+
+config BR2_PACKAGE_LIBLOCKFILE_STATIC
+	bool "Enable static"
+	default y if BR2_STATIC_LIBS
+
+endif

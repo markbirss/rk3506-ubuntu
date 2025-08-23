@@ -1,0 +1,19 @@
+#!/bin/sh
+
+case "$1" in
+start)
+        echo 220M > /sys/block/zram0/disksize
+        echo 80M > /sys/block/zram0/mem_limit
+        mkswap /dev/zram0
+        swapon /dev/zram0
+        ;;
+stop)
+	swapoff -a
+	echo 1 > /sys/block/zram0/reset
+        ;;
+*)
+        echo "Usage: $0 {start|stop}"
+        exit 1
+esac
+
+exit 0

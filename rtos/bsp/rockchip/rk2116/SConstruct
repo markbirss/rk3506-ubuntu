@@ -1,0 +1,44 @@
+import os
+import sys
+import rtconfig
+
+if os.getenv('RTT_ROOT'):
+    RTT_ROOT = os.getenv('RTT_ROOT')
+else:
+    RTT_ROOT = os.path.normpath(os.getcwd() + '/../../..')
+
+sys.path = sys.path + [os.path.join(RTT_ROOT, 'tools')]
+from building import *
+
+TARGET = 'rtthread.' + rtconfig.TARGET_EXT
+
+env = Environment(tools = ['mingw'],
+    AS = rtconfig.AS, ASFLAGS = rtconfig.AFLAGS,
+    CC = rtconfig.CC, CCFLAGS = rtconfig.CFLAGS,
+    CXX = rtconfig.CXX, CXXFLAGS = rtconfig.CXXFLAGS,
+    AR = rtconfig.AR, ARFLAGS = '-rc',
+    CPPFLAGS = '-D__RT_THREAD__',
+    LINK = rtconfig.LINK, LINKFLAGS = rtconfig.LFLAGS)
+env.PrependENVPath('PATH', rtconfig.EXEC_PATH)
+
+if rtconfig.PLATFORM == 'iar':
+    env.Replace(CCCOM = ['$CC $CCFLAGS $CPPFLAGS $_CPPDEFFLAGS $_CPPINCFLAGS -o $TARGET $SOURCES'])
+    env.Replace(ARFLAGS = [''])
+    env.Replace(LINKCOM = ['$LINK $SOURCES $LINKFLAGS -o $TARGET --map project.map'])
+
+Export('RTT_ROOT')
+Export('rtconfig')
+
+# prepare building environment
+objs = PrepareBuilding(env, RTT_ROOT, has_libcpu=False)
+
+if os.system('{cppcmd} -P -C -E -I. -I../../../ -D__ASSEMBLY__ {ldfile}.S -o {ldfile}'.format(
+                  cppcmd = os.path.join(rtconfig.EXEC_PATH, 'riscv64-unknown-elf-gcc'),
+                  ldfile = rtconfig.LINK_SCRIPT)) != 0:
+        print('failed to generate linker script %s' % rtconfig.LINK_SCRIPT)
+        sys.exit(255)
+# if the linker script changed, relink the target
+Depends(TARGET, rtconfig.LINK_SCRIPT)
+
+# make a building
+DoBuilding(TARGET, objs)

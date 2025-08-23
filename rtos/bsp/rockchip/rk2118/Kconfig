@@ -1,0 +1,64 @@
+mainmenu "RT-Thread Configuration"
+
+config BSP_DIR
+    string
+    option env = "BSP_ROOT"
+    default "."
+
+config RTT_DIR
+    string
+    option env = "RTT_ROOT"
+    default "../../.."
+
+config PKGS_DIR
+    string
+    option env = "PKGS_ROOT"
+    default "packages"
+
+config ARCH_ARM_CORTEX_M33
+    bool
+    default y
+
+config ARM_CM33_ENABLE_TRUSTZONE
+    bool
+    default n
+
+config RKMCU_RK2118
+    bool
+    select ARCH_ARM_CORTEX_M33
+    default y
+
+choice
+    prompt "RK2118 cpu core select"
+    default RK2118_CPU_CORE0
+
+    config RK2118_CPU_CORE0
+        bool "STAR-MC1 CORE0"
+
+    config RK2118_CPU_CORE1
+        bool "STAR-MC1 CORE1"
+
+endchoice
+
+config ARCH_ARM_CORTEX_SECURE
+    bool "STAR-MC1 Core0 run in security context"
+    select RK2118_CPU_CORE0
+    default n
+
+config PM_HAS_CUSTOM_CONFIG
+    bool
+    depends on RT_USING_PM
+    default n
+
+source "$RTT_DIR/Kconfig"
+
+menuconfig RT_USING_PKGS
+    bool "Enable RT-Thread online packages"
+
+if RT_USING_PKGS
+    source "$PKGS_DIR/Kconfig"
+endif
+
+source "$BSP_DIR/drivers/Kconfig"
+source "$BSP_DIR/board/Kconfig"
+source "$BSP_DIR/../common/tests/Kconfig"

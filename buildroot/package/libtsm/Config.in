@@ -1,0 +1,18 @@
+menuconfig BR2_PACKAGE_LIBTSM
+	bool "libtsm"
+	select BR2_PACKAGE_LIBXKBCOMMON
+	help
+		TSM is a state machine for DEC VT100-VT520
+		compatible terminal emulators. It tries to
+		support all common standards while keeping
+		compatibility to existing emulators.
+
+		https://github.com/Aetf/libtsm
+
+if BR2_PACKAGE_LIBTSM
+
+config BR2_PACKAGE_LIBTSM_STATIC
+	bool "Enable static"
+	default y if BR2_STATIC_LIBS
+
+endif

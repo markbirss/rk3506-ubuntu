@@ -1,0 +1,26 @@
+From 3a60ef98770aed85d96c5b7d6cf1aef8bad69ac6 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Mon, 19 Aug 2024 10:52:38 +0800
+Subject: [PATCH 3/3] meson: Disable Werror
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ meson.build | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/meson.build b/meson.build
+index 6bb048e..86170a2 100644
+--- a/meson.build
++++ b/meson.build
+@@ -4,8 +4,6 @@ project('uvc-gadget', 'c', 'cpp',
+     meson_version : '>= 0.56',
+     version : '0.4.0',
+     default_options : [
+-        'werror=true',
+-        'warning_level=2',
+         'cpp_std=c++17',
+     ],
+     license : 'LGPL 2.1+')
+-- 
+2.20.1
+

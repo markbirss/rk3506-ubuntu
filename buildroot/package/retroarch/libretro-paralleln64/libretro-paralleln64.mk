@@ -1,0 +1,43 @@
+################################################################################
+#
+# PARALLELN64
+#
+################################################################################
+LIBRETRO_PARALLELN64_VERSION = 334998e6129debe50f7ef9c5cd1e995460ae2da8
+LIBRETRO_PARALLELN64_SITE = $(call github,libretro,parallel-n64,$(LIBRETRO_PARALLELN64_VERSION))
+
+LIBRETRO_PARALLELN64_CONF = platform=unix
+LIBRETRO_PARALLELN64_CFLAGS = $(TARGET_CFLAGS)
+
+ifeq ($(BR2_arm),y)
+LIBRETRO_PARALLELN64_CONF += ARCH=arm
+LIBRETRO_PARALLELN64_CFLAGS += -DARM_FIX
+else ifeq ($(BR2_aarch64),y)
+LIBRETRO_PARALLELN64_CONF += ARCH=aarch64
+LIBRETRO_PARALLELN64_CFLAGS += -DARM_FIX
+endif
+
+ifeq ($(BR2_ARM_CPU_HAS_NEON),y)
+LIBRETRO_PARALLELN64_CONF += HAVE_NEON=1
+LIBRETRO_PARALLELN64_CFLAGS += -DUSE_SSE2NEON
+endif
+
+ifeq ($(BR2_PACKAGE_HAS_LIBEGL),y)
+LIBRETRO_PARALLELN64_DEPENDENCIES += libgles
+LIBRETRO_PARALLELN64_CONF += FORCE_GLES=1
+endif
+
+define LIBRETRO_PARALLELN64_BUILD_CMDS
+	CFLAGS="$(LIBRETRO_PARALLELN64_CFLAGS)" CXXFLAGS="$(TARGET_CXXFLAGS)" \
+		LDFLAGS="$(TARGET_LDFLAGS) -lstdc++" $(MAKE) -C $(@D) \
+		CC="$(TARGET_CC)" CXX="$(TARGET_CXX)" LD="$(TARGET_CC)" \
+		RANLIB="$(TARGET_RANLIB)" AR="$(TARGET_AR)" \
+		$(LIBRETRO_PARALLELN64_CONF)
+endef
+
+define LIBRETRO_PARALLELN64_INSTALL_TARGET_CMDS
+	$(INSTALL) -D $(@D)/parallel_n64_libretro.so \
+		$(TARGET_DIR)/usr/lib/libretro/paralleln64_libretro.so
+endef
+
+$(eval $(generic-package))

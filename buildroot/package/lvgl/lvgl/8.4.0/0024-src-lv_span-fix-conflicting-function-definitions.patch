@@ -1,0 +1,26 @@
+From 9a2ae3d132970a714bda957170d85d296e59ae0e Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Wed, 26 Apr 2023 16:43:30 +0800
+Subject: [PATCH 24/35] src: lv_span: fix conflicting function definitions
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ src/extra/widgets/span/lv_span.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/extra/widgets/span/lv_span.c b/src/extra/widgets/span/lv_span.c
+index 6f970c54e..09a842431 100644
+--- a/src/extra/widgets/span/lv_span.c
++++ b/src/extra/widgets/span/lv_span.c
+@@ -48,7 +48,7 @@ static const lv_font_t * lv_span_get_style_text_font(lv_obj_t * par, lv_span_t *
+ static lv_coord_t lv_span_get_style_text_letter_space(lv_obj_t * par, lv_span_t * span);
+ static lv_color_t lv_span_get_style_text_color(lv_obj_t * par, lv_span_t * span);
+ static lv_opa_t lv_span_get_style_text_opa(lv_obj_t * par, lv_span_t * span);
+-static lv_opa_t lv_span_get_style_text_blend_mode(lv_obj_t * par, lv_span_t * span);
++static lv_blend_mode_t lv_span_get_style_text_blend_mode(lv_obj_t * par, lv_span_t * span);
+ static int32_t lv_span_get_style_text_decor(lv_obj_t * par, lv_span_t * span);
+ 
+ static inline void span_text_check(const char ** text);
+-- 
+2.25.1
+

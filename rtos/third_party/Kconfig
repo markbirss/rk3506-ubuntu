@@ -1,0 +1,10 @@
+menu "RT-Thread third party package"
+
+source "$RTT_DIR/third_party/cmsis/Kconfig"
+source "$RTT_DIR/third_party/wice/Kconfig"
+source "$RTT_DIR/third_party/netutils/Kconfig"
+source "$RTT_DIR/third_party/bt/Kconfig"
+source "$RTT_DIR/third_party/cypress/Kconfig"
+source "$RTT_DIR/third_party/ampak/Kconfig"
+source "$RTT_DIR/third_party/wfd/Kconfig"
+endmenu

@@ -1,0 +1,80 @@
+config BR2_PACKAGE_RKADK
+	bool "rkadk"
+	select BR2_PACKAGE_ROCKIT
+	select BR2_PACKAGE_COMMON_ALGORITHM
+	default n
+	help
+		rkadk
+
+if BR2_PACKAGE_RKADK
+config BR2_PACKAGE_RKADK_USE_AIQ
+	bool "camera capture with rkaiq api"
+	select BR2_PACKAGE_CAMERA_ENGINE_RKAIQ
+	default n
+	help
+		camera capture with rkaiq api
+
+config BR2_PACKAGE_RKADK_COMMON_FUNCTIONS
+	bool "common functions(record photo stream live)"
+	default n
+	help
+		wrapped function of rkadk common functions
+
+if BR2_PACKAGE_RKADK_COMMON_FUNCTIONS
+config BR2_PACKAGE_RKADK_AOV
+	bool "always on video"
+	default n
+	help
+		enable rkadk aov
+
+config BR2_PACKAGE_RKADK_FILE_CACHE
+	bool "file cache"
+	default n
+	help
+		enable rkadk file cache
+
+config BR2_PACKAGE_RKADK_EIS
+	bool "eis"
+	select BR2_PACKAGE_CAMERA_ENGINE_RKAIQ
+	default n
+	help
+		enable rkadk eis
+
+config BR2_PACKAGE_RKADK_JPEG_SLICE
+	bool "jpeg slice"
+	default n
+	help
+		wrapped function of jpeg slice
+endif #BR2_PACKAGE_RKADK_COMMON_FUNCTIONS
+
+config BR2_PACKAGE_RKADK_DISPLAY
+	bool "display"
+	default n
+	help
+		wrapped function of rkadk display
+
+config BR2_PACKAGE_RKADK_PLAYER
+	bool "player"
+	default n
+	help
+		wrapped function of rkadk player
+
+config BR2_PACKAGE_RKADK_STORAGE
+	bool "storage"
+	select BR2_PACKAGE_RKFSMK
+	default n
+	help
+		wrapped function of rkadk storage
+
+config BR2_PACKAGE_RKADK_STATIC_LIBRARY
+	bool "static library"
+	default n
+	help
+		build rkadk static library and example
+
+config BR2_PACKAGE_RKADK_EXAMPLES
+	bool "examples"
+	default n
+	help
+		build rkadk examples
+endif #BR2_PACKAGE_RKADK

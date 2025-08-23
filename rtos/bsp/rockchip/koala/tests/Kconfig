@@ -1,0 +1,20 @@
+menu "RT-Thread bsp test case"
+
+config RT_USING_TC
+    bool "Enable Kernel TEST"
+    default n
+
+config RT_USING_PRIVATE_TEST
+    bool "Enable BSP Private TEST"
+    default n
+
+    if RT_USING_PRIVATE_TEST
+    config RT_DSP_DECODE_TEST
+        bool "Enable Dsp Decode Test"
+        depends on RT_USING_DSP
+        default n
+    endif
+
+source "$BSP_DIR/../common/tests/Kconfig"
+
+endmenu

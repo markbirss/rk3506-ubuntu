@@ -1,0 +1,6 @@
+boto3
+git-pw>=2.5.0
+jinja2
+pylint
+pyparsing>=3.0.9
+unidiff

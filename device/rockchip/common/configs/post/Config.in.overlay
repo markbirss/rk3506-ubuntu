@@ -1,0 +1,79 @@
+#
+
+menuconfig RK_ROOTFS_OVERLAY
+	bool "Overlays"
+	default y
+
+if RK_ROOTFS_OVERLAY
+
+source "post/Config.in.usb-gadget"
+
+choice
+	prompt "extra fonts"
+
+config RK_EXTRA_FONTS_DEFAULT
+	bool "auto"
+	help
+	  Install extra fonts for yocto OS.
+
+config RK_EXTRA_FONTS_ENABLED_EN
+	bool "install EN fonts"
+
+config RK_EXTRA_FONTS_ENABLED_EN_CN
+	bool "install EN and CN fonts"
+
+config RK_EXTRA_FONTS_DISABLED
+	bool "not install"
+
+endchoice # extra fonts
+
+config RK_ROOTFS_INPUT_EVENT_DAEMON
+	bool "input-event-daemon (power-key handling)"
+	default y
+	help
+	  Short-press to suspend and long-press to shutdown.
+
+menuconfig RK_ROOTFS_BOOTANIM
+	bool "bootanim (Boot-time animation)"
+
+config RK_ROOTFS_BOOTANIM_TIMEOUT
+	int "timeout"
+	depends on RK_ROOTFS_BOOTANIM
+	default 3
+
+endmenuconfig # Bootanim
+
+config RK_ROOTFS_IRQBALANCE
+	bool "irqbalance (Balance hardware IRQs)"
+	default y
+
+menuconfig RK_ROOTFS_FSTRIM
+	bool "fstrim (Discard unused blocks on all filesystems)"
+	default y
+
+config RK_ROOTFS_FSTRIM_INTERVAL
+	int "interval (seconds)"
+	depends on RK_ROOTFS_FSTRIM
+	default 3600
+
+endmenuconfig # Fstrim
+
+source "post/Config.in.frecon"
+
+config RK_ROOTFS_GENERATE_LOGS
+	bool "generate-logs (Dump and pack Logs)"
+	default y
+
+config RK_ROOTFS_PREBUILT_TOOLS
+	bool "prebuilt tools"
+
+config RK_ROOTFS_PREFER_PREBUILT_TOOLS
+	bool "prefer using prebuilt tools"
+	depends on !RK_ROOTFS_PREBUILT_TOOLS
+	default y
+
+config RK_ROOTFS_EXTRA_OVERLAY_DIRS
+	string "extra overlay dirs"
+
+endif # Overlay
+endmenuconfig # Overlay

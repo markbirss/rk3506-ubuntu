@@ -1,0 +1,97 @@
+From c70ac38823fb18d4b1e180f4b73ee59738f7d048 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 12 Jan 2022 11:42:19 +0800
+Subject: [PATCH 4/4] HACK: Bypass auth APIs by default
+
+There're hacks in Rockchip's BSP kernels to ignore drm auth, so we can
+bypass the related drm auth APIs here.
+
+Bypass these auth APIs:
+drmGetBusid, drmSetBusid, drmGetMagic, drmAuthMagic,
+drmSetInterfaceVersion, drmSetMaster, drmDropMaster.
+
+Set these environments to enable:
+"DRM_GET_BUSID", "DRM_SET_BUSID", "DRM_GET_MAGIC", "DRM_AUTH_MAGIC",
+"DRM_SET_VERSION", "DRM_SET_MASTER", "DRM_DROP_MASTER".
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ xf86drm.c | 23 ++++++++++++++++++++++-
+ 1 file changed, 22 insertions(+), 1 deletion(-)
+
+diff --git a/xf86drm.c b/xf86drm.c
+index b1ae6bf..904ea8c 100644
+--- a/xf86drm.c
++++ b/xf86drm.c
+@@ -1507,6 +1507,9 @@ drm_public char *drmGetBusid(int fd)
+ {
+     drm_unique_t u;
+ 
++    if (!getenv("DRM_GET_BUSID"))
++        return strdup("");
++
+     memclear(u);
+ 
+     if (drmIoctl(fd, DRM_IOCTL_GET_UNIQUE, &u))
+@@ -1538,6 +1541,9 @@ drm_public int drmSetBusid(int fd, const char *busid)
+ {
+     drm_unique_t u;
+ 
++    if (!getenv("DRM_SET_BUSID"))
++        return 0;
++
+     memclear(u);
+     u.unique     = (char *)busid;
+     u.unique_len = strlen(busid);
+@@ -1552,6 +1558,9 @@ drm_public int drmGetMagic(int fd, drm_magic_t * magic)
+ {
+     drm_auth_t auth;
+ 
++    if (!getenv("DRM_GET_MAGIC"))
++        return 0;
++
+     memclear(auth);
+ 
+     *magic = 0;
+@@ -1565,6 +1574,9 @@ drm_public int drmAuthMagic(int fd, drm_magic_t magic)
+ {
+     drm_auth_t auth;
+ 
++    if (!getenv("DRM_AUTH_MAGIC"))
++        return 0;
++
+     memclear(auth);
+     auth.magic = magic;
+     if (drmIoctl(fd, DRM_IOCTL_AUTH_MAGIC, &auth))
+@@ -3063,6 +3075,9 @@ drm_public int drmSetInterfaceVersion(int fd, drmSetVersion *version)
+     int retcode = 0;
+     drm_set_version_t sv;
+ 
++    if (!getenv("DRM_SET_VERSION"))
++        return 0;
++
+     memclear(sv);
+     sv.drm_di_major = version->drm_di_major;
+     sv.drm_di_minor = version->drm_di_minor;
+@@ -3261,11 +3276,17 @@ drm_public void drmCloseOnce(int fd)
+ 
+ drm_public int drmSetMaster(int fd)
+ {
+-        return drmIoctl(fd, DRM_IOCTL_SET_MASTER, NULL);
++	if (!getenv("DRM_SET_MASTER"))
++		return 0;
++
++	return drmIoctl(fd, DRM_IOCTL_SET_MASTER, NULL);
+ }
+ 
+ drm_public int drmDropMaster(int fd)
+ {
++	if (!getenv("DRM_DROP_MASTER"))
++		return 0;
++
+         return drmIoctl(fd, DRM_IOCTL_DROP_MASTER, NULL);
+ }
+ 
+-- 
+2.20.1
+

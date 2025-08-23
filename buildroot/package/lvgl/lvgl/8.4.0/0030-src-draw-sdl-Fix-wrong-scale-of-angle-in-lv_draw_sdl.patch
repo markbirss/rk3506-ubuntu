@@ -1,0 +1,27 @@
+From ee87014eba3e7f73791a4ab87a5e36fbbc06a5a4 Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Wed, 31 Jan 2024 15:40:29 +0800
+Subject: [PATCH 30/35] src: draw: sdl: Fix wrong scale of angle in
+ lv_draw_sdl_img
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ src/draw/sdl/lv_draw_sdl_img.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/draw/sdl/lv_draw_sdl_img.c b/src/draw/sdl/lv_draw_sdl_img.c
+index 0136a268e..9e06b3f8e 100644
+--- a/src/draw/sdl/lv_draw_sdl_img.c
++++ b/src/draw/sdl/lv_draw_sdl_img.c
+@@ -322,7 +322,7 @@ static void draw_img_simple(lv_draw_sdl_ctx_t * ctx, SDL_Texture * texture, cons
+     }
+     SDL_Rect src_rect, dst_rect;
+     calc_draw_part(texture, header, coords, clip, &src_rect, &dst_rect);
+-    SDL_RenderCopyEx(ctx->renderer, texture, &src_rect, &dst_rect, draw_dsc->angle, &pivot, SDL_FLIP_NONE);
++    SDL_RenderCopyEx(ctx->renderer, texture, &src_rect, &dst_rect, draw_dsc->angle / 10.0, &pivot, SDL_FLIP_NONE);
+     if(draw_dsc->angle != 0) {
+         SDL_RenderSetClipRect(ctx->renderer, NULL);
+     }
+-- 
+2.25.1
+

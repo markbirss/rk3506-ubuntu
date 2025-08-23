@@ -1,0 +1,16 @@
+#!/bin/sh
+
+case "$1" in
+	start)
+		if [ ! -f /etc/.usb_config ]; then
+			echo "usb_rndis_en" >> /etc/.usb_config
+			echo "usb_adb_en" >> /etc/.usb_config
+		fi
+		;;
+	*)
+		echo "Usage: [start|stop|restart]" >&2
+		exit 3
+		;;
+esac
+
+:

@@ -1,0 +1,7 @@
+config BR2_PACKAGE_MUPEN64PLUS_RSP_Z64
+        bool "mupen64plus-video-rsp-z64"
+	depends on BR2_PACKAGE_MUPEN64PLUS_CORE
+        help
+          mupen64plus rsp z64.
+
+	  https://mupen64plus.org/

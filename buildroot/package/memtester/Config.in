@@ -1,0 +1,15 @@
+config BR2_PACKAGE_MEMTESTER
+	bool "memtester"
+	help
+	  A userspace utility for testing the memory subsystem for
+	  faults.
+
+	  http://pyropus.ca/software/memtester/
+
+if BR2_PACKAGE_MEMTESTER
+
+config BR2_PACKAGE_MEMTESTER_STATIC
+	bool "Enable static"
+	default y if BR2_STATIC_LIBS
+
+endif

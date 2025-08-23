@@ -1,0 +1,45 @@
+import os
+import rtconfig
+from building import *
+from buildutil import *
+
+cwd     = GetCurrentDir()
+
+if GetDepend('RT_DSPFW_FILE_NAME'):
+    DSPFW_FILE = GetStringFromConfig(cwd + '/..', 'RT_DSPFW_FILE_NAME');
+else:
+    DSPFW_FILE = 'rkdsp_fw.c'
+
+if GetDepend('RT_USING_DSP'):
+    print(DSPFW_FILE)
+
+    with open(cwd  + '/' + DSPFW_FILE, 'r') as f1:
+        lists = f1.readlines()
+
+    ver_str = {}
+    for dsp_str in lists:
+        if dsp_str.find('dsp_fw') != -1:
+            ver_str = lists[lists.index(dsp_str) + 3] + lists[lists.index(dsp_str) + 4]
+            print(ver_str)
+            break
+
+    ver_file = cwd  + '/' + 'dsp_fw_version.h'
+    data = "/**\n" +\
+           " * Copyright (c) 2020 Rockchip Electronics Co., Ltd\n" +\
+           " *\n" +\
+           " * SPDX-License-Identifier: Apache-2.0\n" +\
+           " */\n\n" +\
+           "#ifndef __RKDSP_FW_VERSION_H__\n" +\
+           "#define __RKDSP_FW_VERSION_H__\n\n" +\
+           "const unsigned char dsp_fw_version[16] =\n{\n"
+    with open(ver_file, 'w+') as f0:
+        data = data + ver_str
+        data += '};\n\n#endif'
+        f0.write(data)
+
+src = Glob(DSPFW_FILE)
+CPPPATH = [cwd]
+
+group = DefineGroup('dsp_fw', src, depend = ['RT_USING_DSP'], CPPPATH = CPPPATH)
+
+Return('group')

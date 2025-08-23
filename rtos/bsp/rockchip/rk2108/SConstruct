@@ -1,0 +1,106 @@
+import os
+import sys
+
+if os.getenv('RTT_ROOT'):
+    RTT_ROOT = os.getenv('RTT_ROOT')
+else:
+    RTT_ROOT = os.path.normpath(os.getcwd() + '/../../..')
+
+sys.path = sys.path + [os.path.join(RTT_ROOT, 'tools'), os.path.join(os.getcwd(), '../tools')]
+from building import *
+from buildutil import *
+
+import rtconfig
+
+def mkloader():
+    fp = open('rtconfig.h', 'r')
+    cfg = fp.readlines()
+    port = 0
+    mux = 0
+    if cfg.count('#define RT_USING_CONSOLE\n') == 1 :
+        has_print=True
+    else :
+        has_print=False
+
+    if has_print == True :
+        console_name = "#define RT_CONSOLE_DEVICE_NAME \"uart"
+        console_mux = "#define RT_CONSOLE_DEVICE_MUX"
+        import re
+        fp = open('rtconfig.h', 'r')
+        for line in fp.readlines() :
+            pattern1 = re.compile(console_name)
+            result1 = pattern1.findall(line)
+            if result1:
+                port = line[36:37]
+            pattern2 = re.compile(console_mux)
+            result2 = pattern2.findall(line)
+            if result2:
+                mux = line[30:31]
+
+        rtconfig.POST_ACTION += './mkloader.sh {port} {mux}\n'.format(port = port, mux = mux)
+    else :
+        rtconfig.POST_ACTION += './mkloader.sh\n'
+
+AddOption('--backup-fw',
+                dest = 'backup-fw',
+                action = 'store_true',
+                default = False,
+                help = 'build backup firmware if need')
+
+os_start = ParsePartitionStart('.', 'OSA')
+TARGET = 'rtthread.' + rtconfig.TARGET_EXT
+need_mkimage = False
+
+if GetOption('backup-fw'):
+    print('building backup firmware ...')
+    if ParsePartitionStart('.', 'OSB') != -1:
+        os_start = ParsePartitionStart('.', 'OSB')
+        TARGET = 'rtthread_bak.' + rtconfig.TARGET_EXT
+    need_mkimage = True
+
+if need_mkimage:
+    mkloader()
+    rtconfig.POST_ACTION += './mkimage.sh {setting}\n'.format(setting = GetImageSetting('.'))
+
+ld_dst = 'gcc_link.ld'
+cmd = '{cppcmd} -P -C -E -I. -D__ASSEMBLY__ -DFIRMWARE_MAGIC_LEN={os_start} {ld_src} -o {ld_dst}'.format(
+                  cppcmd = os.path.join(rtconfig.EXEC_PATH, 'arm-none-eabi-gcc'),
+                  os_start = os_start,
+                  ld_src = rtconfig.LINK_SCRIPT,
+                  ld_dst = ld_dst)
+rtconfig.LFLAGS += '-T %s ' % ld_dst
+if os.system(cmd) != 0:
+        print('failed to generate linker script %s' % ld_dst)
+        sys.exit(255)
+# if the linker script changed, relink the target
+Depends(TARGET, ld_dst)
+
+env = Environment(tools = ['mingw'],
+	AS = rtconfig.AS, ASFLAGS = rtconfig.AFLAGS,
+	CC = rtconfig.CC, CCFLAGS = rtconfig.CFLAGS,
+	AR = rtconfig.AR, ARFLAGS = '-rc',
+	CPPFLAGS = '-D__RT_THREAD__',
+	LINK = rtconfig.LINK, LINKFLAGS = rtconfig.LFLAGS,
+	CXX = rtconfig.CXX)
+env.PrependENVPath('PATH', rtconfig.EXEC_PATH)
+
+if rtconfig.PLATFORM == 'iar':
+	env.Replace(CCCOM = ['$CC $CCFLAGS $CPPFLAGS $_CPPDEFFLAGS $_CPPINCFLAGS -o $TARGET $SOURCES'])
+	env.Replace(ARFLAGS = [''])
+	env.Replace(LINKCOM = ['$LINK $SOURCES $LINKFLAGS -o $TARGET --map project.map'])
+
+Export('RTT_ROOT')
+Export('rtconfig')
+
+fp = open('rtconfig.h', 'r')
+cfg = fp.readlines()
+if cfg.count('#define RT_USING_CORE_FREERTOS\n') == 1 :
+    has_libcpu=True
+else :
+    has_libcpu=False
+
+# prepare building environment
+objs = PrepareBuilding(env, RTT_ROOT, has_libcpu=has_libcpu)
+
+# make a building
+DoBuilding(TARGET, objs)

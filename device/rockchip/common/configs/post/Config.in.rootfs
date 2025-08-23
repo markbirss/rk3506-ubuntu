@@ -1,0 +1,39 @@
+#
+
+menu "Post rootfs installs"
+
+config RK_ROOTFS_LD_CACHE
+	bool "create /etc/ld.so.cache"
+	default y
+
+source "post/Config.in.hostname"
+source "post/Config.in.locale"
+
+config RK_ROOTFS_INSTALL_MODULES
+	bool "install kernel modules"
+	help
+	  Install '.ko' kernel modules.
+
+config RK_ROOTFS_STRIP_MODULES
+	bool "strip kernel modules"
+	default y
+	help
+	  Strip any '.ko' kernel modules.
+
+config RK_ROOTFS_ASYNC_COMMIT
+	bool "async-commit DRM driver hack"
+	default y
+
+config RK_ROOTFS_DEBUG_INFO
+	bool "debug information dir (/info/)"
+	default y
+
+config RK_ROOTFS_UDEV_RULES
+	bool "Rockchip udev rules"
+	default y
+
+source "post/Config.in.wifi-bt"
+source "post/Config.in.disk-helper"
+source "post/Config.in.log-guardian"
+
+endmenu # Post-rootfs

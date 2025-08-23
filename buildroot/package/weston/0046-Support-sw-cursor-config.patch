@@ -1,0 +1,58 @@
+From ac6574b47f6fa719ef88fb574fe463574b0b7df6 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Tue, 13 Jul 2021 10:56:56 +0800
+Subject: [PATCH 46/97] Support sw-cursor config
+
+Tested with:
+[core]
+sw-cursor=true
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ frontend/main.c                 | 2 ++
+ include/libweston/backend-drm.h | 2 ++
+ libweston/backend-drm/drm.c     | 2 ++
+ 3 files changed, 6 insertions(+)
+
+diff --git a/frontend/main.c b/frontend/main.c
+index a6efeb2cf..d03a438ea 100644
+--- a/frontend/main.c
++++ b/frontend/main.c
+@@ -3448,6 +3448,8 @@ load_drm_backend(struct weston_compositor *c, int *argc, char **argv,
+ 	                               &config.pageflip_timeout, 0);
+ 	weston_config_section_get_bool(section, "pixman-shadow",
+ 				       &config.use_pixman_shadow, true);
++	weston_config_section_get_bool(section, "sw-cursor",
++				       &config.use_sw_cursor, false);
+ 	if (without_input)
+ 		c->require_input = !without_input;
+ 
+diff --git a/include/libweston/backend-drm.h b/include/libweston/backend-drm.h
+index d47955c7a..cd7174792 100644
+--- a/include/libweston/backend-drm.h
++++ b/include/libweston/backend-drm.h
+@@ -258,6 +258,8 @@ struct weston_drm_backend_config {
+ 	 * rendering device.
+ 	 */
+ 	char *additional_devices;
++
++	bool use_sw_cursor;
+ };
+ 
+ #ifdef  __cplusplus
+diff --git a/libweston/backend-drm/drm.c b/libweston/backend-drm/drm.c
+index d0b6615fe..40b2f8946 100644
+--- a/libweston/backend-drm/drm.c
++++ b/libweston/backend-drm/drm.c
+@@ -5200,6 +5200,8 @@ drm_backend_create(struct weston_compositor *compositor,
+ 	/* 'compute' faked zpos values in case HW doesn't expose any */
+ 	drm_backend_create_faked_zpos(b->drm);
+ 
++	device->cursors_are_broken |= config->use_sw_cursor;
++
+ 	/* A this point we have some idea of whether or not we have a working
+ 	 * cursor plane. */
+ 	if (!device->cursors_are_broken)
+-- 
+2.20.1
+

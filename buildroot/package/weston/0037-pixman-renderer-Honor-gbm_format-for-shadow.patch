@@ -1,0 +1,33 @@
+From 5f79ee8dc0c5b63ce8a5bd21c75a52ed225895ea Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 23 Oct 2020 17:37:04 +0800
+Subject: [PATCH 37/95] pixman-renderer: Honor gbm_format for shadow
+
+Tested with:
+/etc/xdg/weston/weston.ini:
+[core]
+gbm-format=argb8888
+
+Run: weston --use-pixman
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/pixman-renderer.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/libweston/pixman-renderer.c b/libweston/pixman-renderer.c
+index f654819..e1d71d5 100644
+--- a/libweston/pixman-renderer.c
++++ b/libweston/pixman-renderer.c
+@@ -1672,7 +1672,7 @@ pixman_renderer_output_create(struct weston_output *output,
+ 	output->renderer_state = po;
+ 
+ 	if (options->use_shadow)
+-		po->shadow_format = pixel_format_get_info(DRM_FORMAT_XRGB8888);
++		po->shadow_format = options->format;
+ 
+ 	wl_list_init(&po->renderbuffer_list);
+ 
+-- 
+2.20.1
+

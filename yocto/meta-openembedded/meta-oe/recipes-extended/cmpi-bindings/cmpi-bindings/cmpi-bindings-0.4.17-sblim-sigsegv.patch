@@ -1,0 +1,30 @@
+From bc32342fa63b8359f985fe1e187e811455c96a50 Mon Sep 17 00:00:00 2001
+From: Qian Lei <qianl.fnst@cn.fujitsu.com>
+Date: Tue, 25 Aug 2015 13:19:51 +0800
+Subject: [PATCH] Port from Fedora20
+
+Upstream-Status: Pending
+Signed-off-by: Qian Lei <qianl.fnst@cn.fujitsu.com>
+
+---
+ swig/python/cmpi_pywbem_bindings.py | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/swig/python/cmpi_pywbem_bindings.py b/swig/python/cmpi_pywbem_bindings.py
+index d643990..7f0cc77 100644
+--- a/swig/python/cmpi_pywbem_bindings.py
++++ b/swig/python/cmpi_pywbem_bindings.py
+@@ -361,10 +361,10 @@ class BrokerCIMOMHandle(object):
+             allow_null_ns = False
+         else:
+             allow_null_ns = True
+-            if self.broker.name() == 'RequestHandler':
++#            if self.broker.name() == 'RequestHandler':
+                 # Check sblim bug #2185410.
+-                if instance.path is not None:
+-                    instance.path.namespace = None
++#                if instance.path is not None:
++#                    instance.path.namespace = None
+         inst = self.proxy.pywbem2cmpi_inst(instance, allow_null_ns)
+         rv = self.broker.deliverIndication(self.ctx, ns, inst)
+         return rv

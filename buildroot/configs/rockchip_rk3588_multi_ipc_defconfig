@@ -1,0 +1,4 @@
+#include "rockchip_rk3588_ipc_defconfig"
+# BR2_PACKAGE_RKIPC_RK3588_IPC is not set
+BR2_PACKAGE_AVS=y
+BR2_PACKAGE_RKIPC_RK3588_MULTI_IPC=y

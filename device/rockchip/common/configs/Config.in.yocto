@@ -1,0 +1,89 @@
+#
+
+config RK_YOCTO_SUPPORTS
+	bool
+	default y if RK_CHIP_FAMILY = "px3se" || RK_CHIP_FAMILY = "rk3288" || \
+		RK_CHIP_FAMILY = "rk3308" || RK_CHIP_FAMILY = "px30" || \
+		RK_CHIP_FAMILY = "rk3326" || RK_CHIP_FAMILY = "rk3328" || \
+		RK_CHIP_FAMILY = "rk3399" || RK_CHIP_FAMILY = "rk3399pro" || \
+		RK_CHIP_FAMILY = "rk3566_rk3568" || RK_CHIP_FAMILY = "rk3562" || \
+		RK_CHIP_FAMILY = "rk3588" || RK_CHIP_FAMILY = "rk3576" || \
+		RK_CHIP_FAMILY = "rk3506"
+
+comment "Yocto is not supported for this chip"
+	depends on !RK_YOCTO_SUPPORTS
+
+menuconfig RK_YOCTO
+	bool "Yocto"
+	depends on RK_YOCTO_SUPPORTS
+	default y
+
+if RK_YOCTO
+
+choice
+	prompt "local config"
+
+config RK_YOCTO_CFG_DEFAULT
+	bool "auto generated"
+
+config RK_YOCTO_CFG_CUSTOM
+	bool "custom"
+	help
+	  Use custom local config file.
+
+endchoice # yocto local config
+
+config RK_YOCTO_CFG
+	string "custom local config"
+	depends on RK_YOCTO_CFG_CUSTOM
+	default "local.conf"
+	help
+	  Name of yocto custom local config file under $RK_CHIP_DIR or
+	  yocto/build/conf/.
+
+if RK_YOCTO_CFG_DEFAULT
+
+config RK_YOCTO_MACHINE
+	string "machine name"
+	default "rockchip-rk3308-evb" if RK_CHIP_FAMILY = "rk3308"
+	default "rockchip-rk3399-sapphire-excavator" \
+		if RK_CHIP_FAMILY = "rk3399"
+	default "rockchip-rk3588-evb" if RK_CHIP_FAMILY = "rk3588"
+	default "rockchip-${RK_CHIP}-evb"
+	help
+	  Basename of machine file under yocto/meta-rockchip/conf/machine/.
+
+config RK_YOCTO_CHROMIUM
+	bool "chromium browser"
+	depends on RK_CHIP_HAS_GPU
+	default y if !RK_CHIP_ARM32
+
+config RK_YOCTO_DISPLAY_PLATFORM
+	string
+	default "wayland" if RK_YOCTO_DISPLAY_PLATFORM_WAYLAND
+	default "x11" if RK_YOCTO_DISPLAY_PLATFORM_X11
+
+choice
+	prompt "display platform"
+
+config RK_YOCTO_DISPLAY_PLATFORM_WAYLAND
+	bool "wayland (weston)"
+
+config RK_YOCTO_DISPLAY_PLATFORM_X11
+	bool "x11"
+
+endchoice # yocto display platform
+
+endif # yocto cfg default
+
+config RK_YOCTO_EXTRA_CFG
+	string "extra custom local config"
+	help
+	  Name of yocto extra custom local config file under $RK_CHIP_DIR.
+
+config RK_YOCTO_USBMOUNT
+	bool "usbmount (Mount Udisk and SDcard)"
+	default y
+
+endif # Yocto
+endmenuconfig # Yocto

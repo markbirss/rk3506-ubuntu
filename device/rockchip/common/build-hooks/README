@@ -1,0 +1,8 @@
+Hook scripts for building
+=========================
+
+build-helper: Common helper functions
+
+example.sh.in: Example of hook script
+
+<priority>-<hook>.sh: Hook script for building

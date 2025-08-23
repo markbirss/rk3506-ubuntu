@@ -1,0 +1,28 @@
+From eda4fee1a3df4b2f97c268fa6b80bddaf7111f65 Mon Sep 17 00:00:00 2001
+From: Gabor Kiss-Vamosi <kisvegabor@gmail.com>
+Date: Fri, 11 Aug 2023 19:09:37 +0200
+Subject: [PATCH 01/35] fix(arc): fix setting value in REVERSED mode
+
+---
+ src/widgets/lv_arc.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/src/widgets/lv_arc.c b/src/widgets/lv_arc.c
+index 0f6245564..944a5872d 100644
+--- a/src/widgets/lv_arc.c
++++ b/src/widgets/lv_arc.c
+@@ -550,6 +550,11 @@ static void lv_arc_event(const lv_obj_class_t * class_p, lv_event_t * e)
+         /*Set the new value*/
+         int16_t old_value = arc->value;
+         int16_t new_value = lv_map(angle, arc->bg_angle_start, bg_end, arc->min_value, arc->max_value);
++        if(arc->type == LV_ARC_MODE_REVERSE) {
++            new_value = arc->max_value - new_value + arc->min_value;
++        }
++
++
+         if(new_value != lv_arc_get_value(obj)) {
+             arc->last_tick = lv_tick_get(); /*Cache timestamp for the next iteration*/
+             lv_arc_set_value(obj, new_value); /*set_value caches the last_angle for the next iteration*/
+-- 
+2.25.1
+

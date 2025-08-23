@@ -1,0 +1,8 @@
+1. scons --useconfig=board/evb/defconfig                     选择默认的配置文件
+2. scons -j8                                                 编译固件
+3. ./mkimage.sh                                              打包固件
+4. upgrade_tool db Image/rk2206_db_loader.bin                下载烧写loader
+5. upgrade_tool wl 0 ./Image/Firmware.img                    下载固件
+6. upgrade_tool rd
+7. 如果用windows烧写工具，需要2.63以上版本，烧的时候同时选择rk2206_db_loader.bin和Firmware.img 
+8. 如果要启用xip功能，请修改rtconfig.py文件中XIP = 'enable'

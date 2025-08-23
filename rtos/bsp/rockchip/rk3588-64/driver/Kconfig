@@ -1,0 +1,167 @@
+source "$BSP_DIR/../common/drivers/Kconfig"
+
+menu "RT-Thread rockchip RK3588 drivers"
+
+config RT_USING_CACHE_ECC
+    bool "Enable Cache ECC"
+    default n
+
+menu "Enable CAN"
+    config RT_USING_CAN
+        bool "Enable CAN"
+        default n
+
+    if RT_USING_CAN
+    config RT_USING_CAN1
+        bool "Enable CAN1"
+        default n
+    endif
+endmenu
+
+config RT_USING_CRU
+    bool "Enable CRU"
+    default n
+
+config RT_USING_DMA
+    bool "Enable General DMA Framework"
+    default n
+
+if RT_USING_DMA
+config RT_USING_DMA_PL330
+    bool "Enable PL330 DMA Controller"
+    default n
+
+config RT_USING_DMA0
+    bool "Enable PL330 DMA0 Controller"
+    default n
+
+config RT_USING_DMA1
+    bool "Enable PL330 DMA1 Controller"
+    default n
+endif
+
+menu "Enable GMAC"
+    config RT_USING_GMAC
+        bool "Enable GMAC"
+        select RT_USING_LWIP
+        default n
+
+    if RT_USING_GMAC
+    config RT_USING_GMAC0
+        bool "Enable GMAC0"
+        default n
+    config RT_USING_GMAC1
+        bool "Enable GMAC1"
+        default n
+    endif
+endmenu
+
+config RT_USING_PMU
+    bool "Enable PMU"
+    default y
+
+if RT_USING_PWM
+menu "Enable PWM"
+    config RT_USING_PWM0
+        bool "Enable PWM0"
+        default n
+
+    config RT_USING_PWM1
+        bool "Enable PWM1"
+        default n
+
+    config RT_USING_PWM2
+        bool "Enable PWM2"
+        default n
+
+    config RT_USING_PWM3
+        bool "Enable PWM3"
+        default n
+endmenu
+endif
+
+config RT_USING_SYSTICK
+    bool "Enable SYSTICK"
+    default y
+
+menu "Enable UART"
+    config RT_USING_UART
+        bool "Enable UART"
+        default y
+
+    if RT_USING_UART
+    config RT_USING_UART2
+        bool "Enable UART2"
+        default y
+
+    config RT_USING_UART4
+        bool "Enable UART4"
+        default n
+
+    config RT_USING_UART5
+        bool "Enable UART5"
+        default n
+    endif
+endmenu
+
+if RT_USING_SPI
+menu "Enable SPI"
+    config RT_USING_SPI0
+        bool "Enable SPI0"
+        default n
+
+    config RT_USING_SPI1
+        bool "Enable SPI1"
+        default n
+
+    config RT_USING_SPI2
+        bool "Enable SPI2"
+        default n
+
+    config RT_USING_SPI3
+        bool "Enable SPI3"
+        default n
+
+    config RT_USING_SPI4
+        bool "Enable SPI4"
+        default n
+endmenu
+endif
+
+config RT_USING_DW_PCIE
+    bool "Enable DW PCIE"
+    default n
+
+config RT_USING_PCIE_DMA
+    bool "Enable PCIE DMA"
+    default n
+
+menu "Enable Audio Card"
+    config RT_USING_AUDIO_CARD_I2S0_8CH
+       bool "Enable TDM0 Digital audio card"
+       select RT_USING_I2STDM0
+       default n
+
+    config RT_USING_AUDIO_CARD_I2S1_8CH
+       bool "Enable TDM1 Digital audio card"
+       select RT_USING_I2STDM1
+       default n
+
+menu "Audio Interfaces"
+    config RT_USING_I2STDM
+        bool
+
+    config RT_USING_I2STDM0
+        bool
+        select RT_USING_I2STDM
+
+    config RT_USING_I2STDM1
+        bool
+        select RT_USING_I2STDM
+
+    config RT_USING_PCM
+        bool
+        select RT_USING_DMA
+endmenu
+endmenu
+endmenu

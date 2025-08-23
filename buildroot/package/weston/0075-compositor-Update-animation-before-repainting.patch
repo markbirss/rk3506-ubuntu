@@ -1,0 +1,87 @@
+From 4349867f11594c7fa43e906e8296fea5d07e56c7 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 27 May 2022 15:39:10 +0800
+Subject: [PATCH 75/97] compositor: Update animation before repainting
+
+Avoid showing animation after resumed.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/animation.c  | 13 ++++++++-----
+ libweston/compositor.c |  7 +++++++
+ 2 files changed, 15 insertions(+), 5 deletions(-)
+
+diff --git a/libweston/animation.c b/libweston/animation.c
+index 3d8cc7a20..ae3c31dc0 100644
+--- a/libweston/animation.c
++++ b/libweston/animation.c
+@@ -59,6 +59,7 @@ weston_spring_update(struct weston_spring *spring, const struct timespec *time)
+ {
+ 	double force, v, current, step;
+ 
++#if 0
+ 	/* Limit the number of executions of the loop below by ensuring that
+ 	 * the timestamp for last update of the spring is no more than 1s ago.
+ 	 * This handles the case where time moves backwards or forwards in
+@@ -71,6 +72,7 @@ weston_spring_update(struct weston_spring *spring, const struct timespec *time)
+ 			   timespec_to_msec(time));
+ 		timespec_add_msec(&spring->timestamp, time, -1000);
+ 	}
++#endif
+ 
+ 	step = 0.01;
+ 	while (4 < timespec_sub_to_msec(time, &spring->timestamp)) {
+@@ -199,9 +201,6 @@ weston_view_animation_frame(struct weston_animation *base,
+ 	struct weston_compositor *compositor =
+ 		animation->view->surface->compositor;
+ 
+-	if (base->frame_counter <= 1)
+-		animation->spring.timestamp = *time;
+-
+ 	weston_spring_update(&animation->spring, time);
+ 
+ 	if (weston_spring_done(&animation->spring)) {
+@@ -273,10 +272,14 @@ weston_view_animation_create(struct weston_view *view,
+ static void
+ weston_view_animation_run(struct weston_view_animation *animation)
+ {
+-	struct timespec zero_time = { 0 };
++	struct weston_compositor *compositor =
++		animation->view->surface->compositor;
++	struct timespec now;
+ 
++	weston_compositor_read_presentation_clock(compositor, &now);
+ 	animation->animation.frame_counter = 0;
+-	weston_view_animation_frame(&animation->animation, NULL, &zero_time);
++	animation->spring.timestamp = now;
++	weston_view_animation_frame(&animation->animation, NULL, &now);
+ }
+ 
+ static void
+diff --git a/libweston/compositor.c b/libweston/compositor.c
+index c6b809bb1..f0585fd85 100644
+--- a/libweston/compositor.c
++++ b/libweston/compositor.c
+@@ -4136,12 +4136,19 @@ output_repaint_timer_handler(void *data)
+ 			backend->repaint_begin(backend);
+ 
+ 		wl_list_for_each(output, &compositor->output_list, link) {
++			struct weston_animation *animation, *next;
++
+ 			if (output->backend != backend)
+ 				continue;
+ 
+ 			if (!output->will_repaint)
+ 				continue;
+ 
++			/* update animation status */
++			wl_list_for_each_safe(animation, next,
++					      &output->animation_list, link)
++				animation->frame(animation, output, &now);
++
+ 			ret = weston_output_repaint(output, &now);
+ 			if (ret)
+ 				break;
+-- 
+2.20.1
+

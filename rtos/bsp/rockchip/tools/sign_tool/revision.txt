@@ -1,0 +1,63 @@
+v1.45 revision(2024\09\10)
+1.fix sign update.img bug, cause of afptool unpack image into afptool dir
+
+v1.44 revision(2024\09\09)
+1.fix sign trust.img bug, no reverse before rsa sign
+
+v1.43 revision(2024\06\24)
+1.support to sign and verify resc image
+
+v1.42 revision(2024\02\29)
+1.enable revocation flag for old signed idblock 
+
+v1.41 revision(2024\02\23)
+1.soft version limit on the lower word
+
+v1.4 revision(2023\09\15)
+1.fix ec_sign and ec_verify bug,compute hash twice
+2.correct sm2_sign and sm2_verify to using plain data to compute
+
+v1.39 revision(2023\07\04)
+1.add function to sign /verify by ecdsa
+2.fix fkey bugs on signing
+
+v1.38 revision(2023\05\15)
+1.verify hsm funciton(generate rsa keys and sign and verify)
+
+v1.37 revision(2022\11\21)
+1.fix rsa4096 sign bug
+2.add hsm support
+
+v1.36 revision(2022\08\25)
+1.kk command add --out option for compatible with rk_sign_tool
+
+v1.35 revision(2022\08\23)
+1.add sign new loader by rsa4096
+
+v1.34 revision(2022\08\19)
+1.fix aes align bug 
+
+v1.33 revision(2022\08\15)
+1.add otp command to extract otp data
+
+v1.32 revision(2022\08\10)
+1.support sm4 encrypt
+2.support clear sign argument separately
+
+v1.31 revision(2022\08\08)
+1.mcr command support sm algo
+2.add outfile argument into mcr
+
+v1.3 revision(2022\07\22)
+1.support do sm3 hash
+2.support to generate sm key paris
+3.support to sign and verify loader and update by sm2
+
+v1.2 revision(2022\03\15)
+1.support to compile on mac
+2.align help message 
+3.fix sign trust bug(no value to sig_size)
+
+v1.1 revision(2021\12\31)
+1.change rc4 type of len param from ushort into uint
+

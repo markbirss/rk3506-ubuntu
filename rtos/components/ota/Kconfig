@@ -1,0 +1,75 @@
+menuconfig RT_USING_OTA
+    bool
+    prompt "Enable Ota upgrade"
+    default n
+    select RT_USING_RESET
+    select RT_USING_FWANALYSIS
+    help
+        Select this option to enable firmware ota upgrade
+
+if RT_USING_OTA
+
+    menu "OTA Component Options"
+        config RT_USING_OTA_RECOVERY
+            bool
+            prompt "Enable ota upgrade in recovery mode"
+            default n
+
+        choice
+            prompt "OTA upgrade from where"
+            default RT_USING_OTA_FROM_LOCAL
+
+            config RT_USING_OTA_FROM_LOCAL
+                bool "local"
+            config RT_USING_OTA_FROM_HTTP
+                bool "http"
+
+            config RT_OTA_HTTP_URL
+                string "Url of firmware from http server" if RT_USING_OTA_FROM_HTTP
+
+        endchoice
+        config RT_SUPPORT_ROOT_AB
+            bool
+            depends on !RT_USING_OTA_RECOVERY
+            prompt "Enable support root A/B partition"
+            default n
+    endmenu
+
+endif
+
+menuconfig RT_USING_NEW_OTA
+    bool
+    prompt "Enable new OTA upgrade"
+    default n
+    select RT_USING_RESET
+    select RT_USING_FWANALYSIS
+    select RT_USING_DMA
+    help
+        Select this option to enable firmware new ota upgrade
+
+if RT_USING_NEW_OTA
+    menu "NEW OTA options"
+        choice
+            prompt "OTA A/B mode"
+            default RT_USING_NEW_OTA_MODE_AB_RECOVERY
+            help
+                Select OTA A/B mode, all fw need implement A/B firmware backup, there are three methods:
+                1. A/B and Recovery: need fw_a, fw_b, recovery, recovery is used to upgrade fw_a or fw_b
+                2. A and Recovery: need fw_a, recovery, recovery is used to upgrade fw_a
+                3. A/B: need fw_a, fw_b, fw_a/(fw_b) is used to upgrade fw_b/(fw_a)
+
+            config RT_USING_NEW_OTA_MODE_AB_RECOVERY
+                bool "A/B and Recovery"
+            config RT_USING_NEW_OTA_MODE_A_RECOVERY
+                bool "A and Recovery"
+            config RT_USING_NEW_OTA_MODE_AB
+                bool "A/B"
+        endchoice
+    endmenu
+
+    config RT_BUILD_RECOVERY_FW
+        bool
+        prompt "Build recovery FW"
+        default n
+        select ARCH_ARM_CORTEX_SECURE
+endif

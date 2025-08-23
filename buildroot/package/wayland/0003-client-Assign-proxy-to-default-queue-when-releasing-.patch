@@ -1,0 +1,74 @@
+From 20012f94743c9a8cc562b11ff6409b48842e3995 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Mon, 21 Aug 2023 18:19:40 +0800
+Subject: [PATCH 3/3] client: Assign proxy to default queue when releasing the
+ attached one
+
+It's a bug to release a queue with proxies attached, but it doesn't
+deserve to die.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ src/wayland-client.c | 32 +++++++++++++++++---------------
+ 1 file changed, 17 insertions(+), 15 deletions(-)
+
+diff --git a/src/wayland-client.c b/src/wayland-client.c
+index b090923..b17fb48 100644
+--- a/src/wayland-client.c
++++ b/src/wayland-client.c
+@@ -301,6 +301,21 @@ destroy_queued_closure(struct wl_closure *closure)
+ 	wl_closure_destroy(closure);
+ }
+ 
++static void
++proxy_set_queue(struct wl_proxy *proxy, struct wl_event_queue *queue)
++{
++	wl_list_remove(&proxy->queue_link);
++
++	if (queue) {
++		assert(proxy->display == queue->display);
++		proxy->queue = queue;
++	} else {
++		proxy->queue = &proxy->display->default_queue;
++	}
++
++	wl_list_insert(&proxy->queue->proxy_list, &proxy->queue_link);
++}
++
+ static void
+ wl_event_queue_release(struct wl_event_queue *queue)
+ {
+@@ -328,9 +343,7 @@ wl_event_queue_release(struct wl_event_queue *queue)
+ 				       proxy->object.interface->name,
+ 				       proxy->object.id);
+ 			}
+-			proxy->queue = NULL;
+-			wl_list_remove(&proxy->queue_link);
+-			wl_list_init(&proxy->queue_link);
++			proxy_set_queue(proxy, NULL);
+ 		}
+ 	}
+ 
+@@ -2456,18 +2469,7 @@ WL_EXPORT void
+ wl_proxy_set_queue(struct wl_proxy *proxy, struct wl_event_queue *queue)
+ {
+ 	pthread_mutex_lock(&proxy->display->mutex);
+-
+-	wl_list_remove(&proxy->queue_link);
+-
+-	if (queue) {
+-		assert(proxy->display == queue->display);
+-		proxy->queue = queue;
+-	} else {
+-		proxy->queue = &proxy->display->default_queue;
+-	}
+-
+-	wl_list_insert(&proxy->queue->proxy_list, &proxy->queue_link);
+-
++	proxy_set_queue(proxy, queue);
+ 	pthread_mutex_unlock(&proxy->display->mutex);
+ }
+ 
+-- 
+2.20.1
+

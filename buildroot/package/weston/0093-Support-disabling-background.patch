@@ -1,0 +1,64 @@
+From b63c0350e68ce58e38872fe7056f147da2127ff2 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Thu, 8 Aug 2024 08:51:02 +0800
+Subject: [PATCH 93/98] Support disabling background
+
+Set env WESTON_NO_BACKGROUND=1 to disable it.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ clients/desktop-shell.c   | 10 ++++++++++
+ kiosk-shell/kiosk-shell.c |  2 +-
+ 2 files changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/clients/desktop-shell.c b/clients/desktop-shell.c
+index b8ded46dd..888ab13ed 100644
+--- a/clients/desktop-shell.c
++++ b/clients/desktop-shell.c
+@@ -145,6 +145,8 @@ struct output {
+ 	struct background *background;
+ 
+ 	struct desktop *desktop;
++
++	bool inited;
+ };
+ 
+ struct panel_launcher {
+@@ -2073,6 +2075,11 @@ output_init(struct output *output, struct desktop *desktop)
+ {
+ 	struct wl_surface *surface;
+ 
++	if (output->inited)
++		return;
++
++	output->inited = true;
++
+ 	if (desktop->want_panel) {
+ 		output->panel = panel_create(desktop, output);
+ 		surface = window_get_wl_surface(output->panel->window);
+@@ -2080,6 +2087,9 @@ output_init(struct output *output, struct desktop *desktop)
+ 					       output->output, surface);
+ 	}
+ 
++	if (getenv("WESTON_NO_BACKGROUND"))
++		return;
++
+ 	output->background = background_create(desktop, output);
+ 	surface = window_get_wl_surface(output->background->window);
+ 	weston_desktop_shell_set_background(desktop->shell,
+diff --git a/kiosk-shell/kiosk-shell.c b/kiosk-shell/kiosk-shell.c
+index 440e36e13..2a9a765e6 100644
+--- a/kiosk-shell/kiosk-shell.c
++++ b/kiosk-shell/kiosk-shell.c
+@@ -700,7 +700,7 @@ kiosk_shell_output_recreate_background(struct kiosk_shell_output *shoutput)
+ 	if (shoutput->curtain)
+ 		weston_shell_utils_curtain_destroy(shoutput->curtain);
+ 
+-	if (!output)
++	if (!output || getenv("WESTON_NO_BACKGROUND"))
+ 		return;
+ 
+ 	if (shell->config)
+-- 
+2.20.1
+

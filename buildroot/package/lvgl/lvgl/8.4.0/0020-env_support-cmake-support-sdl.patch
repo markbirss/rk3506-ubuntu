@@ -1,0 +1,27 @@
+From 6924199199cfcb86ea3c96d1a442f19c6f7404b9 Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Wed, 21 Dec 2022 15:19:53 +0800
+Subject: [PATCH 20/35] env_support: cmake: support sdl
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ env_support/cmake/custom.cmake | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/env_support/cmake/custom.cmake b/env_support/cmake/custom.cmake
+index aee3d2562..1a854ea18 100644
+--- a/env_support/cmake/custom.cmake
++++ b/env_support/cmake/custom.cmake
+@@ -45,6 +45,9 @@ endif()
+ if (LV_USE_DEMO_MUSIC)
+     add_definitions(-DLV_USE_DEMO_MUSIC)
+ endif()
++if (LV_USE_GPU_SDL)
++    add_definitions(-DLV_USE_GPU_SDL)
++endif()
+ 
+ target_compile_definitions(
+   lvgl PUBLIC $<$<BOOL:${LV_LVGL_H_INCLUDE_SIMPLE}>:LV_LVGL_H_INCLUDE_SIMPLE>
+-- 
+2.25.1
+

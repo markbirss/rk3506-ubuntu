@@ -1,0 +1,36 @@
+From 3e822dd17cf9f1213bb1e253b4de3905d83fe6cd Mon Sep 17 00:00:00 2001
+From: Liang Chen <cl@rock-chips.com>
+Date: Mon, 22 Jul 2024 14:29:27 +0800
+Subject: [PATCH 2/5] sched/isolation: remove HK_FLAG_TICK for nohz_full for
+ PREEMPT_RT
+
+PREEMPT_RT will enable CONFIG_HZ_PERIODIC to increase cache hit,
+so nohz_full should not depend on CONFIG_NO_HZ_FULL.
+
+Signed-off-by: Liang Chen <cl@rock-chips.com>
+Change-Id: Iecfdd43947128913c3df63091567a303c6ec1ed4
+---
+ kernel/sched/isolation.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/kernel/sched/isolation.c b/kernel/sched/isolation.c
+index 373d42c707bc..934eb51309f1 100644
+--- a/kernel/sched/isolation.c
++++ b/kernel/sched/isolation.c
+@@ -181,8 +181,13 @@ static int __init housekeeping_nohz_full_setup(char *str)
+ {
+ 	unsigned long flags;
+ 
++#ifdef CONFIG_PREEMPT_RT
++	flags = HK_FLAG_WQ | HK_FLAG_TIMER | HK_FLAG_RCU |
++		HK_FLAG_MISC | HK_FLAG_KTHREAD;
++#else
+ 	flags = HK_FLAG_TICK | HK_FLAG_WQ | HK_FLAG_TIMER | HK_FLAG_RCU |
+ 		HK_FLAG_MISC | HK_FLAG_KTHREAD;
++#endif
+ 
+ 	return housekeeping_setup(str, flags);
+ }
+-- 
+2.34.1
+

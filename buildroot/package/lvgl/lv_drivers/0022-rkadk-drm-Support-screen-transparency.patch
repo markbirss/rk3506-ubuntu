@@ -1,0 +1,38 @@
+From 70f3ba02841510188d6ff8dcc6982e32733cedb6 Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Mon, 14 Oct 2024 10:43:47 +0800
+Subject: [PATCH] rkadk/drm: Support screen transparency
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ display/drm.c | 1 +
+ rkadk/rkadk.c | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/display/drm.c b/display/drm.c
+index b582cc07..735722e4 100644
+--- a/display/drm.c
++++ b/display/drm.c
+@@ -1163,6 +1163,7 @@ void drm_disp_drv_init(int rot)
+         disp_drv.ver_res = lcd_w;
+     }
+ 
++    disp_drv.screen_transp = LV_COLOR_SCREEN_TRANSP;
+     disp_drv.sw_rotate = 0;
+     disp_drv.rotated = LV_DISP_ROT_NONE;
+     /*Used to copy the buffer's content to the display*/
+diff --git a/rkadk/rkadk.c b/rkadk/rkadk.c
+index 5c632121..f58811dd 100644
+--- a/rkadk/rkadk.c
++++ b/rkadk/rkadk.c
+@@ -741,6 +741,7 @@ void rkadk_disp_drv_init(lv_disp_rot_t rotate_disp)
+         disp_drv.rotated = LV_DISP_ROT_270;
+     }
+ 
++    disp_drv.screen_transp = LV_COLOR_SCREEN_TRANSP;
+     /*Used to copy the buffer's content to the display*/
+     disp_drv.flush_cb = rk_disp_flush;
+ 
+-- 
+2.25.1
+

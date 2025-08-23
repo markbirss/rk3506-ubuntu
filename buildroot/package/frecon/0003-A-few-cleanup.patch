@@ -1,0 +1,2774 @@
+From 1c077808ac7532434894f62e30c12f4f7e129498 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Thu, 9 Jun 2022 16:59:54 +0800
+Subject: [PATCH 03/11] A few cleanup
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ Makefile                      |  16 +-
+ dbus.h                        |  28 ---
+ dbus/org.chromium.frecon.conf |  18 --
+ dbus_full.c                   | 428 ----------------------------------
+ dbus_interface.h              |  53 -----
+ dbus_lite.c                   |  58 -----
+ dev_full.c => dev.c           |   0
+ dev_lite.c                    |  50 ----
+ drm.c                         | 292 +----------------------
+ drm.h                         |  36 ---
+ fb.c                          | 102 +-------
+ image.c                       | 280 ----------------------
+ image.h                       |  35 ---
+ input.c                       |  10 -
+ main.c                        | 213 +----------------
+ splash.c                      | 309 ------------------------
+ splash.h                      |  28 ---
+ term.c                        | 274 +---------------------
+ term.h                        |   5 -
+ 19 files changed, 14 insertions(+), 2221 deletions(-)
+ delete mode 100644 dbus.h
+ delete mode 100644 dbus/org.chromium.frecon.conf
+ delete mode 100644 dbus_full.c
+ delete mode 100644 dbus_interface.h
+ delete mode 100644 dbus_lite.c
+ rename dev_full.c => dev.c (100%)
+ delete mode 100644 dev_lite.c
+ delete mode 100644 image.c
+ delete mode 100644 image.h
+ delete mode 100644 splash.c
+ delete mode 100644 splash.h
+
+diff --git a/Makefile b/Makefile
+index 3fef7e9..892fd37 100644
+--- a/Makefile
++++ b/Makefile
+@@ -4,19 +4,9 @@
+ 
+ include common.mk
+ 
+-FRECON_LITE ?= 0
+-
+-PC_DEPS = libdrm libpng libtsm
+-ifeq ($(FRECON_LITE),1)
+-FRECON_OBJECTS = $(filter-out %_full.o,$(C_OBJECTS))
+-CPPFLAGS += -DFRECON_LITE=1
+-TARGET ?= frecon-lite
+-else
+-FRECON_OBJECTS = $(filter-out %_lite.o,$(C_OBJECTS))
+-PC_DEPS += dbus-1 libudev
+-CPPFLAGS += -DFRECON_LITE=0
++PC_DEPS = libdrm libtsm
++PC_DEPS += libudev
+ TARGET ?= frecon
+-endif
+ 
+ PC_CFLAGS := $(shell $(PKG_CONFIG) --cflags $(PC_DEPS))
+ PC_LIBS := $(shell $(PKG_CONFIG) --libs $(PC_DEPS))
+@@ -32,7 +22,7 @@ $(OUT)glyphs.h: $(SRC)/font_to_c.py $(SRC)/ter-u16n.bdf
+ 
+ font.o.depends: $(OUT)glyphs.h
+ 
+-CC_BINARY($(TARGET)): $(FRECON_OBJECTS)
++CC_BINARY($(TARGET)): $(C_OBJECTS)
+ 
+ all: CC_BINARY($(TARGET))
+ 
+diff --git a/dbus.h b/dbus.h
+deleted file mode 100644
+index 99e2cd4..0000000
+--- a/dbus.h
++++ /dev/null
+@@ -1,28 +0,0 @@
+-/*
+- * Copyright 2014 The ChromiumOS Authors
+- * Use of this source code is governed by a BSD-style license that can be
+- * found in the LICENSE file.
+- */
+-
+-#ifndef FRECON_DBUS_H
+-#define FRECON_DBUS_H
+-
+-#include <sys/select.h>
+-#include <stdbool.h>
+-#include <memory.h>
+-#include <stdio.h>
+-
+-bool dbus_init();
+-bool dbus_init_wait();
+-void dbus_destroy(void);
+-void dbus_add_fds(fd_set* read_set, fd_set* exception_set, int *maxfd);
+-void dbus_dispatch_io(void);
+-void dbus_report_user_activity(int activity_type);
+-bool dbus_take_display_ownership(void);
+-bool dbus_release_display_ownership(void);
+-bool dbus_is_initialized(void);
+-void dbus_set_login_prompt_visible_callback(void (*callback)(void));
+-void dbus_set_suspend_done_callback(void (*callback)(void*),
+-				    void* userptr);
+-
+-#endif // FRECON_DBUS_H
+diff --git a/dbus/org.chromium.frecon.conf b/dbus/org.chromium.frecon.conf
+deleted file mode 100644
+index 427257a..0000000
+--- a/dbus/org.chromium.frecon.conf
++++ /dev/null
+@@ -1,18 +0,0 @@
+-<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-BUS Bus Configuration 1.0//EN"
+-  "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+-<!--
+-  Copyright 2015 The ChromiumOS Authors
+-  Use of this source code is governed by a BSD-style license that can be
+-  found in the LICENSE file.
+-
+-  This file will be installed at /etc/dbus-1/system.d on Chromium OS.
+--->
+-<busconfig>
+-  <policy user="root">
+-    <allow own="org.chromium.frecon"/>
+-  </policy>
+-  <policy context="default">
+-    <allow receive_sender="org.chromium.frecon"/>
+-    <allow send_destination="org.chromium.frecon"/>
+-  </policy>
+-</busconfig>
+diff --git a/dbus_full.c b/dbus_full.c
+deleted file mode 100644
+index e0d955c..0000000
+--- a/dbus_full.c
++++ /dev/null
+@@ -1,428 +0,0 @@
+-/*
+- * Copyright 2014 The ChromiumOS Authors
+- * Use of this source code is governed by a BSD-style license that can be
+- * found in the LICENSE file.
+- */
+-
+-#include <dbus/dbus.h>
+-#include <stdlib.h>
+-#include <unistd.h>
+-
+-#include "dbus.h"
+-#include "dbus_interface.h"
+-#include "image.h"
+-#include "main.h"
+-#include "term.h"
+-#include "util.h"
+-
+-#define DBUS_WAIT_DELAY_US             (50000)
+-#define DBUS_DEFAULT_DELAY             3000
+-#define DBUS_INIT_TIMEOUT_MS           (60*1000)
+-
+-typedef struct _dbus_t dbus_t;
+-
+-static void (*login_prompt_visible_callback)(void) = NULL;
+-static void (*suspend_done_callback)(void*) = NULL;
+-static void* suspend_done_callback_userptr = NULL;
+-static bool chrome_is_already_up = false;
+-static bool dbus_connect_fail = false;
+-static int64_t dbus_connect_fail_time;
+-static bool dbus_first_init = true;
+-static int64_t dbus_first_init_time;
+-
+-struct _dbus_t {
+-	DBusConnection* conn;
+-	DBusWatch* watch;
+-	int fd;
+-};
+-
+-static dbus_t *dbus = NULL;
+-
+-static void frecon_dbus_unregister(DBusConnection* connection, void* user_data)
+-{
+-}
+-
+-static DBusHandlerResult frecon_dbus_message_handler(DBusConnection* connection,
+-						     DBusMessage* message,
+-						     void* user_data)
+-{
+-	return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+-}
+-
+-static DBusObjectPathVTable
+-frecon_vtable = {
+-	frecon_dbus_unregister,
+-	frecon_dbus_message_handler,
+-	NULL
+-};
+-
+-static dbus_bool_t add_watch(DBusWatch* w, void* data)
+-{
+-	dbus_t* dbus = (dbus_t*)data;
+-	dbus->watch = w;
+-
+-	return TRUE;
+-}
+-
+-static void remove_watch(DBusWatch* w, void* data)
+-{
+-}
+-
+-static void toggle_watch(DBusWatch* w, void* data)
+-{
+-}
+-
+-static DBusHandlerResult handle_login_prompt_visible(DBusMessage* message)
+-{
+-	if (login_prompt_visible_callback) {
+-		login_prompt_visible_callback();
+-		login_prompt_visible_callback = NULL;
+-	}
+-	chrome_is_already_up = true;
+-
+-	return DBUS_HANDLER_RESULT_HANDLED;
+-}
+-
+-static DBusHandlerResult handle_suspend_done(DBusMessage* message)
+-{
+-	if (suspend_done_callback)
+-		suspend_done_callback(suspend_done_callback_userptr);
+-
+-	return DBUS_HANDLER_RESULT_HANDLED;
+-}
+-
+-static DBusHandlerResult frecon_dbus_message_filter(DBusConnection* connection,
+-						    DBusMessage* message,
+-						    void* user_data)
+-{
+-	if (dbus_message_is_signal(message,
+-				kSessionManagerInterface, kLoginPromptVisibleSignal))
+-		return handle_login_prompt_visible(message);
+-	else if (dbus_message_is_signal(message,
+-				kPowerManagerInterface, kSuspendDoneSignal))
+-		return handle_suspend_done(message);
+-
+-	return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+-}
+-
+-bool dbus_is_initialized(void)
+-{
+-	return !!dbus;
+-}
+-
+-bool dbus_init()
+-{
+-	dbus_t* new_dbus;
+-	DBusError err;
+-	int result;
+-	dbus_bool_t stat;
+-
+-	if (dbus_first_init) {
+-		dbus_first_init = false;
+-		dbus_first_init_time = get_monotonic_time_ms();
+-	}
+-	dbus_error_init(&err);
+-
+-	new_dbus = (dbus_t*)calloc(1, sizeof(*new_dbus));
+-
+-	if (!new_dbus)
+-		return false;
+-
+-	new_dbus->fd = -1;
+-
+-	new_dbus->conn = dbus_bus_get(DBUS_BUS_SYSTEM, &err);
+-	if (dbus_error_is_set(&err)) {
+-		if (!dbus_connect_fail) {
+-			LOG(DEBUG, "Cannot get DBUS connection");
+-			dbus_connect_fail = true;
+-			dbus_connect_fail_time = get_monotonic_time_ms();
+-		}
+-		free(new_dbus);
+-		return false;
+-	}
+-
+-	if (dbus_connect_fail) {
+-		int64_t t = get_monotonic_time_ms() - dbus_connect_fail_time;
+-		LOG(DEBUG, "DBUS connected after %.1f seconds", (float)t / 1000.0f);
+-	}
+-
+-	result = dbus_bus_request_name(new_dbus->conn, kFreconDbusInterface,
+-			DBUS_NAME_FLAG_DO_NOT_QUEUE, &err);
+-
+-	if (result <= 0) {
+-		LOG(ERROR, "Unable to get name for server");
+-	}
+-
+-	stat = dbus_connection_register_object_path(new_dbus->conn,
+-			kFreconDbusPath,
+-			&frecon_vtable,
+-			NULL);
+-
+-	if (!stat) {
+-		LOG(ERROR, "failed to register object path");
+-	}
+-
+-	dbus_bus_add_match(new_dbus->conn, kLoginPromptVisibleRule, &err);
+-	dbus_bus_add_match(new_dbus->conn, kSuspendDoneRule, &err);
+-
+-	stat = dbus_connection_add_filter(new_dbus->conn, frecon_dbus_message_filter, NULL, NULL);
+-	if (!stat) {
+-		LOG(ERROR, "failed to add message filter");
+-	}
+-
+-	stat = dbus_connection_set_watch_functions(new_dbus->conn,
+-			add_watch, remove_watch, toggle_watch,
+-			new_dbus, NULL);
+-
+-	if (!stat) {
+-		LOG(ERROR, "Failed to set watch functions");
+-	}
+-
+-	dbus_connection_set_exit_on_disconnect(new_dbus->conn, FALSE);
+-
+-	dbus = new_dbus;
+-	return true;
+-}
+-
+-bool dbus_init_wait()
+-{
+-	while (!dbus_is_initialized()) {
+-		if (!dbus_init()) {
+-			int64_t t = get_monotonic_time_ms() - dbus_first_init_time;
+-			if (t >= DBUS_INIT_TIMEOUT_MS) {
+-				LOG(ERROR, "DBUS init failed after a timeout of %u sec", DBUS_INIT_TIMEOUT_MS/1000);
+-				return false;
+-			}
+-		}
+-		usleep(DBUS_WAIT_DELAY_US);
+-	}
+-	return true;
+-}
+-
+-static bool dbus_method_call0(const char* service_name,
+-			      const char* service_path,
+-			      const char* service_interface,
+-			      const char* method)
+-{
+-	DBusMessage* msg = NULL;
+-	if (!dbus) {
+-		LOG(ERROR, "dbus not initialized");
+-		return false;
+-	}
+-
+-	msg = dbus_message_new_method_call(service_name,
+-			service_path, service_interface, method);
+-
+-	if (!msg)
+-		return false;
+-
+-	if (!dbus_connection_send_with_reply_and_block(dbus->conn,
+-				msg, DBUS_DEFAULT_DELAY, NULL)) {
+-		dbus_message_unref(msg);
+-		return false;
+-	}
+-
+-	dbus_connection_flush(dbus->conn);
+-	dbus_message_unref(msg);
+-
+-	return true;
+-}
+-
+-static bool dbus_method_call0_bool(const char* service_name,
+-				   const char* service_path,
+-				   const char* service_interface,
+-				   const char* method)
+-{
+-	DBusMessage* msg = NULL;
+-	DBusMessage* reply = NULL;
+-	int res = false;
+-
+-	if (!dbus) {
+-		LOG(ERROR, "dbus not initialized");
+-		return false;
+-	}
+-
+-	msg = dbus_message_new_method_call(service_name,
+-			service_path, service_interface, method);
+-
+-	if (!msg)
+-		return false;
+-
+-	reply = dbus_connection_send_with_reply_and_block(dbus->conn,
+-				msg, DBUS_DEFAULT_DELAY, NULL);
+-	if (!reply) {
+-		dbus_message_unref(msg);
+-		return false;
+-	}
+-
+-	dbus_message_get_args(reply, NULL, DBUS_TYPE_BOOLEAN, &res, DBUS_TYPE_INVALID);
+-
+-	dbus_connection_flush(dbus->conn);
+-	dbus_message_unref(msg);
+-	dbus_message_unref(reply);
+-
+-	return (bool)res;
+-}
+-
+-static bool dbus_method_call1(const char* service_name,
+-			      const char* service_path,
+-			      const char* service_interface,
+-			      const char* method, int arg_type, void* param)
+-{
+-	DBusMessage* msg = NULL;
+-	if (!dbus) {
+-		LOG(ERROR, "dbus not initialized");
+-		return false;
+-	}
+-
+-	msg = dbus_message_new_method_call(service_name,
+-			service_path, service_interface, method);
+-
+-	if (!msg)
+-		return false;
+-
+-	if (!dbus_message_append_args(msg,
+-				arg_type, param, DBUS_TYPE_INVALID)) {
+-		dbus_message_unref(msg);
+-		return false;
+-	}
+-
+-	if (!dbus_connection_send_with_reply_and_block(dbus->conn,
+-				msg, DBUS_DEFAULT_DELAY, NULL)) {
+-		dbus_message_unref(msg);
+-		return false;
+-	}
+-
+-	dbus_connection_flush(dbus->conn);
+-	dbus_message_unref(msg);
+-
+-	return true;
+-}
+-
+-void dbus_destroy(void)
+-{
+-	/* FIXME - not sure what the right counterpart to
+-	 * dbus_bus_get() is, unref documentation is rather
+-	 * unclear. Not a big issue but it would be nice to
+-	 * clean up properly here
+-	 */
+-	/* dbus_connection_unref(dbus->conn); */
+-	if (dbus) {
+-		free(dbus);
+-		dbus = NULL;
+-	}
+-}
+-
+-void dbus_add_fds(fd_set* read_set, fd_set* exception_set, int *maxfd)
+-{
+-	if (!dbus)
+-		return;
+-
+-	if (dbus->fd < 0)
+-		dbus->fd = dbus_watch_get_unix_fd(dbus->watch);
+-
+-	if (dbus->fd >= 0) {
+-		FD_SET(dbus->fd, read_set);
+-		FD_SET(dbus->fd, exception_set);
+-	}
+-
+-	if (dbus->fd > *maxfd)
+-		*maxfd = dbus->fd;
+-}
+-
+-void dbus_dispatch_io(void)
+-{
+-	if (!dbus)
+-		return;
+-
+-	dbus_watch_handle(dbus->watch, DBUS_WATCH_READABLE);
+-	while (dbus_connection_get_dispatch_status(dbus->conn)
+-			== DBUS_DISPATCH_DATA_REMAINS) {
+-		dbus_connection_dispatch(dbus->conn);
+-	}
+-}
+-
+-void dbus_report_user_activity(int activity_type)
+-{
+-	dbus_bool_t allow_off = false;
+-	if (!dbus)
+-		return;
+-
+-	dbus_method_call1(kPowerManagerServiceName,
+-			kPowerManagerServicePath,
+-			kPowerManagerInterface,
+-			kHandleUserActivityMethod,
+-			DBUS_TYPE_INT32, &activity_type);
+-
+-	switch (activity_type) {
+-		case USER_ACTIVITY_BRIGHTNESS_UP_KEY_PRESS:
+-				(void)dbus_method_call0(kPowerManagerServiceName,
+-					kPowerManagerServicePath,
+-					kPowerManagerInterface,
+-					kIncreaseScreenBrightnessMethod);
+-				break;
+-		case USER_ACTIVITY_BRIGHTNESS_DOWN_KEY_PRESS:
+-				/*
+-				 * Shouldn't allow the screen to go
+-				 * completely off while frecon is active
+-				 * so passing false to allow_off
+-				 */
+-				(void)dbus_method_call1(kPowerManagerServiceName,
+-					kPowerManagerServicePath,
+-					kPowerManagerInterface,
+-					kDecreaseScreenBrightnessMethod,
+-					DBUS_TYPE_BOOLEAN, &allow_off);
+-				break;
+-	}
+-}
+-
+-/*
+- * tell Chrome to take ownership of the display (DRM master)
+- */
+-bool dbus_take_display_ownership(void)
+-{
+-	if (!dbus)
+-		return true;
+-	return dbus_method_call0_bool(kDisplayServiceName,
+-				      kDisplayServicePath,
+-				      kDisplayServiceInterface,
+-				      kTakeOwnership);
+-}
+-
+-/*
+- * ask Chrome to give up display ownership (DRM master)
+- */
+-bool dbus_release_display_ownership(void)
+-{
+-	if (!dbus)
+-		return true;
+-	return dbus_method_call0_bool(kDisplayServiceName,
+-				      kDisplayServicePath,
+-				      kDisplayServiceInterface,
+-				      kReleaseOwnership);
+-}
+-
+-void dbus_set_login_prompt_visible_callback(void (*callback)(void))
+-{
+-	if (chrome_is_already_up) {
+-		if (callback)
+-			callback();
+-	} else {
+-		if (login_prompt_visible_callback && callback) {
+-			LOG(ERROR, "trying to register login prompt visible callback multiple times");
+-			return;
+-		}
+-		login_prompt_visible_callback = callback;
+-	}
+-}
+-
+-void dbus_set_suspend_done_callback(void (*callback)(void*),
+-				    void* userptr)
+-{
+-	if (suspend_done_callback && callback) {
+-		LOG(ERROR, "trying to register login prompt visible callback multiple times");
+-		return;
+-	}
+-	suspend_done_callback = callback;
+-	suspend_done_callback_userptr = userptr;
+-}
+diff --git a/dbus_interface.h b/dbus_interface.h
+deleted file mode 100644
+index 0985b55..0000000
+--- a/dbus_interface.h
++++ /dev/null
+@@ -1,53 +0,0 @@
+-/*
+- * Copyright 2014 The ChromiumOS Authors
+- * Use of this source code is governed by a BSD-style license that can be
+- * found in the LICENSE file.
+- */
+-
+-#ifndef DBUS_INTERFACE_H_
+-#define DBUS_INTERFACE_H_
+-
+-/* Minimal set of power manager constants copied from
+-   platform/system_api/dbus/service_constants.h which are C++
+-   header file so we can't use it in our code directly */
+-
+-static const char kPowerManagerInterface[] = "org.chromium.PowerManager";
+-static const char kPowerManagerServicePath[] = "/org/chromium/PowerManager";
+-static const char kPowerManagerServiceName[] = "org.chromium.PowerManager";
+-/* Methods exposed by powerd. */
+-static const char kDecreaseScreenBrightnessMethod[] = "DecreaseScreenBrightness";
+-static const char kIncreaseScreenBrightnessMethod[] = "IncreaseScreenBrightness";
+-static const char kHandleUserActivityMethod[] = "HandleUserActivity";
+-/* Values */
+-static const int kBrightnessTransitionGradual = 1;
+-static const int kBrightnessTransitionInstant = 2;
+-enum UserActivityType {
+-	USER_ACTIVITY_OTHER = 0,
+-	USER_ACTIVITY_BRIGHTNESS_UP_KEY_PRESS = 1,
+-	USER_ACTIVITY_BRIGHTNESS_DOWN_KEY_PRESS = 2,
+-	USER_ACTIVITY_VOLUME_UP_KEY_PRESS = 3,
+-	USER_ACTIVITY_VOLUME_DOWN_KEY_PRESS = 4,
+-	USER_ACTIVITY_VOLUME_MUTE_KEY_PRESS = 5,
+-};
+-
+-static const char kSuspendDoneSignal[] = "SuspendDone";
+-static const char kSuspendDoneRule[] = "interface='org.chromium.PowerManager',type='signal'";
+-
+-static const char kSessionManagerInterface[] = "org.chromium.SessionManagerInterface";
+-static const char kSessionManagerServicePath[] = "/org/chromium/SessionManager";
+-static const char kSessionManagerServiceName[] = "org.chromium.SessionManager";
+-
+-static const char kLoginPromptVisibleSignal[] = "LoginPromptVisible";
+-static const char kLoginPromptVisibleRule[] = "interface='org.chromium.SessionManagerInterface',type='signal'";
+-
+-static const char kDisplayServiceName[] = "org.chromium.DisplayService";
+-static const char kDisplayServicePath[] = "/org/chromium/DisplayService";
+-static const char kDisplayServiceInterface[] =
+-  "org.chromium.DisplayServiceInterface";
+-static const char kTakeOwnership[] = "TakeOwnership";
+-static const char kReleaseOwnership[] = "ReleaseOwnership";
+-
+-static const char kFreconDbusInterface[] = "org.chromium.frecon";
+-static const char kFreconDbusPath[] = "/org/chromium/frecon";
+-
+-#endif // FRECON_DBUS_API_H_
+diff --git a/dbus_lite.c b/dbus_lite.c
+deleted file mode 100644
+index c477d96..0000000
+--- a/dbus_lite.c
++++ /dev/null
+@@ -1,58 +0,0 @@
+-/*
+- * Copyright 2019 The ChromiumOS Authors
+- * Use of this source code is governed by a BSD-style license that can be
+- * found in the LICENSE file.
+- */
+-
+-#include <stdlib.h>
+-#include <stdbool.h>
+-
+-bool dbus_init()
+-{
+-	return true;
+-}
+-
+-bool dbus_init_wait()
+-{
+-	return true;
+-}
+-
+-void dbus_destroy(void)
+-{
+-}
+-
+-void dbus_add_fds(fd_set* read_set, fd_set* exception_set, int *maxfd)
+-{
+-}
+-
+-void dbus_dispatch_io(void)
+-{
+-}
+-
+-void dbus_report_user_activity(int activity_type)
+-{
+-}
+-
+-bool dbus_take_display_ownership(void)
+-{
+-	return true;
+-}
+-
+-bool dbus_release_display_ownership(void)
+-{
+-	return true;
+-}
+-
+-bool dbus_is_initialized(void)
+-{
+-	return true;
+-}
+-
+-void dbus_set_login_prompt_visible_callback(void (*callback)(void))
+-{
+-}
+-
+-void dbus_set_suspend_done_callback(void (*callback)(void*),
+-				    void* userptr)
+-{
+-}
+diff --git a/dev_full.c b/dev.c
+similarity index 100%
+rename from dev_full.c
+rename to dev.c
+diff --git a/dev_lite.c b/dev_lite.c
+deleted file mode 100644
+index ac7311a..0000000
+--- a/dev_lite.c
++++ /dev/null
+@@ -1,50 +0,0 @@
+-/*
+- * Copyright 2019 The ChromiumOS Authors
+- * Use of this source code is governed by a BSD-style license that can be
+- * found in the LICENSE file.
+- */
+-
+-#include "dev.h"
+-#include "input.h"
+-#include "util.h"
+-
+-/*
+- * We believe that there's a limit of 32 /dev/input/eventX devices in the
+- * kernel. It's not quite clear. Anyway, we should probably never have more than
+- * that in practice on Chrome OS anyway, so our algorithm is to check for the
+- * first 32 nodes explicitly, then keep checking for any further ones until we
+- * find an entry missing. (This is way simpler than using actual POSIX globbing
+- * or directory entry APIs.)
+- */
+-#define EVDEV_MAX 32
+-
+-int dev_init(void)
+-{
+-	char path[64];
+-	int i;
+-
+-	for (i = 0;; i++) {
+-		snprintf(path, sizeof(path), "/dev/input/event%d", i);
+-		if (access(path, F_OK)) {
+-			if (i >= EVDEV_MAX)
+-				break;
+-			else
+-				continue;
+-		}
+-		input_add(path);
+-	}
+-
+-	return 0;
+-}
+-
+-void dev_close(void)
+-{
+-}
+-
+-void dev_add_fds(fd_set* read_set, fd_set* exception_set, int *maxfd)
+-{
+-}
+-
+-void dev_dispatch_io(fd_set* read_set, fd_set* exception_set)
+-{
+-}
+diff --git a/drm.c b/drm.c
+index 037a820..4748415 100644
+--- a/drm.c
++++ b/drm.c
+@@ -21,33 +21,6 @@
+ 
+ static drm_t* g_drm = NULL;
+ 
+-static int32_t atomic_set_prop(drm_t* drm, drmModeAtomicReqPtr pset, uint32_t id,
+-				drmModeObjectPropertiesPtr props, const char *name, uint64_t value)
+-{
+-	uint32_t u;
+-	int32_t ret;
+-	drmModePropertyPtr prop;
+-
+-	for (u = 0; u < props->count_props; u++) {
+-		prop = drmModeGetProperty(drm->fd, props->props[u]);
+-		if (!prop)
+-			continue;
+-		if (strcmp(prop->name, name)) {
+-			drmModeFreeProperty(prop);
+-			continue;
+-		}
+-		ret = drmModeAtomicAddProperty(pset, id, prop->prop_id, value);
+-		if (ret < 0)
+-			LOG(ERROR, "setting atomic property %s failed with %d\n", name, ret);
+-		else
+-			ret = 0;
+-		drmModeFreeProperty(prop);
+-		return ret;
+-	}
+-	LOG(ERROR, "could not find atomic property %s\n", name);
+-	return -ENOENT;
+-}
+-
+ static int32_t crtc_planes_num(drm_t* drm, int32_t crtc_index)
+ {
+ 	drmModePlanePtr plane;
+@@ -243,37 +216,6 @@ static drmModeConnector* find_first_connected_connector(drm_t* drm, bool interna
+ 	return NULL;
+ }
+ 
+-static int find_panel_orientation(drm_t *drm)
+-{
+-	uint32_t p;
+-	bool found = false;
+-	drmModeObjectPropertiesPtr props;
+-
+-	props = drmModeObjectGetProperties(drm->fd,
+-					   drm->console_connector_id,
+-					   DRM_MODE_OBJECT_CONNECTOR);
+-	if (!props) {
+-		LOG(ERROR, "Unable to get connector properties: %m");
+-		return -1;
+-	}
+-
+-	for (p = 0; p < props->count_props && !found; p++) {
+-		drmModePropertyPtr prop;
+-		prop = drmModeGetProperty(drm->fd, props->props[p]);
+-		if (prop) {
+-			if (strcmp("panel orientation", prop->name) == 0) {
+-				found = true;
+-				drm->panel_orientation = (int32_t)(props->prop_values[p]);
+-			}
+-			drmModeFreeProperty(prop);
+-		}
+-	}
+-
+-	drmModeFreeObjectProperties(props);
+-	return 0;
+-}
+-
+-
+ static bool find_main_monitor(drm_t* drm)
+ {
+ 	int modes;
+@@ -307,8 +249,6 @@ static bool find_main_monitor(drm_t* drm)
+ 
+ 	drm->console_connector_id = main_monitor_connector->connector_id;
+ 	drm->console_connector_internal = drm_is_internal(main_monitor_connector->connector_type);
+-	drm->console_mmWidth = main_monitor_connector->mmWidth;
+-	drm->console_mmHeight = main_monitor_connector->mmHeight;
+ 
+ 	for (modes = 0; modes < main_monitor_connector->count_modes; modes++) {
+ 		if (main_monitor_connector->modes[modes].type &
+@@ -321,8 +261,6 @@ static bool find_main_monitor(drm_t* drm)
+ 	if (modes == main_monitor_connector->count_modes)
+ 		drm->console_mode_info = main_monitor_connector->modes[0];
+ 
+-	find_panel_orientation(drm);
+-
+ 	drmModeFreeConnector(main_monitor_connector);
+ 
+ 	get_connector_path(drm, drm->console_connector_id, NULL, &console_crtc_id);
+@@ -457,12 +395,9 @@ try_open_again:
+ 
+ 		ret = drmGetCap(drm->fd, DRM_CLIENT_CAP_ATOMIC, &atomic);
+ 		if (!ret && atomic) {
+-			drm->atomic = true;
+ 			ret = drmSetClientCap(drm->fd, DRM_CLIENT_CAP_ATOMIC, 1);
+-			if (ret < 0) {
++			if (ret < 0)
+ 				LOG(ERROR, "Failed to set atomic cap.");
+-				drm->atomic = false;
+-			}
+ 		}
+ 
+ 		drm->resources = drmModeGetResources(drm->fd);
+@@ -499,13 +434,12 @@ try_open_again:
+ 		version = drmGetVersion(best_drm->fd);
+ 		if (version) {
+ 			LOG(INFO,
+-			    "Frecon using drm driver %s, version %d.%d, date(%s), desc(%s)%s",
++			    "Frecon using drm driver %s, version %d.%d, date(%s), desc(%s)",
+ 			    version->name,
+ 			    version->version_major,
+ 			    version->version_minor,
+ 			    version->date,
+-			    version->desc,
+-			    best_drm->atomic ? " using atomic" : "");
++			    version->desc);
+ 			drmFreeVersion(version);
+ 		}
+ 	}
+@@ -612,177 +546,6 @@ bool drm_valid(drm_t* drm) {
+ 	return drm && drm->fd >= 0 && drm->resources && drm->console_connector_id;
+ }
+ 
+-static bool is_crtc_possible(drm_t* drm, uint32_t crtc_id, uint32_t mask)
+-{
+-	int32_t crtc;
+-	for (crtc = 0; crtc < drm->resources->count_crtcs; crtc++)
+-		if (drm->resources->crtcs[crtc] == crtc_id)
+-			return !!(mask & (1u << crtc));
+-
+-	return false;
+-
+-}
+-
+-#define CHECK(fn) do { ret = fn; if (ret < 0) goto error_mode; } while (0)
+-static int32_t drm_setmode_atomic(drm_t* drm, uint32_t fb_id)
+-{
+-	int32_t ret;
+-	int32_t crtc, conn;
+-	uint32_t plane;
+-	uint32_t console_crtc_id = 0;
+-	drmModeObjectPropertiesPtr crtc_props = NULL;
+-	drmModeObjectPropertiesPtr plane_props = NULL;
+-	drmModeObjectPropertiesPtr conn_props = NULL;
+-	drmModePlaneResPtr plane_resources;
+-	drmModeAtomicReqPtr pset = NULL;
+-	uint32_t mode_id = 0;
+-
+-	plane_resources = drmModeGetPlaneResources(drm->fd);
+-	if (!plane_resources)
+-		return -ENOENT;
+-
+-	get_connector_path(drm, drm->console_connector_id, NULL, &console_crtc_id);
+-	if (!console_crtc_id)
+-		find_crtc_for_connector(drm, drm->console_connector_id, &console_crtc_id);
+-	if (!console_crtc_id) {
+-		LOG(ERROR, "Could not get console crtc for connector:%d in modeset.\n", drm->console_connector_id);
+-		return -ENOENT;
+-	}
+-
+-	pset = drmModeAtomicAlloc();
+-	if (!pset) {
+-		ret = -ENOMEM;
+-		goto error_mode;
+-	}
+-
+-	for (crtc = 0; crtc < drm->resources->count_crtcs; crtc++) {
+-		uint32_t crtc_id = drm->resources->crtcs[crtc];
+-
+-		crtc_props = drmModeObjectGetProperties(drm->fd, crtc_id, DRM_MODE_OBJECT_CRTC);
+-
+-		if (!crtc_props) {
+-			LOG(ERROR, "Could not query properties for crtc %d %m.", crtc_id);
+-			if (crtc_id != console_crtc_id)
+-				continue;
+-			ret = -ENOENT;
+-			goto error_mode;
+-		}
+-
+-		if (crtc_id == console_crtc_id) {
+-			CHECK(drmModeCreatePropertyBlob(drm->fd, &drm->console_mode_info,
+-							sizeof(drm->console_mode_info),
+-							&mode_id));
+-			/* drm->crtc->mode has been set during init */
+-			CHECK(atomic_set_prop(drm, pset, crtc_id, crtc_props, "MODE_ID", mode_id));
+-			CHECK(atomic_set_prop(drm, pset, crtc_id, crtc_props, "ACTIVE", 1));
+-			/* Reset color matrix to identity and gamma/degamma LUTs to pass through,
+-			 * ignore errors in case they are not supported. */
+-			atomic_set_prop(drm, pset, crtc_id, crtc_props, "CTM", 0);
+-			atomic_set_prop(drm, pset, crtc_id, crtc_props, "DEGAMMA_LUT", 0);
+-			atomic_set_prop(drm, pset, crtc_id, crtc_props, "GAMMA_LUT", 0);
+-		} else {
+-			CHECK(atomic_set_prop(drm, pset, crtc_id, crtc_props, "MODE_ID", 0));
+-			CHECK(atomic_set_prop(drm, pset, crtc_id, crtc_props, "ACTIVE", 0));
+-		}
+-
+-		drmModeFreeObjectProperties(crtc_props);
+-		crtc_props = NULL;
+-	}
+-
+-	for (plane = 0; plane < plane_resources->count_planes; plane++) {
+-		drmModePlanePtr planeobj;
+-		uint32_t plane_id = plane_resources->planes[plane];
+-		uint32_t possible_crtcs;
+-		int primary;
+-
+-		planeobj = drmModeGetPlane(drm->fd, plane_id);
+-		if (!planeobj) {
+-			LOG(ERROR, "Could not query plane object for plane %d %m.", plane_id);
+-			ret = -ENOENT;
+-			goto error_mode;
+-		}
+-
+-		possible_crtcs = planeobj->possible_crtcs;
+-		drmModeFreePlane(planeobj);
+-
+-		primary = drm_is_primary_plane(drm, plane_id);
+-
+-		plane_props = drmModeObjectGetProperties(drm->fd, plane_id, DRM_MODE_OBJECT_PLANE);
+-		if (!plane_props) {
+-			LOG(ERROR, "Could not query properties for plane %d %m.", plane_id);
+-			ret = -ENOENT;
+-			goto error_mode;
+-		}
+-
+-		if (is_crtc_possible(drm, console_crtc_id, possible_crtcs) && primary) {
+-			CHECK(atomic_set_prop(drm, pset, plane_id, plane_props, "FB_ID", fb_id));
+-			CHECK(atomic_set_prop(drm, pset, plane_id, plane_props, "CRTC_ID", console_crtc_id));
+-			CHECK(atomic_set_prop(drm, pset, plane_id, plane_props, "CRTC_X", 0));
+-			CHECK(atomic_set_prop(drm, pset, plane_id, plane_props, "CRTC_Y", 0));
+-			CHECK(atomic_set_prop(drm, pset, plane_id, plane_props, "CRTC_W", drm->console_mode_info.hdisplay));
+-			CHECK(atomic_set_prop(drm, pset, plane_id, plane_props, "CRTC_H", drm->console_mode_info.vdisplay));
+-			CHECK(atomic_set_prop(drm, pset, plane_id, plane_props, "SRC_X", 0));
+-			CHECK(atomic_set_prop(drm, pset, plane_id, plane_props, "SRC_Y", 0));
+-			CHECK(atomic_set_prop(drm, pset, plane_id, plane_props, "SRC_W", drm->console_mode_info.hdisplay << 16));
+-			CHECK(atomic_set_prop(drm, pset, plane_id, plane_props, "SRC_H", drm->console_mode_info.vdisplay << 16));
+-		} else {
+-			CHECK(atomic_set_prop(drm, pset, plane_id, plane_props, "FB_ID", 0));
+-			CHECK(atomic_set_prop(drm, pset, plane_id, plane_props, "CRTC_ID", 0));
+-		}
+-
+-		drmModeFreeObjectProperties(plane_props);
+-		plane_props = NULL;
+-	}
+-
+-	for (conn = 0; conn < drm->resources->count_connectors; conn++) {
+-		uint32_t conn_id = drm->resources->connectors[conn];
+-
+-		conn_props = drmModeObjectGetProperties(drm->fd, conn_id, DRM_MODE_OBJECT_CONNECTOR);
+-		if (!conn_props) {
+-			LOG(ERROR, "Could not query properties for connector %d %m.", conn_id);
+-			if (conn_id != drm->console_connector_id)
+-				continue;
+-			ret = -ENOENT;
+-			goto error_mode;
+-		}
+-		if (conn_id == drm->console_connector_id)
+-			CHECK(atomic_set_prop(drm, pset, conn_id, conn_props, "CRTC_ID", console_crtc_id));
+-		else
+-			CHECK(atomic_set_prop(drm, pset, conn_id, conn_props, "CRTC_ID", 0));
+-		drmModeFreeObjectProperties(conn_props);
+-		conn_props = NULL;
+-	}
+-
+-	ret = drmModeAtomicCommit(drm->fd, pset,
+-				    DRM_MODE_ATOMIC_ALLOW_MODESET , NULL);
+-	if (ret < 0) {
+-		drm_clear_rmfb(drm);
+-		/* LOG(INFO, "TIMING: Console switch atomic modeset finished."); */
+-	} else {
+-		ret = 0;
+-	}
+-
+-error_mode:
+-	if (mode_id)
+-		drmModeDestroyPropertyBlob(drm->fd, mode_id);
+-
+-	if (plane_resources)
+-		drmModeFreePlaneResources(plane_resources);
+-
+-	if (crtc_props)
+-		drmModeFreeObjectProperties(crtc_props);
+-
+-	if (conn_props)
+-		drmModeFreeObjectProperties(conn_props);
+-
+-	if (plane_props)
+-		drmModeFreeObjectProperties(plane_props);
+-
+-	drmModeAtomicFree(pset);
+-	return ret;
+-}
+-#undef CHECK
+-
+ static int remove_gamma_properties(drm_t* drm, uint32_t crtc_id) {
+ 	drmModeObjectPropertiesPtr crtc_props = NULL;
+ 
+@@ -824,11 +587,6 @@ int32_t drm_setmode(drm_t* drm, uint32_t fb_id)
+ 	int32_t ret = 0;
+ 	uint32_t existing_console_crtc_id = 0;
+ 
+-	if (drm->atomic)
+-		if (drm_setmode_atomic(drm, fb_id) == 0)
+-			return 0;
+-	       	/* Fallback to legacy mode set. */
+-
+ 	get_connector_path(drm, drm->console_connector_id, NULL, &existing_console_crtc_id);
+ 
+ 	/* Loop through all the connectors, disable ones that are configured and set video mode on console connector. */
+@@ -910,47 +668,3 @@ void drm_rmfb(drm_t* drm, uint32_t fb_id)
+ 	drm_clear_rmfb(drm);
+ 	drm->delayed_rmfb_fb_id = fb_id;
+ }
+-
+-bool drm_read_edid(drm_t* drm)
+-{
+-	drmModeConnector* console_connector;
+-	if (drm->edid_found) {
+-		return true;
+-	}
+-
+-	console_connector = drmModeGetConnector(drm->fd, drm->console_connector_id);
+-
+-	if (!console_connector)
+-		return false;
+-
+-	for (int i = 0; i < console_connector->count_props; i++) {
+-		drmModePropertyPtr prop;
+-		drmModePropertyBlobPtr blob_ptr;
+-		prop = drmModeGetProperty(drm->fd, console_connector->props[i]);
+-		if (prop) {
+-			if (strcmp(prop->name, "EDID") == 0) {
+-				blob_ptr = drmModeGetPropertyBlob(drm->fd,
+-					console_connector->prop_values[i]);
+-				if (blob_ptr) {
+-					memcpy(&drm->edid, blob_ptr->data, EDID_SIZE);
+-					drmModeFreePropertyBlob(blob_ptr);
+-					drmModeFreeConnector(console_connector);
+-					return (drm->edid_found = true);
+-				}
+-			}
+-		}
+-	}
+-
+-	drmModeFreeConnector(console_connector);
+-	return false;
+-}
+-
+-uint32_t drm_gethres(drm_t* drm)
+-{
+-	return drm->console_mode_info.hdisplay;
+-}
+-
+-uint32_t drm_getvres(drm_t* drm)
+-{
+-	return drm->console_mode_info.vdisplay;
+-}
+diff --git a/drm.h b/drm.h
+index 303253a..09720f8 100644
+--- a/drm.h
++++ b/drm.h
+@@ -13,48 +13,15 @@
+ #include <xf86drm.h>
+ #include <xf86drmMode.h>
+ 
+-#define EDID_SIZE 0x80
+-
+-// There are 4 DTD blocks in the EDID
+-#define EDID_DTD_BASE 0x36
+-#define EDID_N_DTDS 4
+-
+-// 18 byte DTD structure
+-#define DTD_PCLK_LO 0
+-#define DTD_PCLK_HI 1
+-#define DTD_HA_LO 2
+-#define DTD_HBL_LO 3
+-#define DTD_HABL_HI 4
+-#define DTD_VA_LO 5
+-#define DTD_VBL_LO 6
+-#define DTD_VABL_HI 7
+-#define DTD_HSO_LO 8
+-#define DTD_HSW_LO 9
+-#define DTD_VSX_LO 10
+-#define DTD_HVSX_HI 11
+-#define DTD_HSIZE_LO 12
+-#define DTD_VSIZE_LO 13
+-#define DTD_HVSIZE_HI 14
+-#define DTD_HBORDER 15
+-#define DTD_VBORDER 16
+-#define DTD_FLAGS 17
+-#define DTD_SIZE 18
+-
+ typedef struct _drm_t {
+ 	int refcount;
+ 	int fd;
+ 	drmModeRes* resources;
+ 	drmModePlaneResPtr plane_resources;
+ 	uint32_t console_connector_id;
+-	uint32_t console_mmWidth;
+-	uint32_t console_mmHeight;
+ 	bool console_connector_internal;
+ 	drmModeModeInfo console_mode_info;
+-	bool edid_found;
+-	char edid[EDID_SIZE];
+ 	uint32_t delayed_rmfb_fb_id;
+-	bool atomic;
+-	int32_t panel_orientation; // DRM_PANEL_ORIENTATION_*
+ } drm_t;
+ 
+ drm_t* drm_scan(void);
+@@ -68,8 +35,5 @@ bool drm_rescan(void);
+ bool drm_valid(drm_t* drm);
+ int32_t drm_setmode(drm_t* drm, uint32_t fb_id);
+ void drm_rmfb(drm_t* drm, uint32_t fb_id);
+-bool drm_read_edid(drm_t* drm);
+-uint32_t drm_gethres(drm_t* drm);
+-uint32_t drm_getvres(drm_t* drm);
+ 
+ #endif
+diff --git a/fb.c b/fb.c
+index 9bb2599..d7cee5b 100644
+--- a/fb.c
++++ b/fb.c
+@@ -104,80 +104,21 @@ unref_drm:
+ 	}
+ }
+ 
+-static bool parse_edid_dtd(uint8_t* dtd, drmModeModeInfo* mode,
+-			   int32_t* hdisplay_size, int32_t* vdisplay_size) {
+-	int32_t clock;
+-	int32_t hactive, hbl, hso, hsw, hsize;
+-	int32_t vactive, vbl, vso, vsw, vsize;
+-
+-	clock = ((int32_t)dtd[DTD_PCLK_HI] << 8) | dtd[DTD_PCLK_LO];
+-	if (!clock)
+-		return false;
+-
+-	hactive = ((int32_t)(dtd[DTD_HABL_HI] & 0xf0) << 4) + dtd[DTD_HA_LO];
+-	vactive = ((int32_t)(dtd[DTD_VABL_HI] & 0xf0) << 4) + dtd[DTD_VA_LO];
+-	hbl = ((int32_t)(dtd[DTD_HABL_HI] & 0x0f) << 8) + dtd[DTD_HBL_LO];
+-	vbl = ((int32_t)(dtd[DTD_VABL_HI] & 0x0f) << 8) + dtd[DTD_VBL_LO];
+-	hso = ((int32_t)(dtd[DTD_HVSX_HI] & 0xc0) << 2) + dtd[DTD_HSO_LO];
+-	vso = ((int32_t)(dtd[DTD_HVSX_HI] & 0x0c) << 2) + (dtd[DTD_VSX_LO] >> 4);
+-	hsw = ((int32_t)(dtd[DTD_HVSX_HI] & 0x30) << 4) + dtd[DTD_HSW_LO];
+-	vsw = ((int32_t)(dtd[DTD_HVSX_HI] & 0x03) << 4) + (dtd[DTD_VSX_LO] & 0xf);
+-	hsize = ((int32_t)(dtd[DTD_HVSIZE_HI] & 0xf0) << 4) + dtd[DTD_HSIZE_LO];
+-	vsize = ((int32_t)(dtd[DTD_HVSIZE_HI] & 0x0f) << 8) + dtd[DTD_VSIZE_LO];
+-
+-	mode->clock = clock * 10;
+-	mode->hdisplay = hactive;
+-	mode->vdisplay = vactive;
+-	mode->hsync_start = hactive + hso;
+-	mode->vsync_start = vactive + vso;
+-	mode->hsync_end = mode->hsync_start + hsw;
+-	mode->vsync_end = mode->vsync_start + vsw;
+-	mode->htotal = hactive + hbl;
+-	mode->vtotal = vactive + vbl;
+-	*hdisplay_size = hsize;
+-	*vdisplay_size = vsize;
+-	return true;
+-}
+-
+-static bool parse_edid_dtd_display_size(drm_t* drm, int32_t* hsize_mm, int32_t* vsize_mm) {
+-	drmModeModeInfo* mode = &drm->console_mode_info;
+-
+-	for (int i = 0; i < EDID_N_DTDS; i++) {
+-		uint8_t* dtd = (uint8_t*)&drm->edid[EDID_DTD_BASE + i * DTD_SIZE];
+-		drmModeModeInfo dtd_mode;
+-		int32_t hdisplay_size, vdisplay_size;
+-		if (!parse_edid_dtd(dtd, &dtd_mode, &hdisplay_size, &vdisplay_size) ||
+-				mode->clock != dtd_mode.clock ||
+-				mode->hdisplay != dtd_mode.hdisplay ||
+-				mode->vdisplay != dtd_mode.vdisplay ||
+-				mode->hsync_start != dtd_mode.hsync_start ||
+-				mode->vsync_start != dtd_mode.vsync_start ||
+-				mode->hsync_end != dtd_mode.hsync_end ||
+-				mode->vsync_end != dtd_mode.vsync_end ||
+-				mode->htotal != dtd_mode.htotal ||
+-				mode->vtotal != dtd_mode.vtotal)
+-			continue;
+-		*hsize_mm = hdisplay_size;
+-		*vsize_mm = vdisplay_size;
+-		return true;
+-	}
+-	return false;
+-}
+-
+ int fb_buffer_init(fb_t* fb)
+ {
+ 	int32_t width, height, pitch = 0;
+-	int32_t hsize_mm, vsize_mm;
+ 	int r;
+ 
+ 	/* reuse the buffer_properties if it was set before */
+ 	if (!fb->buffer_properties.width || !fb->buffer_properties.height ||
+-		!fb->buffer_properties.pitch || !fb->buffer_properties.scaling) {
++		!fb->buffer_properties.pitch || !fb->buffer_properties.scaling ||
++		!fb->buffer_properties.rotation) {
+ 		/* some reasonable defaults */
+ 		fb->buffer_properties.width = 640;
+ 		fb->buffer_properties.height = 480;
+ 		fb->buffer_properties.pitch = 640 * 4;
+ 		fb->buffer_properties.scaling = 1;
++		fb->buffer_properties.rotation = DRM_MODE_ROTATE_0;
+ 	}
+ 
+ 	fb->drm = drm_addref();
+@@ -200,43 +141,6 @@ int fb_buffer_init(fb_t* fb)
+ 	fb->buffer_properties.height = height;
+ 	fb->buffer_properties.pitch = pitch;
+ 
+-/*
+-	for reference, since it is not available in headers right now
+-	DRM_MODE_PANEL_ORIENTATION_UNKNOWN = -1,
+-	DRM_MODE_PANEL_ORIENTATION_NORMAL = 0,
+-	DRM_MODE_PANEL_ORIENTATION_BOTTOM_UP,
+-	DRM_MODE_PANEL_ORIENTATION_LEFT_UP,
+-	DRM_MODE_PANEL_ORIENTATION_RIGHT_UP,
+-*/
+-	switch (fb->drm->panel_orientation) {
+-		case 1:
+-			fb->buffer_properties.rotation = DRM_MODE_ROTATE_180;
+-			break;
+-		case 2:
+-			fb->buffer_properties.rotation = DRM_MODE_ROTATE_270;
+-			break;
+-		case 3:
+-			fb->buffer_properties.rotation = DRM_MODE_ROTATE_90;
+-			break;
+-		default:
+-			fb->buffer_properties.rotation = DRM_MODE_ROTATE_0;
+-	}
+-
+-	hsize_mm = fb->drm->console_mmWidth;
+-	vsize_mm = fb->drm->console_mmHeight;
+-	if (drm_read_edid(fb->drm))
+-		parse_edid_dtd_display_size(fb->drm, &hsize_mm, &vsize_mm);
+-
+-	if (hsize_mm) {
+-		int dots_per_cm = width * 10 / hsize_mm;
+-		if (dots_per_cm > 133)
+-			fb->buffer_properties.scaling = 4;
+-		else if (dots_per_cm > 105)
+-			fb->buffer_properties.scaling = 3;
+-		else if (dots_per_cm > 67)
+-			fb->buffer_properties.scaling = 2;
+-	}
+-
+ 	return 0;
+ }
+ 
+diff --git a/image.c b/image.c
+deleted file mode 100644
+index de32da0..0000000
+--- a/image.c
++++ /dev/null
+@@ -1,280 +0,0 @@
+-/*
+- * Copyright 2015 The ChromiumOS Authors
+- * Use of this source code is governed by a BSD-style license that can be
+- * found in the LICENSE file.
+- */
+-
+-#include <errno.h>
+-#include <fcntl.h>
+-#include <math.h>
+-#include <stdio.h>
+-#include <stdlib.h>
+-#include <string.h>
+-#include <sys/mman.h>
+-#include <unistd.h>
+-
+-#include "fb.h"
+-#include "image.h"
+-#include "util.h"
+-
+-typedef union {
+-	uint32_t* as_pixels;
+-	png_byte* as_png_bytes;
+-	char* address;
+-} layout_t;
+-
+-struct _image_t {
+-	char* filename;
+-	bool use_offset;
+-	bool use_location;
+-	int32_t offset_x;
+-	int32_t offset_y;
+-	uint32_t location_x;
+-	uint32_t location_y;
+-	uint32_t scale;
+-	uint32_t duration;
+-	layout_t layout;
+-	png_uint_32 width;
+-	png_uint_32 height;
+-	png_uint_32 pitch;
+-};
+-
+-image_t* image_create()
+-{
+-	image_t* image;
+-
+-	image = (image_t*)calloc(1, sizeof(image_t));
+-	image->scale = 1;
+-	return image;
+-}
+-
+-static void image_rgb(png_struct* png, png_row_info* row_info, png_byte* data)
+-{
+-	for (unsigned int i = 0; i < row_info->rowbytes; i+= 4) {
+-		uint32_t r, g, b, a;
+-		uint32_t pixel;
+-
+-		r = data[i + 0];
+-		g = data[i + 1];
+-		b = data[i + 2];
+-		a = data[i + 3];
+-		pixel = (a << 24) | (r << 16) | (g << 8) | b;
+-		memcpy(data + i, &pixel, sizeof(pixel));
+-	}
+-}
+-
+-int image_load_image_from_file(image_t* image)
+-{
+-	FILE* fp;
+-	png_struct* png;
+-	png_info* info;
+-	png_uint_32 width, height, pitch, row;
+-	int bpp, color_type, interlace_mthd;
+-	png_byte** rows;
+-	int ret = 0;
+-
+-	if (image->layout.address != NULL)
+-		return EADDRINUSE;
+-
+-	fp = fopen(image->filename, "rb");
+-	if (fp == NULL)
+-		return errno;
+-
+-	png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+-	info = png_create_info_struct(png);
+-
+-	if (info == NULL)
+-		return 1;
+-
+-	png_init_io(png, fp);
+-
+-	ret = setjmp(png_jmpbuf(png));
+-	if (ret != 0)
+-		goto fail;
+-
+-	png_read_info(png, info);
+-	png_get_IHDR(png, info, &width, &height, &bpp, &color_type,
+-			&interlace_mthd, NULL, NULL);
+-
+-	pitch = 4 * width;
+-
+-	switch (color_type)
+-	{
+-		case PNG_COLOR_TYPE_PALETTE:
+-			png_set_palette_to_rgb(png);
+-			break;
+-
+-		case PNG_COLOR_TYPE_GRAY:
+-		case PNG_COLOR_TYPE_GRAY_ALPHA:
+-			png_set_gray_to_rgb(png);
+-	}
+-
+-	if (png_get_valid(png, info, PNG_INFO_tRNS))
+-		png_set_tRNS_to_alpha(png);
+-
+-	switch (bpp)
+-	{
+-		default:
+-			if (bpp < 8)
+-				png_set_packing(png);
+-			break;
+-		case 16:
+-			png_set_strip_16(png);
+-			break;
+-	}
+-
+-	if (interlace_mthd != PNG_INTERLACE_NONE)
+-		png_set_interlace_handling(png);
+-
+-	png_set_filler(png, 0xff, PNG_FILLER_AFTER);
+-
+-	png_set_read_user_transform_fn(png, image_rgb);
+-	png_read_update_info(png, info);
+-
+-	rows = malloc(height * sizeof(*rows));
+-	if (!rows) {
+-		ret = -ENOMEM;
+-		goto fail;
+-	}
+-
+-	image->layout.address = malloc(height * pitch);
+-	if (!image->layout.address) {
+-		free(rows);
+-		ret = -ENOMEM;
+-		goto fail;
+-	}
+-
+-	for (row = 0; row < height; row++)
+-		rows[row] = &image->layout.as_png_bytes[row * pitch];
+-
+-	png_read_image(png, rows);
+-	free(rows);
+-
+-	image->width = width;
+-	image->height = height;
+-	image->pitch = pitch;
+-	png_read_end(png, info);
+-
+-fail:
+-	png_destroy_read_struct(&png, &info, NULL);
+-	fclose(fp);
+-	fp = NULL;
+-	return ret;
+-}
+-
+-int image_show(image_t* image, fb_t* fb)
+-{
+-	fb_stepper_t s;
+-	int32_t startx, starty;
+-	uint32_t w, h;
+-
+-	if (fb_lock(fb) == NULL)
+-		return -1;
+-
+-	if (image->use_offset && image->use_location) {
+-		LOG(WARNING, "offset and location set, using location");
+-		image->use_offset = false;
+-	}
+-
+-	w = image->width * image->scale;
+-	h = image->height * image->scale;
+-
+-	if (image->use_location) {
+-		startx = image->location_x;
+-		starty = image->location_y;
+-	} else {
+-		startx = (fb_getwidth(fb) - (int32_t)w)/2;
+-		starty = (fb_getheight(fb) - (int32_t)h)/2;
+-	}
+-
+-	if (image->use_offset) {
+-		startx += image->offset_x * (int32_t)image->scale;
+-		starty += image->offset_y * (int32_t)image->scale;
+-	}
+-
+-	if (!fb_stepper_init(&s, fb, startx, starty, w, h))
+-		goto done;
+-
+-	do {
+-		do {
+-		} while (fb_stepper_step_x(&s, image->layout.as_pixels[(s.y / image->scale) * (image->pitch >> 2) + (s.x / image->scale)]));
+-	} while (fb_stepper_step_y(&s));
+-
+-done:
+-	fb_unlock(fb);
+-	return 0;
+-}
+-
+-void image_release(image_t* image)
+-{
+-	if (image->layout.address != NULL) {
+-		free(image->layout.address);
+-		image->layout.address = NULL;
+-	}
+-}
+-
+-void image_destroy(image_t* image)
+-{
+-	image_release(image);
+-
+-	if (image->filename != NULL) {
+-		free(image->filename);
+-		image->filename = NULL;
+-	}
+-
+-	free(image);
+-}
+-
+-void image_set_filename(image_t* image, char* filename)
+-{
+-	if (image->filename != NULL)
+-		free(image->filename);
+-
+-	image->filename = strdup(filename);
+-}
+-
+-char* image_get_filename(image_t* image)
+-{
+-	return image->filename;
+-}
+-
+-void image_set_offset(image_t* image, int32_t offset_x, int32_t offset_y)
+-{
+-	image->offset_x = offset_x;
+-	image->offset_y = offset_y;
+-
+-	image->use_offset = true;
+-}
+-
+-void image_set_location(image_t* image,
+-			uint32_t location_x, uint32_t location_y)
+-{
+-	image->location_x = location_x;
+-	image->location_y = location_y;
+-
+-	image->use_location = true;
+-}
+-
+-void image_set_scale(image_t* image, uint32_t scale)
+-{
+-	if (scale > MAX_SCALE_FACTOR)
+-		scale = MAX_SCALE_FACTOR;
+-	if (scale == 0)
+-		image->scale = 1;
+-	else
+-		image->scale = scale;
+-}
+-
+-int image_is_hires(fb_t* fb)
+-{
+-	return fb_getwidth(fb) > HIRES_THRESHOLD_HR ||
+-	       fb_getheight(fb) > HIRES_THRESHOLD_VR;
+-}
+-
+-int32_t image_get_auto_scale(fb_t* fb)
+-{
+-	if (image_is_hires(fb))
+-		return 2;
+-	else
+-		return 1;
+-}
+diff --git a/image.h b/image.h
+deleted file mode 100644
+index 0e30a15..0000000
+--- a/image.h
++++ /dev/null
+@@ -1,35 +0,0 @@
+-/*
+- * Copyright 2015 The ChromiumOS Authors
+- * Use of this source code is governed by a BSD-style license that can be
+- * found in the LICENSE file.
+- */
+-#ifndef IMAGE_H
+-#define IMAGE_H
+-
+-#include <stddef.h>
+-#include <stdbool.h>
+-#include <stdint.h>
+-#include <png.h>
+-
+-#include "fb.h"
+-
+-#define HIRES_THRESHOLD_HR 2048
+-#define HIRES_THRESHOLD_VR 2048
+-#define MAX_SCALE_FACTOR 100
+-
+-typedef struct _image_t image_t;
+-
+-image_t* image_create();
+-void image_set_filename(image_t* image, char* filename);
+-char* image_get_filename(image_t* image);
+-void image_set_offset(image_t* image, int32_t offset_x, int32_t offset_y);
+-void image_set_location(image_t* image, uint32_t location_x, uint32_t location_y);
+-void image_set_scale(image_t* image, uint32_t scale);
+-int image_load_image_from_file(image_t* image);
+-int image_show(image_t* image, fb_t* fb);
+-void image_release(image_t* image);
+-void image_destroy(image_t* image);
+-int image_is_hires(fb_t* fb);
+-int32_t image_get_auto_scale(fb_t* fb);
+-
+-#endif
+diff --git a/input.c b/input.c
+index 01c8764..df645e5 100644
+--- a/input.c
++++ b/input.c
+@@ -14,8 +14,6 @@
+ #include <sys/select.h>
+ #include <unistd.h>
+ 
+-#include "dbus.h"
+-#include "dbus_interface.h"
+ #include "input.h"
+ #include "keysym.h"
+ #include "main.h"
+@@ -173,27 +171,20 @@ static int input_special_key(struct input_key_event* ev)
+ 					break;
+ 				case KEY_F6:
+ 				case KEY_F7:
+-					dbus_report_user_activity(USER_ACTIVITY_BRIGHTNESS_DOWN_KEY_PRESS -
+-								(ev->code - KEY_F6));
+ 					return 1;
+ 				case KEY_F8:
+ 				case KEY_F9:
+ 				case KEY_F10:
+ 					break;
+ 				case KEY_BRIGHTNESSDOWN:
+-					dbus_report_user_activity(USER_ACTIVITY_BRIGHTNESS_DOWN_KEY_PRESS);
+ 					return 1;
+ 				case KEY_BRIGHTNESSUP:
+-					dbus_report_user_activity(USER_ACTIVITY_BRIGHTNESS_UP_KEY_PRESS);
+ 					return 1;
+ 				case KEY_MUTE:
+-					dbus_report_user_activity(USER_ACTIVITY_VOLUME_MUTE_KEY_PRESS);
+ 					return 1;
+ 				case KEY_VOLUMEDOWN:
+-					dbus_report_user_activity(USER_ACTIVITY_VOLUME_DOWN_KEY_PRESS);
+ 					return 1;
+ 				case KEY_VOLUMEUP:
+-					dbus_report_user_activity(USER_ACTIVITY_VOLUME_MUTE_KEY_PRESS);
+ 					return 1;
+ 			}
+ 		}
+@@ -498,7 +489,6 @@ void input_dispatch_io(fd_set* read_set, fd_set* exception_set)
+ 			terminal = term_get_current_terminal();
+ 			if (term_is_active(terminal)) {
+ 				// Only report user activity when the terminal is active
+-				dbus_report_user_activity(USER_ACTIVITY_OTHER);
+ 				input_get_keysym_and_unicode(
+ 					event, &keysym, &unicode);
+ 				term_key_event(terminal,
+diff --git a/main.c b/main.c
+index 61a54f1..6df2379 100644
+--- a/main.c
++++ b/main.c
+@@ -17,24 +17,18 @@
+ #include <sys/stat.h>
+ #include <sys/types.h>
+ 
+-#include "dbus.h"
+-#include "dbus_interface.h"
+ #include "dev.h"
+ #include "input.h"
+ #include "main.h"
+-#include "splash.h"
+ #include "term.h"
+ #include "util.h"
+ 
+ #define  FLAG_CLEAR                        'c'
+ #define  FLAG_DAEMON                       'd'
+-#define  FLAG_ENABLE_OSC                   'G'
+ #define  FLAG_ENABLE_VT1                   '1'
+ #define  FLAG_ENABLE_VTS                   'e'
+ #define  FLAG_FRAME_INTERVAL               'f'
+ #define  FLAG_HELP                         'h'
+-#define  FLAG_IMAGE                        'i'
+-#define  FLAG_IMAGE_HIRES                  'I'
+ #define  FLAG_LOOP_COUNT                   'C'
+ #define  FLAG_LOOP_START                   'l'
+ #define  FLAG_LOOP_INTERVAL                'L'
+@@ -43,59 +37,29 @@
+ #define  FLAG_NO_LOGIN                     'n'
+ #define  FLAG_OFFSET                       'O'
+ #define  FLAG_PRE_CREATE_VTS               'P'
+-#define  FLAG_PRINT_RESOLUTION             'p'
+ #define  FLAG_SCALE                        'S'
+-#define  FLAG_SPLASH_ONLY                  's'
+ #define  FLAG_WAIT_CHILD                   'w'
+ 
+ static const struct option command_options[] = {
+-	{ "clear", required_argument, NULL, FLAG_CLEAR },
+ 	{ "daemon", no_argument, NULL, FLAG_DAEMON },
+ 	{ "dev-mode", no_argument, NULL, FLAG_ENABLE_VTS },
+-	{ "enable-gfx", no_argument, NULL, FLAG_ENABLE_OSC },
+-	{ "enable-osc", no_argument, NULL, FLAG_ENABLE_OSC },
+ 	{ "enable-vt1", no_argument, NULL, FLAG_ENABLE_VT1 },
+ 	{ "enable-vts", no_argument, NULL, FLAG_ENABLE_VTS },
+-	{ "frame-interval", required_argument, NULL, FLAG_FRAME_INTERVAL },
+ 	{ "help", no_argument, NULL, FLAG_HELP },
+-	{ "image", required_argument, NULL, FLAG_IMAGE },
+-	{ "image-hires", required_argument, NULL, FLAG_IMAGE_HIRES },
+-	{ "loop-count", required_argument, NULL, FLAG_LOOP_COUNT },
+-	{ "loop-start", required_argument, NULL, FLAG_LOOP_START },
+-	{ "loop-interval", required_argument, NULL, FLAG_LOOP_INTERVAL },
+-	{ "loop-offset", required_argument, NULL, FLAG_LOOP_OFFSET },
+ 	{ "num-vts", required_argument, NULL, FLAG_NUM_VTS },
+ 	{ "no-login", no_argument, NULL, FLAG_NO_LOGIN },
+-	{ "offset", required_argument, NULL, FLAG_OFFSET },
+-	{ "print-resolution", no_argument, NULL, FLAG_PRINT_RESOLUTION },
+ 	{ "pre-create-vts", no_argument, NULL, FLAG_PRE_CREATE_VTS },
+-	{ "scale", required_argument, NULL, FLAG_SCALE },
+-	{ "splash-only", no_argument, NULL, FLAG_SPLASH_ONLY },
+ 	{ NULL, 0, NULL, 0 }
+ };
+ static const char * const command_help[] = {
+-	"Splash screen clear color.",
+ 	"Daemonize frecon.",
+ 	"Force dev mode behavior (deprecated, use --enable-vts).",
+-	"Enable image and box drawing OSC escape codes (deprecated, use --enable-osc).",
+-	"Enable OSC escape codes for graphics and input control.",
+ 	"Enable switching to VT1 and keep a terminal on it.",
+ 	"Enable additional terminals beyond VT1.",
+-	"Default time (in msecs) between splash animation frames.",
+ 	"This help screen!",
+-	"Image (low res) to use for splash animation.",
+-	"Image (hi res) to use for splash animation.",
+-	"Number of times to loop splash animations (unset = forever).",
+-	"First frame to start the splash animation loop (and enable looping).",
+-	"Pause time (in msecs) between splash animation frames.",
+-	"Offset (as x,y) for centering looped image.",
+ 	"Number of enabled VTs. The default is 4, the maximum is 12.",
+ 	"Do not display login prompt on additional VTs.",
+-	"Absolute location of the splash image on screen (as x,y).",
+-	"(Deprecated) Print detected screen resolution and exit.",
+ 	"Create all VTs immediately instead of on-demand.",
+-	"Default scale for splash screen images.",
+-	"Exit immediately after finishing splash animation.",
+ };
+ 
+ static void usage(int status)
+@@ -108,7 +72,7 @@ static void usage(int status)
+ 	fprintf(out,
+ 		"Frecon: The Freon based console daemon.\n"
+ 		"\n"
+-		"Usage: frecon [options] [splash images]\n"
++		"Usage: frecon [options]\n"
+ 		"\n"
+ 		"Options:\n"
+ 	);
+@@ -131,20 +95,6 @@ static void usage(int status)
+ 
+ commandflags_t command_flags = { 0 };
+ 
+-static void parse_offset(char* param, int32_t* x, int32_t* y)
+-{
+-	char* token;
+-	char* saveptr;
+-
+-	token = strtok_r(param, ",", &saveptr);
+-	if (token)
+-		*x = strtol(token, NULL, 0);
+-
+-	token = strtok_r(NULL, ",", &saveptr);
+-	if (token)
+-		*y = strtol(token, NULL, 0);
+-}
+-
+ int main_process_events(uint32_t usec)
+ {
+ 	terminal_t* terminal;
+@@ -160,7 +110,6 @@ int main_process_events(uint32_t usec)
+ 	FD_ZERO(&read_set);
+ 	FD_ZERO(&exception_set);
+ 
+-	dbus_add_fds(&read_set, &exception_set, &maxfd);
+ 	input_add_fds(&read_set, &exception_set, &maxfd);
+ 	dev_add_fds(&read_set, &exception_set, &maxfd);
+ 
+@@ -181,8 +130,6 @@ int main_process_events(uint32_t usec)
+ 	if (sstat == 0)
+ 		return 0;
+ 
+-	dbus_dispatch_io();
+-
+ 	if (term_exception(terminal, &exception_set))
+ 		return -1;
+ 
+@@ -201,10 +148,6 @@ int main_process_events(uint32_t usec)
+ 	/* Restart terminal on which child has exited. We don't want possible garbage settings from previous session to remain. */
+ 	if (term_is_valid(terminal)) {
+ 		if (term_is_child_done(terminal)) {
+-			if (terminal == term_get_terminal(TERM_SPLASH_TERMINAL) && !command_flags.enable_vt1) {
+-				/* Let the old term be, splash_destroy will clean it up. */
+-				return 0;
+-			}
+ 			term_set_current_terminal(term_init(term_get_current(), -1));
+ 			new_terminal = term_get_current_terminal();
+ 			if (!term_is_valid(new_terminal)) {
+@@ -257,54 +200,14 @@ bool set_drm_master_relax(void)
+ 	return true;
+ }
+ 
+-static void main_on_login_prompt_visible(void)
+-{
+-	if (command_flags.daemon && !command_flags.enable_vts) {
+-		LOG(INFO, "Chrome started, our work is done, exiting.");
+-		exit(EXIT_SUCCESS);
+-	} else {
+-		if (command_flags.enable_vt1)
+-			LOG(WARNING, "VT1 enabled and Chrome is active!");
+-	}
+-}
+-
+-static void legacy_print_resolution(int argc, char* argv[])
+-{
+-	int c;
+-
+-	optind = 1;
+-	opterr = 0;
+-	for (;;) {
+-		c = getopt_long(argc, argv, "", command_options, NULL);
+-		if (c == -1) {
+-			break;
+-		} else if (c == FLAG_PRINT_RESOLUTION) {
+-			drm_t *drm = drm_scan();
+-			if (!drm)
+-				exit(EXIT_FAILURE);
+-
+-			printf("%d %d", drm_gethres(drm),
+-			       drm_getvres(drm));
+-			drm_delref(drm);
+-			exit(EXIT_SUCCESS);
+-		}
+-	}
+-}
+-
+ int main(int argc, char* argv[])
+ {
+ 	int ret;
+ 	int c;
+-	int pts_fd;
+ 	unsigned vt;
+-	int32_t x, y;
+-	splash_t* splash;
+ 	drm_t* drm;
+ 
+-	legacy_print_resolution(argc, argv);
+-
+ 	fix_stdio();
+-	pts_fd =  posix_openpt(O_RDWR | O_NOCTTY | O_CLOEXEC | O_NONBLOCK);
+ 
+ 	optind = 1;
+ 	opterr = 1;
+@@ -319,10 +222,6 @@ int main(int argc, char* argv[])
+ 				command_flags.daemon = true;
+ 				break;
+ 
+-			case FLAG_ENABLE_OSC:
+-				command_flags.enable_osc = true;
+-				break;
+-
+ 			case FLAG_ENABLE_VT1:
+ 				command_flags.enable_vt1 = true;
+ 				break;
+@@ -343,10 +242,6 @@ int main(int argc, char* argv[])
+ 				command_flags.pre_create_vts = true;
+ 				break;
+ 
+-			case FLAG_SPLASH_ONLY:
+-				command_flags.splash_only = true;
+-				break;
+-
+ 			case FLAG_HELP:
+ 				usage(0);
+ 				break;
+@@ -396,14 +291,8 @@ int main(int argc, char* argv[])
+ 
+ 	drm_set(drm = drm_scan());
+ 
+-	splash = splash_init(pts_fd);
+-	if (splash == NULL) {
+-		LOG(ERROR, "Splash init failed.");
+-		return EXIT_FAILURE;
+-	}
+-
+ 	if (command_flags.pre_create_vts) {
+-		for (unsigned vt = command_flags.enable_vt1 ? TERM_SPLASH_TERMINAL : 1;
++		for (unsigned vt = 1;
+ 		     vt < (command_flags.enable_vts ? term_num_terminals : 1); vt++) {
+ 			terminal_t *terminal = term_get_terminal(vt);
+ 			if (!terminal) {
+@@ -416,114 +305,20 @@ int main(int argc, char* argv[])
+ 	if (command_flags.daemon && command_flags.pre_create_vts)
+ 		daemon_exit_code(EXIT_SUCCESS);
+ 
+-	/* These flags can be only processed after splash object has been created. */
+-	optind = 1;
+-	for (;;) {
+-		c = getopt_long(argc, argv, "", command_options, NULL);
+-
+-		if (c == -1)
+-			break;
+-
+-		switch (c) {
+-			case FLAG_CLEAR:
+-				splash_set_clear(splash, strtoul(optarg, NULL, 0));
+-				break;
+-
+-			case FLAG_FRAME_INTERVAL:
+-				splash_set_default_duration(splash, strtoul(optarg, NULL, 0));
+-				break;
+-
+-			case FLAG_IMAGE:
+-				if (!splash_is_hires(splash))
+-					splash_add_image(splash, optarg);
+-				break;
+-
+-			case FLAG_IMAGE_HIRES:
+-				if (splash_is_hires(splash))
+-					splash_add_image(splash, optarg);
+-				break;
+-
+-			case FLAG_LOOP_COUNT:
+-				splash_set_loop_count(splash, strtoul(optarg, NULL, 0));
+-				break;
+-
+-			case FLAG_LOOP_START:
+-				splash_set_loop_start(splash, strtoul(optarg, NULL, 0));
+-				break;
+-
+-			case FLAG_LOOP_INTERVAL:
+-				splash_set_loop_duration(splash, strtoul(optarg, NULL, 0));
+-				break;
+-
+-			case FLAG_LOOP_OFFSET:
+-				parse_offset(optarg, &x, &y);
+-				splash_set_loop_offset(splash, x, y);
+-				break;
+-
+-			case FLAG_OFFSET:
+-				parse_offset(optarg, &x, &y);
+-				splash_set_offset(splash, x, y);
+-				break;
+-
+-			case FLAG_SCALE:
+-				splash_set_scale(splash, strtoul(optarg, NULL, 0));
+-				break;
+-		}
+-	}
+-
+-	for (int i = optind; i < argc; i++)
+-		splash_add_image(splash, argv[i]);
+-
+-	if (drm && splash_num_images(splash) > 0) {
+-		ret = splash_run(splash);
+-		if (ret) {
+-			LOG(ERROR, "Splash_run failed: %d.", ret);
+-			if (!command_flags.daemon)
+-				return EXIT_FAILURE;
+-		}
+-	}
+-
+-	splash_destroy(splash);
+-
+-	if (command_flags.splash_only)
+-		goto main_done;
+-
+-	/*
+-	 * The DBUS service launches later than the boot-splash service, and
+-	 * as a result, when splash_run starts DBUS is not yet up, but, by
+-	 * the time splash_run completes, it is running.
+-	 * We really need DBUS now, so we can interact with Chrome.
+-	 */
+-	dbus_init_wait();
+-	/*
+-	 * Ask DBUS to call us back so we can quit when login prompt is visible.
+-	 */
+-	dbus_set_login_prompt_visible_callback(main_on_login_prompt_visible);
+-	/*
+-	 * Ask DBUS to notify us when suspend has finished so monitors can be reprobed
+-	 * in case they changed during suspend.
+-	 */
+-	dbus_set_suspend_done_callback(term_suspend_done, NULL);
+-
+ 	if (command_flags.daemon) {
+ 		if (command_flags.enable_vts)
+ 			set_drm_master_relax();
+-		if (command_flags.enable_vt1)
+-			term_switch_to(TERM_SPLASH_TERMINAL);
+-		else
+-			term_background(true);
++		term_background(true);
+ 	} else {
+ 		/* Create and switch to first term in interactve mode. */
+ 		set_drm_master_relax();
+-		term_switch_to(command_flags.enable_vt1 ? TERM_SPLASH_TERMINAL : 1);
++		term_switch_to(1);
+ 	}
+ 
+ 	ret = main_loop();
+ 
+-main_done:
+ 	input_close();
+ 	dev_close();
+-	dbus_destroy();
+ 	drm_close();
+ 	if (command_flags.daemon)
+ 		unlink(FRECON_PID_FILE);
+diff --git a/splash.c b/splash.c
+deleted file mode 100644
+index 12f7d57..0000000
+--- a/splash.c
++++ /dev/null
+@@ -1,309 +0,0 @@
+-/*
+- * Copyright 2014 The ChromiumOS Authors
+- * Use of this source code is governed by a BSD-style license that can be
+- * found in the LICENSE file.
+- */
+-
+-#include <errno.h>
+-#include <fcntl.h>
+-#include <stdbool.h>
+-#include <stddef.h>
+-#include <stdio.h>
+-#include <stdlib.h>
+-#include <string.h>
+-#include <sys/mman.h>
+-#include <unistd.h>
+-
+-#include "dbus.h"
+-#include "dbus_interface.h"
+-#include "image.h"
+-#include "input.h"
+-#include "main.h"
+-#include "splash.h"
+-#include "term.h"
+-#include "util.h"
+-
+-#define  MAX_SPLASH_IMAGES      (30)
+-#define  MAX_SPLASH_WAITTIME    (8)
+-
+-typedef struct {
+-	image_t* image;
+-	uint32_t duration;
+-} splash_frame_t;
+-
+-struct _splash_t {
+-	int num_images;
+-	uint32_t clear;
+-	splash_frame_t image_frames[MAX_SPLASH_IMAGES];
+-	bool terminated;
+-	int32_t loop_start;
+-	int32_t loop_count;
+-	uint32_t loop_duration;
+-	uint32_t default_duration;
+-	int32_t offset_x;
+-	int32_t offset_y;
+-	int32_t loop_offset_x;
+-	int32_t loop_offset_y;
+-	uint32_t scale;
+-};
+-
+-
+-splash_t* splash_init(int pts_fd)
+-{
+-	splash_t* splash;
+-
+-	splash = (splash_t*)calloc(1, sizeof(splash_t));
+-	if (!splash)
+-		return NULL;
+-
+-	term_create_splash_term(pts_fd);
+-	splash->loop_start = -1;
+-	splash->loop_count = -1;
+-	splash->default_duration = 25;
+-	splash->loop_duration = 25;
+-	splash->scale = 1;
+-
+-	return splash;
+-}
+-
+-int splash_destroy(splash_t* splash)
+-{
+-	free(splash);
+-	term_destroy_splash_term();
+-	return 0;
+-}
+-
+-int splash_set_clear(splash_t* splash, uint32_t clear_color)
+-{
+-	splash->clear = clear_color;
+-	return 0;
+-}
+-
+-int splash_add_image(splash_t* splash, char* filespec)
+-{
+-	image_t* image;
+-	int32_t offset_x, offset_y;
+-	char* filename;
+-	uint32_t duration;
+-	if (splash->num_images >= MAX_SPLASH_IMAGES)
+-		return 1;
+-
+-	filename = (char*)malloc(strlen(filespec) + 1);
+-	parse_filespec(filespec,
+-			filename,
+-			&offset_x, &offset_y, &duration,
+-			splash->default_duration,
+-			splash->offset_x,
+-			splash->offset_y);
+-
+-	image = image_create();
+-	image_set_filename(image, filename);
+-	image_set_offset(image, offset_x, offset_y);
+-	if (splash->scale == 0)
+-		image_set_scale(image, splash_is_hires(splash) ? 2 : 1);
+-	else
+-		image_set_scale(image, splash->scale);
+-	splash->image_frames[splash->num_images].image = image;
+-	splash->image_frames[splash->num_images].duration = duration;
+-	splash->num_images++;
+-
+-	free(filename);
+-	return 0;
+-}
+-
+-int splash_run(splash_t* splash)
+-{
+-	int i;
+-	int status = 0;
+-	/*
+-	 * Counters for throttling error messages. Only at most MAX_SPLASH_IMAGES
+-	 * of each type of error are logged so every frame of animation could log
+-	 * error message but it wouldn't spam the log.
+-	 */
+-	int ec_li = 0, ec_ts = 0, ec_ip = 0;
+-	int64_t last_show_ms;
+-	int64_t now_ms;
+-	int64_t sleep_ms;
+-	struct timespec sleep_spec;
+-	image_t* image;
+-	uint32_t duration;
+-	int32_t c, loop_start, loop_count;
+-	bool active = false;
+-
+-	terminal_t *terminal = term_get_terminal(TERM_SPLASH_TERMINAL);
+-	if (!terminal)
+-		return -ENOENT;
+-
+-	/* Update the bootstat metrics once the first image is shown */
+-	errno = 0;
+-	status = system("/usr/sbin/bootstat splash-screen-visible");
+-	if (status) {
+-		LOG(ERROR, "Failed to execute 'bootstat splash-screen-visible': "
+-			"status = %d, errno = %d (%s)",
+-			status, errno, strerror(errno));
+-	}
+-
+-	/*
+-	 * First draw the actual splash screen
+-	 */
+-	term_set_background(terminal, splash->clear);
+-	term_clear(terminal);
+-	term_set_current_to(terminal);
+-	term_update_current_link();
+-
+-	last_show_ms = -1;
+-	loop_count = (splash->loop_start >= 0 && splash->loop_start < splash->num_images) ? splash->loop_count : 1;
+-	loop_start = (splash->loop_start >= 0 && splash->loop_start < splash->num_images) ? splash->loop_start : 0;
+-
+-	for (c = 0; ((loop_count < 0) ? true : (c < loop_count)); c++)
+-	for (i = (c > 0) ? loop_start : 0; i < splash->num_images; i++) {
+-		image = splash->image_frames[i].image;
+-		status = image_load_image_from_file(image);
+-		if (status != 0 && ec_li < MAX_SPLASH_IMAGES) {
+-			LOG(WARNING, "image_load_image_from_file %s failed: %d:%s.",
+-				image_get_filename(image), status, strerror(status));
+-			ec_li++;
+-		}
+-		/*
+-		 * Check status again after timing code so we preserve animation
+-		 * frame timings and dont's monopolize CPU time.
+-		 */
+-		now_ms = get_monotonic_time_ms();
+-		if (last_show_ms > 0) {
+-			if (splash->loop_start >= 0 && i >= splash->loop_start)
+-				duration = splash->loop_duration;
+-			else
+-				duration = splash->image_frames[i].duration;
+-			sleep_ms = duration - (now_ms - last_show_ms);
+-			if (sleep_ms > 0) {
+-				sleep_spec.tv_sec = sleep_ms / MS_PER_SEC;
+-				sleep_spec.tv_nsec = (sleep_ms % MS_PER_SEC) * NS_PER_MS;
+-				nanosleep(&sleep_spec, NULL);
+-			}
+-		}
+-
+-		now_ms = get_monotonic_time_ms();
+-		if (status != 0) {
+-			goto img_error;
+-		}
+-
+-		if (i >= splash->loop_start) {
+-			image_set_offset(image,
+-					splash->loop_offset_x,
+-					splash->loop_offset_y);
+-		}
+-
+-		status = term_show_image(terminal, image);
+-		if (status != 0 && ec_ts < MAX_SPLASH_IMAGES) {
+-			LOG(WARNING, "term_show_image failed: %d:%s.", status, strerror(status));
+-			ec_ts++;
+-			goto img_error;
+-		}
+-
+-		if (!active) {
+-			/*
+-			 * Set video mode on first frame so user does not see
+-			 * us drawing first frame.
+-			 */
+-			term_activate(terminal);
+-			active = true;
+-		}
+-
+-		status = main_process_events(1);
+-		if (status != 0 && ec_ip < MAX_SPLASH_IMAGES) {
+-			LOG(WARNING, "input_process failed: %d:%s.", status, strerror(status));
+-			ec_ip++;
+-		}
+-img_error:
+-		last_show_ms = now_ms;
+-
+-		image_release(image);
+-		/* see if we can initialize DBUS */
+-		if (!dbus_is_initialized())
+-			dbus_init();
+-		if (status != 0) {
+-			break;
+-		}
+-	}
+-
+-	for (i = 0; i < splash->num_images; i++) {
+-		image_destroy(splash->image_frames[i].image);
+-	}
+-
+-	return status;
+-}
+-
+-void splash_set_offset(splash_t* splash, int32_t x, int32_t y)
+-{
+-	if (splash) {
+-		splash->offset_x = x;
+-		splash->offset_y = y;
+-	}
+-}
+-
+-int splash_num_images(splash_t* splash)
+-{
+-	if (splash)
+-		return splash->num_images;
+-
+-	return 0;
+-}
+-
+-void splash_set_loop_count(splash_t* splash, int32_t count)
+-{
+-	if (splash)
+-		splash->loop_count = count;
+-}
+-
+-void splash_set_default_duration(splash_t* splash, uint32_t duration)
+-{
+-	if (splash)
+-		splash->default_duration = duration;
+-}
+-
+-void splash_set_loop_start(splash_t* splash, int32_t loop_start)
+-{
+-	if (splash)
+-		splash->loop_start = loop_start;
+-}
+-
+-void splash_set_loop_duration(splash_t* splash, uint32_t duration)
+-{
+-	if (splash)
+-		splash->loop_duration = duration;
+-}
+-
+-void splash_set_loop_offset(splash_t* splash, int32_t x, int32_t y)
+-{
+-	if (splash) {
+-		splash->loop_offset_x = x;
+-		splash->loop_offset_y = y;
+-	}
+-}
+-
+-void splash_set_scale(splash_t* splash, uint32_t scale)
+-{
+-	if (scale > MAX_SCALE_FACTOR)
+-		scale = MAX_SCALE_FACTOR;
+-	if (splash)
+-		splash->scale = scale;
+-}
+-
+-int splash_is_hires(splash_t* splash)
+-{
+-	terminal_t *terminal = term_get_terminal(TERM_SPLASH_TERMINAL);
+-	if (!terminal)
+-		return 0;
+-
+-	if (term_getfb(terminal))
+-		return image_is_hires(term_getfb(terminal));
+-	return 0;
+-}
+-
+-void splash_redrm(splash_t* splash)
+-{
+-	terminal_t *terminal = term_get_terminal(TERM_SPLASH_TERMINAL);
+-	if (!terminal)
+-		return;
+-	term_redrm(terminal);
+-}
+diff --git a/splash.h b/splash.h
+deleted file mode 100644
+index e38f97f..0000000
+--- a/splash.h
++++ /dev/null
+@@ -1,28 +0,0 @@
+-/*
+- * Copyright 2014 The ChromiumOS Authors
+- * Use of this source code is governed by a BSD-style license that can be
+- * found in the LICENSE file.
+- */
+-
+-#ifndef SPLASH_H
+-#define SPLASH_H
+-
+-typedef struct _splash_t splash_t;
+-
+-int splash_add_image(splash_t*, char* filespec);
+-int splash_destroy(splash_t*);
+-splash_t* splash_init(int pts_fd);
+-int splash_is_hires(splash_t* splash);
+-int splash_num_images(splash_t* splash);
+-int splash_run(splash_t*);
+-int splash_set_clear(splash_t* splash, uint32_t clear_color);
+-void splash_set_default_duration(splash_t* splash, uint32_t duration);
+-void splash_set_loop_count(splash_t* splash, int32_t count);
+-void splash_set_loop_duration(splash_t* splash, uint32_t duration);
+-void splash_set_loop_offset(splash_t* splash, int32_t x, int32_t y);
+-void splash_set_loop_start(splash_t* splash, int32_t start_location);
+-void splash_set_offset(splash_t* splash, int32_t x, int32_t y);
+-void splash_set_scale(splash_t* splash, uint32_t scale);
+-void splash_redrm(splash_t* splash);
+-
+-#endif  // SPLASH_H
+diff --git a/term.c b/term.c
+index d843dd1..56f4da5 100644
+--- a/term.c
++++ b/term.c
+@@ -15,10 +15,8 @@
+ #include <sys/wait.h>
+ #include <unistd.h>
+ 
+-#include "dbus.h"
+ #include "fb.h"
+ #include "font.h"
+-#include "image.h"
+ #include "input.h"
+ #include "main.h"
+ #include "shl_pty.h"
+@@ -171,216 +169,6 @@ static void term_write_cb(struct tsm_vte* vte, const char* u8, size_t len,
+ 	shl_pty_dispatch(term->pty);
+ }
+ 
+-static void term_esc_show_image(terminal_t* terminal, char* params)
+-{
+-	char* tok;
+-	image_t* image;
+-	int status;
+-
+-	image = image_create();
+-	if (!image) {
+-		LOG(ERROR, "Out of memory when creating an image.\n");
+-		return;
+-	}
+-	for (tok = strtok(params, ";"); tok; tok = strtok(NULL, ";")) {
+-		if (strncmp("file=", tok, 5) == 0) {
+-			image_set_filename(image, tok + 5);
+-		} else if (strncmp("location=", tok, 9) == 0) {
+-			uint32_t x, y;
+-			if (sscanf(tok + 9, "%u,%u", &x, &y) != 2) {
+-				LOG(ERROR, "Error parsing image location.\n");
+-				goto done;
+-			}
+-			image_set_location(image, x, y);
+-		} else if (strncmp("offset=", tok, 7) == 0) {
+-			int32_t x, y;
+-			if (sscanf(tok + 7, "%d,%d", &x, &y) != 2) {
+-				LOG(ERROR, "Error parsing image offset.\n");
+-				goto done;
+-			}
+-			image_set_offset(image, x, y);
+-		} else if (strncmp("scale=", tok, 6) == 0) {
+-			uint32_t s;
+-			if (sscanf(tok + 6, "%u", &s) != 1) {
+-				LOG(ERROR, "Error parsing image scale.\n");
+-				goto done;
+-			}
+-			if (s == 0)
+-				s = image_get_auto_scale(term_getfb(terminal));
+-			image_set_scale(image, s);
+-		}
+-	}
+-
+-	status = image_load_image_from_file(image);
+-	if (status != 0) {
+-		LOG(WARNING, "Term ESC image_load_image_from_file %s failed: %d:%s.",
+-	        image_get_filename(image), status, strerror(status));
+-	} else {
+-		term_show_image(terminal, image);
+-	}
+-done:
+-	image_destroy(image);
+-}
+-
+-static void term_esc_draw_box(terminal_t* terminal, char* params)
+-{
+-	char* tok;
+-	uint32_t color = 0;
+-	uint32_t w = 1;
+-	uint32_t h = 1;
+-	uint32_t locx, locy;
+-	bool use_location = false;
+-	int32_t offx, offy;
+-	bool use_offset = false;
+-	uint32_t scale = 1;
+-	fb_stepper_t s;
+-	int32_t startx, starty;
+-
+-	for (tok = strtok(params, ";"); tok; tok = strtok(NULL, ";")) {
+-		if (strncmp("color=", tok, 6) == 0) {
+-			color = strtoul(tok + 6, NULL, 0);
+-		} else if (strncmp("size=", tok, 5) == 0) {
+-			if (sscanf(tok + 5, "%u,%u", &w, &h) != 2) {
+-				LOG(ERROR, "Error parsing box size.\n");
+-				goto done;
+-			}
+-		} else if (strncmp("location=", tok, 9) == 0) {
+-			if (sscanf(tok + 9, "%u,%u", &locx, &locy) != 2) {
+-				LOG(ERROR, "Error parsing box location.\n");
+-				goto done;
+-			}
+-			use_location = true;
+-		} else if (strncmp("offset=", tok, 7) == 0) {
+-			if (sscanf(tok + 7, "%d,%d", &offx, &offy) != 2) {
+-				LOG(ERROR, "Error parsing box offset.\n");
+-				goto done;
+-			}
+-			use_offset = true;
+-		} else if (strncmp("scale=", tok, 6) == 0) {
+-			if (sscanf(tok + 6, "%u", &scale) != 1) {
+-				LOG(ERROR, "Error parsing box scale.\n");
+-				goto done;
+-			}
+-			if (scale == 0)
+-				scale = image_get_auto_scale(term_getfb(terminal));
+-		}
+-	}
+-
+-	w *= scale;
+-	h *= scale;
+-	offx *= scale;
+-	offy *= scale;
+-
+-	if (!fb_lock(terminal->fb))
+-		goto done;
+-
+-	if (use_offset && use_location) {
+-		LOG(WARNING, "Box offset and location set, using location.");
+-		use_offset = false;
+-	}
+-
+-	if (use_location) {
+-		startx = locx;
+-		starty = locy;
+-	} else {
+-		startx = (fb_getwidth(terminal->fb) - w)/2;
+-		starty = (fb_getheight(terminal->fb) - h)/2;
+-	}
+-
+-	if (use_offset) {
+-		startx += offx;
+-		starty += offy;
+-	}
+-
+-	if (!fb_stepper_init(&s, terminal->fb, startx, starty, w, h))
+-		goto done_fb;
+-
+-	do {
+-		do {
+-		} while (fb_stepper_step_x(&s, color));
+-	} while (fb_stepper_step_y(&s));
+-
+-done_fb:
+-	fb_unlock(terminal->fb);
+-done:
+-	;
+-}
+-
+-static void term_esc_input(terminal_t* terminal, char* params)
+-{
+-	if (strcmp(params, "1") == 0 ||
+-	    strcasecmp(params, "on") == 0 ||
+-	    strcasecmp(params, "true") == 0)
+-		term_input_enable(terminal, true);
+-	else if (strcmp(params, "0") == 0 ||
+-		 strcasecmp(params, "off") == 0 ||
+-		 strcasecmp(params, "false") == 0)
+-		term_input_enable(terminal, false);
+-	else
+-		LOG(ERROR, "Invalid parameter for input escape.\n");
+-}
+-
+-static void term_esc_switchvt(terminal_t* terminal, char* params)
+-{
+-	uint32_t vt = (uint32_t)strtoul(params, NULL, 0);
+-	if (vt >= term_num_terminals || vt >= TERM_MAX_TERMINALS) {
+-		LOG(ERROR, "Invalid parameter for switchvt escape.");
+-		return;
+-	}
+-	term_switch_to(vt);
+-}
+-
+-/*
+- * Assume all one or two digit sequences followed by ; are xterm OSC escapes.
+- */
+-static bool is_xterm_osc(char *osc)
+-{
+-	if (isdigit(osc[0])) {
+-		if (osc[1] == ';')
+-			return true;
+-		if (isdigit(osc[1]) && osc[2] == ';')
+-			return true;
+-	}
+-	return false;
+-}
+-
+-static void term_osc_cb(struct tsm_vte *vte, const char *osc_string,
+-			size_t osc_len, void *data)
+-{
+-	terminal_t* terminal = (terminal_t*)data;
+-	size_t i;
+-	char *osc;
+-
+-	for (i = 0; i < osc_len; i++)
+-		if (osc_string[i] >= 128)
+-			return; /* we only want to deal with ASCII */
+-
+-	osc = malloc(osc_len + 1);
+-	if (!osc) {
+-		LOG(WARNING, "Out of memory when processing OSC.\n");
+-		return;
+-	}
+-
+-	for (i = 0; i < osc_len; i++)
+-		osc[i] = (char)osc_string[i];
+-	osc[i] = '\0';
+-
+-	if (strncmp(osc, "image:", 6) == 0)
+-		term_esc_show_image(terminal, osc + 6);
+-	else if (strncmp(osc, "box:", 4) == 0)
+-		term_esc_draw_box(terminal, osc + 4);
+-	else if (strncmp(osc, "input:", 6) == 0)
+-		term_esc_input(terminal, osc + 6);
+-	else if (strncmp(osc, "switchvt:", 9) == 0)
+-		term_esc_switchvt(terminal, osc + 9);
+-	else if (is_xterm_osc(osc))
+-		; /* Ignore it. */
+-	else
+-		LOG(WARNING, "Unknown OSC escape sequence \"%s\", ignoring.", osc);
+-
+-	free(osc);
+-}
+-
+ #ifdef __clang__
+ __attribute__((__format__ (__printf__, 7, 0)))
+ #endif
+@@ -444,9 +232,6 @@ static bool term_is_interactive(unsigned int vt)
+ 	if (command_flags.no_login)
+ 		return false;
+ 
+-	if (vt == TERM_SPLASH_TERMINAL)
+-		return command_flags.enable_vt1;
+-
+ 	return true;
+ }
+ 
+@@ -548,9 +333,6 @@ terminal_t* term_init(unsigned vt, int pts_fd)
+ 		return NULL;
+ 	}
+ 
+-	if (command_flags.enable_osc)
+-		tsm_vte_set_osc_cb(new_terminal->term->vte, term_osc_cb, (void *)new_terminal);
+-
+ 	new_terminal->term->pty_bridge = shl_pty_bridge_new();
+ 	if (new_terminal->term->pty_bridge < 0) {
+ 		LOG(ERROR, "Failed to create pty bridge on VT%u.", vt);
+@@ -755,11 +537,6 @@ void term_set_background(terminal_t* terminal, uint32_t bg)
+ 	terminal->background_valid = true;
+ }
+ 
+-int term_show_image(terminal_t* terminal, image_t* image)
+-{
+-	return image_show(image, terminal->fb);
+-}
+-
+ void term_write_message(terminal_t* terminal, char* message)
+ {
+ 	FILE* fp;
+@@ -786,35 +563,11 @@ void term_set_terminal(int num, terminal_t* terminal)
+ 	terminals[num] = terminal;
+ }
+ 
+-int term_create_splash_term(int pts_fd)
+-{
+-	terminal_t* terminal = term_init(TERM_SPLASH_TERMINAL, pts_fd);
+-	if (!terminal) {
+-		LOG(ERROR, "Could not create splash term.");
+-		return -1;
+-	}
+-	term_set_terminal(TERM_SPLASH_TERMINAL, terminal);
+-
+-	return 0;
+-}
+-
+-void term_destroy_splash_term(void)
+-{
+-	terminal_t *terminal;
+-	if (command_flags.enable_vt1) {
+-		return;
+-	}
+-	terminal = term_get_terminal(TERM_SPLASH_TERMINAL);
+-	term_set_terminal(TERM_SPLASH_TERMINAL, NULL);
+-	term_close(terminal);
+-}
+-
+ void term_update_current_link(void)
+ {
+ 	char path[32];
+ 	unlink(FRECON_CURRENT_VT);
+-	if (TERM_SPLASH_TERMINAL != current_terminal ||
+-	    command_flags.enable_vt1) {
++	if (command_flags.enable_vt1) {
+ 		snprintf(path, sizeof(path), FRECON_VT_PATH, current_terminal);
+ 		if (symlink(path, FRECON_CURRENT_VT) < 0)
+ 			LOG(ERROR, "set_current: failed to create current symlink.");
+@@ -887,15 +640,6 @@ int term_switch_to(unsigned int vt)
+ 	if (term_is_active(terminal))
+ 		term_deactivate(terminal);
+ 
+-	if (vt == TERM_SPLASH_TERMINAL
+-	    && !term_get_terminal(TERM_SPLASH_TERMINAL)
+-	    && !command_flags.enable_vt1) {
+-		term_set_current(vt);
+-		/* Splash term is already gone, returning to Chrome. */
+-		term_background(false);
+-		return vt;
+-	}
+-
+ 	term_foreground();
+ 
+ 	term_set_current(vt);
+@@ -1000,37 +744,21 @@ void term_zoom(bool zoom_in)
+  */
+ void term_background(bool onetry)
+ {
+-	int retry = onetry ? 1 : 5;
+ 	if (in_background)
+ 		return;
+ 	in_background = true;
+ 	drm_dropmaster(NULL);
+-	while (!dbus_take_display_ownership() && retry--) {
+-		if (onetry)
+-			break;
+-		LOG(ERROR, "Chrome failed to take display ownership. %s",
+-		    retry ? "Trying again." : "Giving up, Chrome is probably dead.");
+-		if (retry > 0)
+-			usleep(500 * 1000);
+-	}
+ }
+ 
+ void term_foreground(void)
+ {
+ 	int ret;
+-	int retry = 5;
+ 
+ 	if (!in_background)
+ 		return;
+ 	in_background = false;
+ 
+ 	/* LOG(INFO, "TIMING: Console switch time start."); */ /* Keep around for timing it in the future. */
+-	while (!dbus_release_display_ownership() && retry--) {
+-		LOG(ERROR, "Chrome did not release master. %s",
+-		    retry ? "Trying again." : "Frecon will steal master.");
+-		if (retry > 0)
+-			usleep(500 * 1000);
+-	}
+ 
+ 	/* LOG(INFO, "TIMING: Console switch setmaster."); */
+ 	ret = drm_setmaster(NULL);
+diff --git a/term.h b/term.h
+index f3380ab..4184b01 100644
+--- a/term.h
++++ b/term.h
+@@ -8,10 +8,8 @@
+ #define TERM_H
+ 
+ #include "fb.h"
+-#include "image.h"
+ 
+ #define TERM_MAX_TERMINALS    12
+-#define TERM_SPLASH_TERMINAL  0
+ #define TERM_FIRST_STD_VT     1
+ 
+ #define FRECON_VT_PATH FRECON_RUN_DIR "/vt%u"
+@@ -49,13 +47,10 @@ void term_deactivate(terminal_t* terminal);
+ void term_add_fds(terminal_t* terminal, fd_set* read_set, fd_set* exception_set, int* maxfd);
+ const char* term_get_ptsname(terminal_t* terminal);
+ void term_set_background(terminal_t* term, uint32_t bg);
+-int term_show_image(terminal_t* terminal, image_t* image);
+ void term_write_message(terminal_t* terminal, char* message);
+ fb_t* term_getfb(terminal_t* terminal);
+ terminal_t* term_get_terminal(int num);
+ void term_set_terminal(int num, terminal_t* terminal);
+-int term_create_splash_term(int pts_fd);
+-void term_destroy_splash_term(void);
+ void term_update_current_link(void);
+ void term_set_current(uint32_t t);
+ uint32_t term_get_current(void);
+-- 
+2.20.1
+

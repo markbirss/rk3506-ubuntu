@@ -1,0 +1,30 @@
+Import('RTT_ROOT')
+Import('rtconfig')
+from building import *
+
+cwd = os.path.join(str(Dir('#')), 'secure_fw')
+
+# add the general drvers.
+src = Glob("*.c")
+src += ['src/tfm_tz_psa_ns_api.c']
+src += ['src/tfm_fw_intergrity_api.c']
+src += ['src/tfm_platform_api.c']
+src += ['src/os_wrapper/tfm_ns_interface_rtos.c']
+src += ['src/os_wrapper/mutex.c']
+if rtconfig.XIP == 'Y':
+    LIBS    = ['libtfm_s_veneers.a']
+else:
+    LIBS    = ['libtfm_s_veneers_xip_off.a']
+LIBPATH = [cwd + '/lib']
+
+CPPPATH = [cwd + '/include']
+
+group = DefineGroup('Drivers', src, depend = [''], CPPPATH = CPPPATH, LIBS = LIBS, LIBPATH = LIBPATH)
+
+list = os.listdir(cwd)
+for d in list:
+    path = os.path.join(cwd, d)
+    if os.path.isfile(os.path.join(path, 'SConscript')):
+        group = group + SConscript(os.path.join(d, 'SConscript'))
+
+Return('group')

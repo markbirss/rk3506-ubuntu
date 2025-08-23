@@ -1,0 +1,3 @@
+config RT_USING_WFD
+    bool "Enable WFD"
+    default n

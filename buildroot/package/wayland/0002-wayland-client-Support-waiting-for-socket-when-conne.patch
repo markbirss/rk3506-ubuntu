@@ -1,0 +1,47 @@
+From a7d2078418eb5a3ab19655ea05bcd60a968cd1cd Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Tue, 18 Jul 2023 10:33:55 +0800
+Subject: [PATCH 2/3] wayland-client: Support waiting for socket when
+ connecting
+
+Set WAYLAND_WAIT=1 to enable it.
+
+Tested on RK3588 EVB with:
+1/ Run "WAYLAND_WAIT=1 weston-terminal&"
+2/ Run "weston&"
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ src/wayland-client.c | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/src/wayland-client.c b/src/wayland-client.c
+index 9cf2793..b090923 100644
+--- a/src/wayland-client.c
++++ b/src/wayland-client.c
+@@ -1138,6 +1138,7 @@ connect_to_socket(const char *name)
+ 	const char *runtime_dir;
+ 	int name_size, fd;
+ 	bool path_is_absolute;
++	int i;
+ 
+ 	if (name == NULL)
+ 		name = getenv("WAYLAND_DISPLAY");
+@@ -1190,7 +1191,13 @@ connect_to_socket(const char *name)
+ 
+ 	size = offsetof (struct sockaddr_un, sun_path) + name_size;
+ 
+-	if (connect(fd, (struct sockaddr *) &addr, size) < 0) {
++	i = 500;
++	while (connect(fd, (struct sockaddr *) &addr, size) < 0) {
++		if (getenv("WAYLAND_WAIT") && i--) {
++			usleep(10000);
++			continue;
++		}
++
+ 		close(fd);
+ 		return -1;
+ 	}
+-- 
+2.20.1
+

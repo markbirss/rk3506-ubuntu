@@ -1,0 +1,45 @@
+From c4238d0f780ba09e72ab40d03ea64baebbc362a6 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Sun, 29 Sep 2024 18:51:55 +0800
+Subject: [PATCH] HACK: Align texture height to 8 for PVR
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ src/Textures.cpp | 14 +++++++++++---
+ 1 file changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/src/Textures.cpp b/src/Textures.cpp
+index 4739ec3..ed4bcfb 100644
+--- a/src/Textures.cpp
++++ b/src/Textures.cpp
+@@ -1064,8 +1064,11 @@ void TextureCache::_loadBackground(CachedTexture *pTexture)
+ 	}
+ 	pDest16 = reinterpret_cast<u16*>(pDest);
+ 
+-	clampSClamp = pTexture->width - 1;
+-	clampTClamp = pTexture->height - 1;
++	// HACK: Honor clamp size
++	// clampSClamp = pTexture->width - 1;
++	// clampTClamp = pTexture->height - 1;
++	clampSClamp = pTexture->clampWidth - 1;
++	clampTClamp = pTexture->clampHeight - 1;
+ 
+ 	j = 0;
+ 	for (y = 0; y < pTexture->height; y++) {
+@@ -2001,7 +2004,12 @@ void TextureCache::_updateBackground()
+ 	pCurrent->size = gSP.bgImage.size;
+ 
+ 	pCurrent->width = gSP.bgImage.width;
+-	pCurrent->height = gSP.bgImage.height;
++
++	// HACK: Align height to 8 for PVR
++#define __round_mask(x, y)      ((__typeof__(x))((y)-1))
++#define round_up(x, y)          ((((x)-1) | __round_mask(x, y))+1)
++	// pCurrent->height = gSP.bgImage.height;
++	pCurrent->height = round_up(gSP.bgImage.height, 8);
+ 
+ 	pCurrent->clampWidth = gSP.bgImage.width;
+ 	pCurrent->clampHeight = gSP.bgImage.height;
+-- 
+2.20.1
+

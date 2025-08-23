@@ -1,0 +1,4 @@
+#include "base/base.config"
+#include "base/recovery.config"
+#include "chips/rv1126b_aarch64.config"
+

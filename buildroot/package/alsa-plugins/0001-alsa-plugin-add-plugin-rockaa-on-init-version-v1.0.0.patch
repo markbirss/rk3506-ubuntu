@@ -1,0 +1,1345 @@
+From c644603414da7b274239cc9a0cffc76f63dfbcd4 Mon Sep 17 00:00:00 2001
+From: Xing Zheng <zhengxing@rock-chips.com>
+Date: Sun, 21 Apr 2024 09:27:31 +0800
+Subject: [PATCH] alsa-plugin: add plugin rockaa on init version v1.0.0
+
+Signed-off-by: Xing Zheng <zhengxing@rock-chips.com>
+---
+ Makefile.am                       |   3 +
+ configure.ac                      |  12 +
+ rockaa/66-rockaa.conf             |  62 +++
+ rockaa/Makefile.am                |  21 +
+ rockaa/asound_example_rockaa.conf | 144 ++++++
+ rockaa/pcm_rockaa.c               | 763 ++++++++++++++++++++++++++++++
+ rockaa/rockaa_capt.h              |  66 +++
+ rockaa/rockaa_common.h            | 124 +++++
+ rockaa/rockaa_play.h              |  47 ++
+ 9 files changed, 1242 insertions(+)
+ create mode 100644 rockaa/66-rockaa.conf
+ create mode 100644 rockaa/Makefile.am
+ create mode 100644 rockaa/asound_example_rockaa.conf
+ create mode 100644 rockaa/pcm_rockaa.c
+ create mode 100644 rockaa/rockaa_capt.h
+ create mode 100644 rockaa/rockaa_common.h
+ create mode 100644 rockaa/rockaa_play.h
+
+diff --git a/Makefile.am b/Makefile.am
+index af0e9c4..f69a3c1 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -38,6 +38,9 @@ endif
+ if HAVE_AAF
+ SUBDIRS += aaf
+ endif
++if HAVE_ROCKAA
++SUBDIRS += rockaa
++endif
+ 
+ EXTRA_DIST = gitcompile version COPYING.GPL m4/attributes.m4
+ AUTOMAKE_OPTIONS = foreign
+diff --git a/configure.ac b/configure.ac
+index 3215b96..a6fb152 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -185,6 +185,16 @@ if test "x$enable_aaf" != "xno"; then
+ fi
+ AM_CONDITIONAL(HAVE_AAF, test x$HAVE_AAF = xyes)
+ 
++AC_ARG_ENABLE([rockaa],
++      AS_HELP_STRING([--disable-rockaa], [Disable building of RockAA plugin]))
++
++if test "x$enable_rockaa" != "xno"; then
++  PKG_CHECK_MODULES(rockaa, [rockaa], [HAVE_ROCKAA=yes], [HAVE_ROCKAA=no])
++fi
++AS_IF([test "x$enable_rockaa" != "xno"],
++      [AM_CONDITIONAL(HAVE_ROCKAA, true)],
++      [AM_CONDITIONAL(HAVE_ROCKAA, false)])
++
+ dnl ALSA plugin directory
+ AC_ARG_WITH(plugindir,
+     AS_HELP_STRING([--with-plugindir=dir],
+@@ -266,6 +276,7 @@ AC_OUTPUT([
+ 	speex/Makefile
+ 	arcam-av/Makefile
+ 	aaf/Makefile
++	rockaa/Makefile
+ ])
+ 
+ dnl Show the build conditions
+@@ -305,3 +316,4 @@ if test "$HAVE_SPEEX" = "yes"; then
+   echo "  speexdsp_LIBS: $speexdsp_LIBS"
+ fi
+ echo "AAF plugin:         $HAVE_AAF"
++echo "RockAA plugin:      $HAVE_ROCKAA"
+diff --git a/rockaa/66-rockaa.conf b/rockaa/66-rockaa.conf
+new file mode 100644
+index 0000000..66ead26
+--- /dev/null
++++ b/rockaa/66-rockaa.conf
+@@ -0,0 +1,62 @@
++pcm.rockaa {
++	@args [ SLAVE RATE CAPT_CH_FAR CONF_PLAY_NAME CONF_CAPT_NAME
++                PLAY_IN PLAY_OUT CAPT_IN CAPT_OUT DEBUG_MODE ]
++	@args.SLAVE {
++		type string
++		default "plug:hw"
++	}
++	@args.RATE {
++		type integer
++		default 48000
++	}
++	@args.CAPT_CH_FAR {
++		type integer
++		default 0
++	}
++	@args.CONF_PLAY_NAME {
++		type string
++		default null
++	}
++	@args.CONF_CAPT_NAME {
++		type string
++		default null
++	}
++	@args.PLAY_IN {
++		type string
++		default null
++	}
++	@args.PLAY_OUT {
++		type string
++		default null
++	}
++	@args.CAPT_IN {
++		type string
++		default null
++	}
++	@args.CAPT_OUT {
++		type string
++		default null
++	}
++	@args.DEBUG_MODE {
++		type integer
++		default 0
++	}
++	type rockaa
++	slave.pcm $SLAVE
++	rate $RATE
++	capt_ch_far $CAPT_CH_FAR
++	conf_play_name $CONF_PLAY_NAME
++	conf_capt_name $CONF_CAPT_NAME
++	play_in $PLAY_IN
++	play_out $PLAY_OUT
++	capt_in $CAPT_IN
++	capt_out $CAPT_OUT
++	debug_mode $DEBUG_MODE
++	hint {
++		show {
++			@func refer
++			name defaults.namehint.basic
++		}
++		description "Plugin using RockkAA (Rockchip Audio Algorithm)"
++	}
++}
+diff --git a/rockaa/Makefile.am b/rockaa/Makefile.am
+new file mode 100644
+index 0000000..aa497f4
+--- /dev/null
++++ b/rockaa/Makefile.am
+@@ -0,0 +1,21 @@
++GCONF_FILES = 66-rockaa.conf
++
++EXTRA_DIST = $(GCONF_FILES)
++
++asound_module_pcm_rockaa_LTLIBRARIES = libasound_module_pcm_rockaa.la
++asound_module_gconf_DATA = $(GCONF_FILES)
++
++asound_module_pcm_rockaadir = @ALSA_PLUGIN_DIR@
++asound_module_gconfdir = @ALSA_GCONF_DIR@
++
++AM_CFLAGS = -Wall -g @ALSA_CFLAGS@ @rockaa_CFLAGS@
++AM_LDFLAGS = -module -avoid-version -export-dynamic -no-undefined $(LDFLAGS_NOUNDEFINED)
++
++libasound_module_pcm_rockaa_la_SOURCES = pcm_rockaa.c
++libasound_module_pcm_rockaa_la_LIBADD = @ALSA_LIBS@ @rockaa_LIBS@ -lrockaa
++
++include ../install-hooks.am
++
++install-data-hook: install-conf-hook
++
++uninstall-local: uninstall-conf-hook
+diff --git a/rockaa/asound_example_rockaa.conf b/rockaa/asound_example_rockaa.conf
+new file mode 100644
+index 0000000..de1ad60
+--- /dev/null
++++ b/rockaa/asound_example_rockaa.conf
+@@ -0,0 +1,144 @@
++# Copyright (c) 2024 Rockchip Electronics Co. Ltd.
++# Author: Xing Zheng <zhengxing@rock-chips.com>
++
++defaults.pcm.rate_converter "speexrate_medium"
++
++pcm.!default
++{
++    type asym
++    playback.pcm "rockaa_play_0"
++    capture.pcm "rockaa_capt_0"
++}
++
++# To user
++pcm.rockaa_play_0 {
++    type plug
++    slave {
++        pcm "rockaa_play_effect_0"
++        channels 2
++        format S16_LE
++        rate 48000
++    }
++}
++
++pcm.rockaa_play_1 {
++    type plug
++    slave {
++        pcm "rockaa_play_effect_1"
++        channels 2
++        format S16_LE
++        rate 48000
++    }
++}
++
++pcm.rockaa_capt_0 {
++    type softvol
++    slave.pcm "rockaa_capt_effect_0"
++    control {
++        name "Master RockAA Capture 0"
++        card 0
++        device 0
++    }
++    min_dB -50.0
++    max_dB 0.0
++    resolution 101
++}
++
++pcm.rockaa_capt_1 {
++    type softvol
++    slave.pcm "rockaa_capt_effect_1"
++    control {
++        name "Master RockAA Capture 1"
++        card 0
++        device 0
++    }
++    min_dB -50.0
++    max_dB 0.0
++    resolution 101
++}
++
++# To Rockaa and other plugins
++pcm.rockaa_play_effect_0 {
++    type rockaa
++    slave.pcm "softvol_rockaa_play"
++    conf_play_name /userdata/cfg/rockaa_conf/rkaudio_effect_eqdrc_48000hz_2ch_n48db.bin
++    debug_mode 0
++    # play_in /tmp/dbg_dump_playin.pcm
++    # play_out /tmp/dbg_dump_playout.pcm
++}
++
++pcm.rockaa_play_effect_1 {
++    type rockaa
++    slave.pcm "softvol_rockaa_play"
++    conf_play_name /userdata/cfg/rockaa_conf/rkaudio_effect_eqdrc_48000hz_2ch.bin
++    debug_mode 0
++    # play_in /tmp/dbg_dump_playin.pcm
++    # play_out /tmp/dbg_dump_playout.pcm
++}
++
++pcm.rockaa_capt_effect_0 {
++    type rockaa
++    slave.pcm "dsnooper"
++    conf_capt_name /userdata/cfg/rockaa_conf/config_aivqe.json
++    capt_ch_far 1
++    debug_mode 0
++    # capt_in /tmp/dbg_dump_capin.pcm
++    # capt_out /tmp/dbg_dump_capout.pcm
++}
++
++pcm.rockaa_capt_effect_1 {
++    type rockaa
++    slave.pcm "dsnooper"
++    conf_capt_name /userdata/cfg/rockaa_conf/config_aivqe_effect_1.json
++    capt_ch_far 1
++    debug_mode 0
++    # capt_in /tmp/dbg_dump_capin.pcm
++    # capt_out /tmp/dbg_dump_capout.pcm
++}
++
++pcm.softvol_rockaa_play {
++    type softvol
++    slave.pcm "dmixer"
++    control {
++        name "Master RockAA Playback"
++        card 0
++        device 0
++    }
++    min_dB -50.0
++    max_dB 0.0
++    resolution 101
++}
++
++# To Hardware
++pcm.dmixer {
++    type dmix
++    ipc_key 5978293 # must be unique for all dmix plugins!!!!
++    ipc_key_add_uid yes
++    slave {
++        pcm "hw:0,0,0"
++        channels 2
++        period_size 768
++        buffer_size 3072
++    }
++    bindings {
++        0 0
++        1 1
++    }
++}
++
++pcm.dsnooper {
++    type dsnoop
++    ipc_key 5978291 # must be unique for all dmix plugins!!!!
++    ipc_key_add_uid yes
++    slave {
++        pcm "hw:0,0,0"
++        channels 2
++        period_size 768
++        buffer_size 3072
++    }
++    bindings {
++        0 0
++        1 1
++    }
++}
++
+diff --git a/rockaa/pcm_rockaa.c b/rockaa/pcm_rockaa.c
+new file mode 100644
+index 0000000..0cc83d5
+--- /dev/null
++++ b/rockaa/pcm_rockaa.c
+@@ -0,0 +1,763 @@
++/*
++ * Automatic alsa rockaa plugin
++ *
++ * Copyright (c) 2024 by Xing Zheng <zhengxing@rock-chips.com>
++ *
++ * This library is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as
++ * published by the Free Software Foundation; either version 2.1 of
++ * the License, or (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
++ */
++
++#include <alsa/asoundlib.h>
++#include <alsa/pcm_external.h>
++
++#include "rockaa_capt.h"
++#include "rockaa_play.h"
++
++/** Force align frame size, the same with local version of alsa-lib/include/pcm.h */
++#define SND_PCM_FORCE_ALIGN_FRAME   0x00100000
++
++struct snd_pcm_rockaa
++{
++    snd_pcm_extplug_t ext;      /* For pointer must be first member */
++    rockaa_p *hdl_p;
++    rockaa_c *hdl_c;
++    char setup_time[32];
++};
++
++typedef struct snd_pcm_rockaa snd_pcm_rockaa_t;
++
++static inline void *area_addr(const snd_pcm_channel_area_t *area,
++                              snd_pcm_uframes_t offset)
++{
++    unsigned int bitofs = area->first + area->step * offset;
++    return (char *) area->addr + bitofs / 8;
++}
++
++static int rockaa_setup_time(struct snd_pcm_rockaa *rockaa)
++{
++    time_t now;
++    struct tm *local;
++
++    time(&now);
++    local = localtime(&now);
++
++    strftime(rockaa->setup_time, sizeof(rockaa->setup_time), "%Y%m%d%H%M%S", local);
++    LOGI("This RockAA setup time is: %s\n", rockaa->setup_time);
++    return 0;
++}
++
++/* NOTE: needs free realloc dump name outside */
++static int rockaa_realloc_dump(struct snd_pcm_rockaa *rockaa, char **dump_name)
++{
++    char *strbak = NULL, *strpre = NULL, *ptr = NULL;
++    int buflen = 0;
++
++    if (!dump_name || !(*dump_name))
++    {
++        LOGE("Invalid dump_name\n");
++        return -1;
++    }
++
++    strbak = strdup(*dump_name);
++    buflen = strlen(strbak) + strlen("_") + strlen(rockaa->setup_time);
++    LOGE("buflen=%d\n", buflen);
++    /**
++     * FIXME: Using calloc or memset will be crashed:
++     *   free(): invalid next size (fast)
++     * or:
++     *   malloc(): invalid size (unsorted)
++     */
++    // *dump_name = calloc(1, buflen);
++    *dump_name = malloc(buflen);
++    // memset((char *)(*dump_name), 0, buflen);
++    if (!(*dump_name))
++    {
++        LOGE("dump_name alloc faileld: errno=%d\n", errno);
++    }
++
++    strpre = strtok_r(strbak, ".", &ptr);
++    strcpy(*dump_name, strpre);
++    strcat(*dump_name, "_");
++    strcat(*dump_name, rockaa->setup_time);
++    strcat(*dump_name, ".pcm");
++    free(strbak);
++    return 0;
++}
++
++static snd_pcm_sframes_t
++rockaa_transfer(snd_pcm_extplug_t *ext,
++                const snd_pcm_channel_area_t *dst_areas,
++                snd_pcm_uframes_t dst_offset,
++                const snd_pcm_channel_area_t *src_areas,
++                snd_pcm_uframes_t src_offset,
++                snd_pcm_uframes_t size)
++{
++    struct snd_pcm_rockaa *rockaa = (struct snd_pcm_rockaa *)ext;
++    short *src = (short *)area_addr(src_areas, src_offset);
++    short *dst = (short *)area_addr(dst_areas, dst_offset);
++    int err = 0;
++
++    LOGV("%s: stream=%d src_offset=%ld dst_offset=%ld size=%ld\n",
++         __func__, ext->stream, src_offset, dst_offset, size);
++
++    if (ext->stream == SND_PCM_STREAM_PLAYBACK)
++    {
++        if (rockaa->hdl_p->in_fp)
++        {
++            fwrite(src, 1,
++                   rockaa->hdl_p->nb_samples * sizeof(short) * rockaa->hdl_p->channels,
++                   rockaa->hdl_p->in_fp);
++        }
++
++        err = rockaa_play_effect_process(rockaa->hdl_p, src, dst);
++        if (err < 0)
++        {
++            SNDERR("rockaa playback effect failed: %d\n", err);
++            return err;
++        }
++
++        if (rockaa->hdl_p->out_fp)
++        {
++            fwrite(dst, 1,
++                   rockaa->hdl_p->nb_samples * sizeof(short) * rockaa->hdl_p->channels,
++                   rockaa->hdl_p->out_fp);
++        }
++    }
++    else if (ext->stream == SND_PCM_STREAM_CAPTURE)
++    {
++        if (rockaa->hdl_c->in_fp)
++        {
++            fwrite(src, 1,
++                   rockaa->hdl_c->nb_samples * sizeof(short) * rockaa->hdl_c->channels,
++                   rockaa->hdl_c->in_fp);
++        }
++
++        if (rockaa->hdl_c->out_buf)
++        {
++            short *out_buf = (short *)rockaa->hdl_c->out_buf;
++            int ch_out = rockaa->hdl_c->ch_out;
++            int nb_samples = rockaa->hdl_c->nb_samples;
++            int c, n;
++
++            err = rockaa_capt_effect_process(rockaa->hdl_c, src, out_buf);
++            if (err < 0)
++            {
++                SNDERR("rockaa capture effect failed: %d\n", err);
++                return err;
++            }
++
++            /* FIXME: copy mono to source channels */
++            for (n = 0; n < nb_samples; n++)
++            {
++                for (c = 0; c < rockaa->hdl_c->channels; c++)
++                {
++                    *(dst + n * rockaa->hdl_c->channels + c) = *(out_buf + n * ch_out);
++                }
++            }
++        }
++        else
++        {
++            /* effect process bypass directly */
++            err = rockaa_capt_effect_process(rockaa->hdl_c, src, dst);
++            if (err < 0)
++            {
++                SNDERR("rockaa capture effect failed: %d\n", err);
++                return err;
++            }
++        }
++
++        /* TO DEBUG: */
++        // memcpy(dst, src, size * sizeof(short) * rockaa->hdl_c->channels);
++
++        if (rockaa->hdl_c->out_fp)
++        {
++            fwrite(dst, 1,
++                   rockaa->hdl_c->nb_samples * sizeof(short) * rockaa->hdl_c->channels,
++                   rockaa->hdl_c->out_fp);
++        }
++    }
++    else
++    {
++        SNDERR("Invalid stream: %d\n", ext->stream);
++    }
++
++    return size;
++}
++
++static int rockaa_init(snd_pcm_extplug_t *ext)
++{
++    return 0;
++}
++
++static int rockaa_close(snd_pcm_extplug_t *ext)
++{
++    struct snd_pcm_rockaa *rockaa = (struct snd_pcm_rockaa *)ext;
++
++    if (ext->stream == SND_PCM_STREAM_PLAYBACK)
++    {
++        if (rockaa->hdl_p)
++        {
++            rockaa_play_effect_destroy(rockaa->hdl_p);
++
++            if (rockaa->hdl_p->conf_path)
++            {
++                free(rockaa->hdl_p->conf_path);
++                rockaa->hdl_p->conf_path = NULL;
++            }
++
++            if (rockaa->hdl_p->in_buf)
++            {
++                free(rockaa->hdl_p->in_buf);
++                rockaa->hdl_p->in_buf = NULL;
++            }
++
++            if (rockaa->hdl_p->out_buf)
++            {
++                free(rockaa->hdl_p->out_buf);
++                rockaa->hdl_p->out_buf = NULL;
++            }
++
++            if (rockaa->hdl_p->in_fp)
++            {
++                fclose(rockaa->hdl_p->in_fp);
++                rockaa->hdl_p->in_fp = NULL;
++            }
++
++            if (rockaa->hdl_p->out_fp)
++            {
++                fclose(rockaa->hdl_p->out_fp);
++                rockaa->hdl_p->out_fp = NULL;
++            }
++            free(rockaa->hdl_p);
++            rockaa->hdl_p = NULL;
++        }
++    }
++    else if (ext->stream == SND_PCM_STREAM_CAPTURE)
++    {
++        if (rockaa->hdl_c)
++        {
++            rockaa_capt_effect_destroy(rockaa->hdl_c);
++
++            if (rockaa->hdl_c->conf_path)
++            {
++                free(rockaa->hdl_c->conf_path);
++                rockaa->hdl_c->conf_path = NULL;
++            }
++
++            if (rockaa->hdl_c->in_buf)
++            {
++                free(rockaa->hdl_c->in_buf);
++                rockaa->hdl_c->in_buf = NULL;
++            }
++
++            if (rockaa->hdl_c->out_buf)
++            {
++                free(rockaa->hdl_c->out_buf);
++                rockaa->hdl_c->out_buf = NULL;
++            }
++
++            if (rockaa->hdl_c->in_fp)
++            {
++                fclose(rockaa->hdl_c->in_fp);
++                rockaa->hdl_c->in_fp = NULL;
++            }
++
++            if (rockaa->hdl_c->out_fp)
++            {
++                fclose(rockaa->hdl_c->out_fp);
++                rockaa->hdl_c->out_fp = NULL;
++            }
++            free(rockaa->hdl_c);
++            rockaa->hdl_c = NULL;
++        }
++    }
++    else
++    {
++        SNDERR("Invalid stream: %d\n", ext->stream);
++    }
++
++    return 0;
++}
++
++static int rockaa_hw_params(snd_pcm_extplug_t *ext, snd_pcm_hw_params_t *params)
++{
++    struct snd_pcm_rockaa *rockaa = (struct snd_pcm_rockaa *)ext;
++    snd_pcm_uframes_t period_size;
++    unsigned int rate, channels;
++    int err;
++
++    if (!ext)
++    {
++        SNDERR("ext plugin is NULL\n");
++        return -EINVAL;
++    }
++
++    if (!params)
++    {
++        SNDERR("params is NULL\n");
++        return -EINVAL;
++    }
++
++    snd_pcm_hw_params_get_period_size(params, &period_size, 0);
++    snd_pcm_hw_params_get_rate(params, &rate, 0);
++    snd_pcm_hw_params_get_channels(params, &channels);
++    snd_pcm_hw_params_set_period_size_near(ext->pcm, params,
++                                           &period_size, 0);
++
++    if (ext->stream == SND_PCM_STREAM_PLAYBACK)
++    {
++        if (!rockaa->hdl_p)
++        {
++            SNDERR("rockaa playback handle is NULL\n");
++            return -EINVAL;
++        }
++
++        rockaa->hdl_p->rate = rate;
++        rockaa->hdl_p->channels = channels;
++        rockaa->hdl_p->nb_samples = period_size;
++        LOGI("rockaa play: rate=%d channels=%d nb_samples=%d debug_mode=%d conf_path: %s\n",
++             rockaa->hdl_p->rate,
++             rockaa->hdl_p->channels,
++             rockaa->hdl_p->nb_samples,
++             rockaa->hdl_p->debug_mode,
++             rockaa->hdl_p->conf_path);
++
++        err = rockaa_play_effect_create(rockaa->hdl_p);
++        if (err < 0)
++        {
++            SNDERR("rockaa playback create failed: %d\n", err);
++            return err;
++        }
++        SNDERR("rockaa playback create success\n");
++    }
++    else if (ext->stream == SND_PCM_STREAM_CAPTURE)
++    {
++        if (!rockaa->hdl_c)
++        {
++            SNDERR("rockaa capture handle is NULL\n");
++            return -EINVAL;
++        }
++
++        rockaa->hdl_c->rate = rate;
++        rockaa->hdl_c->channels = channels;
++        rockaa->hdl_c->ch_near = channels - rockaa->hdl_c->ch_far;
++        rockaa->hdl_c->nb_samples = period_size;
++
++        LOGI("rockaa capt: rate=%d channels=%d(%d+%d) nb_samples=%d debug_mode=%d conf_path: %s\n",
++             rockaa->hdl_c->rate,
++             rockaa->hdl_c->channels, rockaa->hdl_c->ch_near, rockaa->hdl_c->ch_far,
++             rockaa->hdl_c->nb_samples,
++             rockaa->hdl_c->debug_mode,
++             rockaa->hdl_c->conf_path);
++        err = rockaa_capt_effect_create(rockaa->hdl_c);
++        if (err < 0)
++        {
++            SNDERR("rockaa capture create failed: %d\n", err);
++            return err;
++        }
++        SNDERR("rockaa capture create success, ch_out=%d\n", rockaa->hdl_c->ch_out);
++        if (rockaa->hdl_c->ch_out == 1)
++        {
++            rockaa->hdl_c->out_bytes = sizeof(short) * period_size * rockaa->hdl_c->ch_out;
++            rockaa->hdl_c->out_buf = (char *)malloc(rockaa->hdl_c->out_bytes);
++            if (!rockaa->hdl_c->out_buf)
++            {
++                SNDERR("Unable to allocate out_buf\n");
++                return -ENOMEM;
++            }
++        }
++    }
++    else
++    {
++        SNDERR("Invalid stream: %d\n", ext->stream);
++    }
++
++    return 0;
++}
++
++static int rockaa_hw_free(snd_pcm_extplug_t *ext)
++{
++    return 0;
++}
++
++#if SND_PCM_EXTPLUG_VERSION >= 0x10002
++static snd_pcm_chmap_query_t **rockaa_query_chmaps(snd_pcm_extplug_t *ext ATTRIBUTE_UNUSED)
++{
++    return NULL;
++}
++
++static snd_pcm_chmap_t *rockaa_get_chmap(snd_pcm_extplug_t *ext)
++{
++    return NULL;
++}
++#endif /* SND_PCM_EXTPLUG_VERSION >= 0x10002 */
++
++static const snd_pcm_extplug_callback_t rockaa_callback =
++{
++    .transfer = rockaa_transfer,
++    .init = rockaa_init,
++    .close = rockaa_close,
++    .hw_params = rockaa_hw_params,
++    .hw_free = rockaa_hw_free,
++#if SND_PCM_EXTPLUG_VERSION >= 0x10002
++    .query_chmaps = rockaa_query_chmaps,
++    .get_chmap = rockaa_get_chmap,
++#endif
++};
++
++SND_PCM_PLUGIN_DEFINE_FUNC(rockaa)
++{
++    snd_config_iterator_t i, next;
++    snd_pcm_rockaa_t *rockaa;
++    snd_config_t *sconf = NULL;
++    const char *conf_play_name = NULL;
++    const char *conf_capt_name = NULL;
++    const char *play_in_name = NULL, *play_out_name = NULL;
++    const char *capt_in_name = NULL, *capt_out_name = NULL;
++    long channels = 2, rate = 48000, debug_mode = 0;
++    long ch_far = 0, enable_doa = 0;
++    unsigned int bit_format;
++    int err;
++
++    snd_config_for_each(i, next, conf)
++    {
++        snd_config_t *n = snd_config_iterator_entry(i);
++        const char *id;
++        if (snd_config_get_id(n, &id) < 0)
++            continue;
++        if (strcmp(id, "comment") == 0 || strcmp(id, "type") == 0 || strcmp(id, "hint") == 0)
++            continue;
++        if (strcmp(id, "slave") == 0)
++        {
++            sconf = n;
++            continue;
++        }
++        if (strcmp(id, "rate") == 0)
++        {
++            snd_config_get_integer(n, &rate);
++            continue;
++        }
++        if (strcmp(id, "debug_mode") == 0)
++        {
++            long val;
++            err = snd_config_get_integer(n, &val);
++            if (err < 0)
++            {
++                SNDERR("Invalid value for %s", id);
++                return err;
++            }
++            debug_mode = val;
++            continue;
++        }
++        if (strcmp(id, "channels") == 0)
++        {
++            long val;
++            err = snd_config_get_integer(n, &val);
++            if (err < 0)
++            {
++                SNDERR("Invalid value for %s", id);
++                return err;
++            }
++            channels = val;
++            if (channels > 2)
++            {
++                SNDERR("channels must be 1 or 2");
++                return -EINVAL;
++            }
++            continue;
++        }
++        if (strcmp(id, "capt_ch_far") == 0)
++        {
++            long val;
++            err = snd_config_get_integer(n, &val);
++            if (err < 0)
++            {
++                SNDERR("Invalid value for %s", id);
++                return err;
++            }
++            ch_far = val;
++            continue;
++        }
++        if (strcmp(id, "conf_play_name") == 0)
++        {
++            if ((err = snd_config_get_string(n, &conf_play_name)) < 0)
++            {
++                SNDERR("field %s is not a string", id);
++                return err;
++            }
++
++            if (conf_play_name && (strcasecmp(conf_play_name, "null") == 0))
++            {
++                conf_play_name = NULL;
++            }
++            continue;
++        }
++        if (strcmp(id, "conf_capt_name") == 0)
++        {
++            if ((err = snd_config_get_string(n, &conf_capt_name)) < 0)
++            {
++                SNDERR("field %s is not a string", id);
++                return err;
++            }
++
++            if (conf_capt_name && (strcasecmp(conf_capt_name, "null") == 0))
++            {
++                conf_capt_name = NULL;
++            }
++            continue;
++        }
++        if (strcmp(id, "play_in") == 0)
++        {
++            if ((err = snd_config_get_string(n, &play_in_name)) < 0)
++            {
++                SNDERR("field %s is not a string", id);
++                return err;
++            }
++
++            if (play_in_name && (strcasecmp(play_in_name, "null") == 0))
++            {
++                play_in_name = NULL;
++            }
++            continue;
++        }
++        if (strcmp(id, "play_out") == 0)
++        {
++            if ((err = snd_config_get_string(n, &play_out_name)) < 0)
++            {
++                SNDERR("field %s is not a string", id);
++                return err;
++            }
++
++            if (play_out_name && (strcasecmp(play_out_name, "null") == 0))
++            {
++                play_out_name = NULL;
++            }
++            continue;
++        }
++        if (strcmp(id, "capt_in") == 0)
++        {
++            if ((err = snd_config_get_string(n, &capt_in_name)) < 0)
++            {
++                SNDERR("field %s is not a string", id);
++                return err;
++            }
++
++            if (capt_in_name && (strcasecmp(capt_in_name, "null") == 0))
++            {
++                capt_in_name = NULL;
++            }
++            continue;
++        }
++        if (strcmp(id, "capt_out") == 0)
++        {
++            if ((err = snd_config_get_string(n, &capt_out_name)) < 0)
++            {
++                SNDERR("field %s is not a string", id);
++                return err;
++            }
++
++            if (capt_out_name && (strcasecmp(capt_out_name, "null") == 0))
++            {
++                capt_out_name = NULL;
++            }
++            continue;
++        }
++
++        SNDERR("Unknown field %s", id);
++        return -EINVAL;
++    }
++
++    if (!sconf)
++    {
++        SNDERR("No slave configuration for filrrockaa pcm");
++        return -EINVAL;
++    }
++
++    rockaa = calloc(1, sizeof(*rockaa));
++    if (rockaa == NULL)
++        return -ENOMEM;
++
++    bit_format = SND_PCM_FORMAT_S16;
++
++    rockaa->ext.version = SND_PCM_EXTPLUG_VERSION;
++    rockaa->ext.name = "RockAA ALSA Plugin";
++    rockaa->ext.callback = &rockaa_callback;
++    rockaa->ext.private_data = rockaa;
++    rockaa->ext.rate = rate;
++    rockaa->ext.channels = channels;
++    rockaa->ext.slave_channels = channels;
++    rockaa->ext.format = bit_format;
++    rockaa->ext.slave_format = bit_format;
++    rockaa_setup_time(rockaa);
++
++    /* force sync and align frame size during capture */
++    mode |= SND_PCM_FORCE_ALIGN_FRAME;
++    err = snd_pcm_extplug_create(&rockaa->ext, name, root, sconf, stream, mode);
++    if (err < 0)
++    {
++        free(rockaa);
++        return err;
++    }
++
++    snd_pcm_extplug_set_param(&rockaa->ext, SND_PCM_EXTPLUG_HW_FORMAT,
++                              bit_format);
++    snd_pcm_extplug_set_slave_param(&rockaa->ext, SND_PCM_EXTPLUG_HW_FORMAT,
++                                    bit_format);
++
++    snd_pcm_extplug_set_param_minmax(&rockaa->ext,
++                                     SND_PCM_EXTPLUG_HW_CHANNELS,
++                                     1, channels);
++    snd_pcm_extplug_set_slave_param_minmax(&rockaa->ext,
++                                           SND_PCM_EXTPLUG_HW_CHANNELS,
++                                           1, channels);
++
++    if (rockaa->ext.stream == SND_PCM_STREAM_PLAYBACK)
++    {
++        rockaa_p *hdl_p;
++
++        hdl_p = (rockaa_p *)calloc(1, sizeof(rockaa_p));
++        if (!hdl_p)
++        {
++            LOGE("alloc talk hdl_p failed\n");
++            return -1;
++        }
++
++        hdl_p->bits = bit_format | ROCKAA_ALSA_BIT_FORMAT;
++        hdl_p->debug_mode = debug_mode;
++        hdl_p->conf_path = conf_play_name ? (char *)strdup(conf_play_name) : NULL;
++
++        if (play_in_name)
++        {
++            const char *play_in_dump = play_in_name;
++
++            if (access(play_in_dump, F_OK) == 0)
++            {
++                rockaa_realloc_dump(rockaa, &play_in_dump);
++            }
++
++            hdl_p->in_fp = fopen(play_in_dump, "wb");
++            if (hdl_p->in_fp == NULL)
++            {
++                LOGE("%s play_in_name fopen failed\n", play_in_dump);
++                return -1;
++            }
++            LOGI("open play_in: %s success\n", play_in_dump);
++
++            if (play_in_dump && (play_in_dump != play_in_name))
++            {
++                free(play_in_dump);
++                play_in_dump = NULL;
++            }
++        }
++        if (play_out_name)
++        {
++            const char *play_out_dump = play_out_name;
++
++            if (access(play_out_dump, F_OK) == 0)
++            {
++                rockaa_realloc_dump(rockaa, &play_out_dump);
++            }
++
++            hdl_p->out_fp = fopen(play_out_dump, "wb");
++            if (hdl_p->out_fp == NULL)
++            {
++                LOGE("%s play_out_name fopen failed\n", play_out_dump);
++                return -1;
++            }
++            LOGI("open play_out: %s success\n", play_out_dump);
++
++            if (play_out_dump && (play_out_dump != play_out_name))
++            {
++                free(play_out_dump);
++                play_out_dump = NULL;
++            }
++        }
++
++        rockaa->hdl_p = hdl_p;
++    }
++    else if (rockaa->ext.stream == SND_PCM_STREAM_CAPTURE)
++    {
++        rockaa_c *hdl_c;
++
++        hdl_c = (rockaa_c *)calloc(1, sizeof(rockaa_c));
++        if (!hdl_c)
++        {
++            LOGE("alloc talk hdl_c failed\n");
++            return -1;
++        }
++
++        hdl_c->bits = bit_format | ROCKAA_ALSA_BIT_FORMAT;
++        hdl_c->ch_far = ch_far;
++        hdl_c->debug_mode = debug_mode;
++        hdl_c->enable_doa = enable_doa;
++        hdl_c->conf_path = conf_capt_name ? (char *)strdup(conf_capt_name) : NULL;
++
++        if (capt_in_name)
++        {
++            const char *capt_in_dump = capt_in_name;
++
++            if (access(capt_in_dump, F_OK) == 0)
++            {
++                rockaa_realloc_dump(rockaa, &capt_in_dump);
++            }
++
++            hdl_c->in_fp = fopen(capt_in_dump, "wb");
++            if (hdl_c->in_fp == NULL)
++            {
++                LOGE("%s capt_in_name fopen failed\n", capt_in_dump);
++                return -1;
++            }
++            LOGI("open capt_in: %s success\n", capt_in_dump);
++
++            if (capt_in_dump && (capt_in_dump != capt_in_name))
++            {
++                free(capt_in_dump);
++                capt_in_dump = NULL;
++            }
++        }
++        if (capt_out_name)
++        {
++            const char *capt_out_dump = capt_out_name;
++
++            if (access(capt_out_dump, F_OK) == 0)
++            {
++                rockaa_realloc_dump(rockaa, &capt_out_dump);
++            }
++            hdl_c->out_fp = fopen(capt_out_dump, "wb");
++            if (hdl_c->out_fp == NULL)
++            {
++                LOGE("%s capt_out_name fopen failed\n", capt_out_dump);
++                return -1;
++            }
++            LOGI("open capt_out: %s success\n", capt_out_dump);
++
++            if (capt_out_dump && (capt_out_dump != capt_out_name))
++            {
++                free(capt_out_dump);
++                capt_out_dump = NULL;
++            }
++        }
++
++        rockaa->hdl_c = hdl_c;
++    }
++    else
++    {
++        SNDERR("Invalid stream: %d\n", rockaa->ext.stream);
++    }
++
++    *pcmp = rockaa->ext.pcm;
++    return 0;
++}
++
++SND_PCM_PLUGIN_SYMBOL(rockaa);
+diff --git a/rockaa/rockaa_capt.h b/rockaa/rockaa_capt.h
+new file mode 100644
+index 0000000..459e446
+--- /dev/null
++++ b/rockaa/rockaa_capt.h
+@@ -0,0 +1,66 @@
++/*
++ * Copyright 2023 Rockchip Electronics Co. LTD
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ *
++ * Author: xing.zheng@rock-chips.com
++ *   Date: 2023.02.28
++ */
++
++#ifndef __ROCKAA_CAPT_H__
++#define __ROCKAA_CAPT_H__
++
++#include "rockaa_common.h"
++
++enum
++{
++    STATUS_RES_SUCCESS = 0,
++    STATUS_RES_NONE = -1,
++    STATUS_RES_INVALID = -2,
++};
++
++typedef struct _result_capt
++{
++    int angle_horiz;
++    int angle_pitch;
++} result_capt;
++
++typedef struct _rockaa_c
++{
++    /* base members */
++    void *effect;
++    FILE *in_fp;
++    FILE *out_fp;
++    char *in_buf;
++    char *out_buf;
++    char *conf_path;
++    int out_bytes;
++    int rate;
++    int channels;
++    int bits;
++    int nb_samples;
++    /* customized members */
++    int debug_mode;
++    bool enable_doa;
++    int ch_near;
++    int ch_far;
++    int ch_out;  /* ==1: BF is enabled, ==ch_near: BF is disabled, configured by rockaa_capt_effect_create() */
++    result_capt results;
++} rockaa_c;
++
++int rockaa_capt_effect_create(rockaa_c *handle);
++int rockaa_capt_effect_destroy(rockaa_c *handle);
++int rockaa_capt_effect_process(rockaa_c *handle, short *pcm_in, short *pcm_out);
++int rockaa_capt_effect_results(rockaa_c *handle);
++
++#endif /* __ROCKAA_CAPT_H__ */
+diff --git a/rockaa/rockaa_common.h b/rockaa/rockaa_common.h
+new file mode 100644
+index 0000000..a001cc5
+--- /dev/null
++++ b/rockaa/rockaa_common.h
+@@ -0,0 +1,124 @@
++/*
++ * Copyright 2023 Rockchip Electronics Co. LTD
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ *
++ * Author: xing.zheng@rock-chips.com
++ *   Date: 2023.02.28
++ */
++
++#ifndef __ROCKAA_COMMON_H__
++#define __ROCKAA_COMMON_H__
++
++#include <assert.h>
++#include <stdbool.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <stdint.h>
++#include <string.h>
++
++#define rt_memset memset
++#define rt_malloc(x) calloc(1, x)
++#define rt_safe_free(x) do { if (x) free(x); } while (0)
++#define RT_NULL     NULL
++#define RT_NONE     "none"
++#define RT_BOOL     char
++#define RT_TRUE     1
++#define RT_FALSE    0
++
++#define RT_ARRAY_ELEMS(a)      (sizeof(a) / sizeof((a)[0]))
++
++#define ROCKAA_VERSION     "V1.1.0"
++#define DEFAULT_FRAME_GAP  16
++
++#define ROCKAA_ALSA_BIT_FORMAT      0x8000000
++
++typedef enum _alsa_snd_pcm_format_part {
++    ALSA_SND_PCM_FORMAT_S16 = 2,
++} alsa_snd_pcm_format_part;
++
++typedef int8_t       INT8;
++typedef int16_t      INT16;
++typedef int32_t      INT32;
++typedef int64_t      INT64;
++
++typedef uint8_t      UINT8;
++typedef uint8_t      UCHAR;
++typedef uint16_t     UINT16;
++typedef uint32_t     UINT32;
++typedef uint64_t     UINT64;
++
++typedef void        *RT_PTR;
++typedef void         RT_VOID;
++typedef float        RT_FLOAT;
++typedef short        RT_SHORT;
++
++typedef enum _ROCKAA_DEBUG
++{
++    DEBUG_SUMMARY    = 1 << 0,
++    DEBUG_PER_FRAME  = 1 << 1,
++} ROCKAA_DEBUG;
++
++struct wav_header
++{
++    uint32_t riff_id;
++    uint32_t riff_sz;
++    uint32_t riff_fmt;
++    uint32_t fmt_id;
++    uint32_t fmt_sz;
++    uint16_t audio_format;
++    uint16_t num_channels;
++    uint32_t sample_rate;
++    uint32_t byte_rate;
++    uint16_t block_align;
++    uint16_t bits_per_sample;
++    uint32_t data_id;
++    uint32_t data_sz;
++};
++
++#define LOGV(format, ...)                                     \
++  do {                                                        \
++  } while (0)
++
++#define LOGD(format, ...)                                     \
++  do {                                                        \
++    fprintf(stderr, "[tagD] " format, ##__VA_ARGS__);         \
++    if(format[strlen(format) - 1] != '\n')                    \
++      fprintf(stderr, "\n");                                  \
++  } while (0)
++
++#define LOGI(format, ...)                                     \
++  do {                                                        \
++    fprintf(stderr, "[tagI] " format, ##__VA_ARGS__);         \
++    if(format[strlen(format) - 1] != '\n')                    \
++      fprintf(stderr, "\n");                                  \
++  } while (0)
++
++#define LOGE(format, ...)                                     \
++  do {                                                        \
++    fprintf(stderr, "[tagE] " format, ##__VA_ARGS__);         \
++    if(format[strlen(format) - 1] != '\n')                    \
++      fprintf(stderr, "\n");                                  \
++  } while (0)
++
++#define RT_ASSERT assert
++
++inline static void rockaa_version(char *tag)
++{
++    printf("Test for Rock Audio Algorithm %s Version: %s\n",
++           tag, ROCKAA_VERSION);
++}
++
++int rockaa_common_handle_wav(FILE *in_fp, char *in_file);
++
++#endif /* __ROCKAA_COMMON_H__ */
+diff --git a/rockaa/rockaa_play.h b/rockaa/rockaa_play.h
+new file mode 100644
+index 0000000..607deda
+--- /dev/null
++++ b/rockaa/rockaa_play.h
+@@ -0,0 +1,47 @@
++/*
++ * Copyright 2023 Rockchip Electronics Co. LTD
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ *
++ * Author: xing.zheng@rock-chips.com
++ *   Date: 2023.03.30
++ */
++
++#ifndef __ROCKAA_PLAY_H__
++#define __ROCKAA_PLAY_H__
++
++#include "rockaa_common.h"
++
++typedef struct _rockaa_p
++{
++    /* base members */
++    void *effect;
++    FILE *in_fp;
++    FILE *out_fp;
++    char *in_buf;
++    char *out_buf;
++    char *conf_path;
++    int out_bytes;
++    int rate;
++    int channels;
++    int bits;
++    int nb_samples;
++    /* customized members */
++    int debug_mode;
++} rockaa_p;
++
++int rockaa_play_effect_create(rockaa_p *handle);
++int rockaa_play_effect_destroy(rockaa_p *handle);
++int rockaa_play_effect_process(rockaa_p *handle, short *pcm_in, short *pcm_out);
++
++#endif /* __ROCKAA_PLAY_H__ */
+-- 
+2.34.1
+

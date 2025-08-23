@@ -1,0 +1,27 @@
+From 70a113d026cdd0b323505d8ef98eb76d6c515fbd Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Tue, 27 Aug 2024 16:00:44 +0800
+Subject: [PATCH 08/10] Ignore persistent storages
+
+For example UFS.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ usbmount.rules | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/usbmount.rules b/usbmount.rules
+index db943dd..945dc0c 100644
+--- a/usbmount.rules
++++ b/usbmount.rules
+@@ -7,6 +7,6 @@ ACTION!="add", GOTO="usbmount_end"
+ ENV{ID_FS_TYPE}=="", GOTO="usbmount_end"
+ 
+ KERNEL=="mmcblk*", ATTRS{type}=="SD", RUN+="/usr/share/usbmount/usbmount add sd"
+-KERNEL=="sd*", RUN+="/usr/share/usbmount/usbmount add usb"
++KERNEL=="sd*", ATTRS{removable}=="1", RUN+="/usr/share/usbmount/usbmount add usb"
+ 
+ LABEL="usbmount_end"
+-- 
+2.20.1
+

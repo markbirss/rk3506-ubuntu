@@ -1,0 +1,8 @@
+config BR2_PACKAGE_RKTOOLKIT
+	bool "rockchip toolkit"
+	help
+	  rockchip toolkit for linux
+
+config BR2_PACKAGE_RKTOOLKIT_STATIC
+	bool "static tools"
+	depends on BR2_PACKAGE_RKTOOLKIT

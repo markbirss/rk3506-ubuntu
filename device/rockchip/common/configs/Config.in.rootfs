@@ -1,0 +1,114 @@
+#
+
+comment "Rootfs system depends on linux kernel"
+	depends on !RK_KERNEL
+
+menuconfig RK_ROOTFS
+	bool "Rootfs (Buildroot|Debian|Yocto|Ubuntu)"
+	depends on RK_KERNEL
+	default y if !RK_AMP
+
+if RK_ROOTFS
+
+source "Config.in.buildroot"
+source "Config.in.yocto"
+source "Config.in.debian"
+source "Config.in.ubuntu"
+
+config RK_ROOTFS_SYSTEM
+	string
+	default "buildroot" if RK_ROOTFS_SYSTEM_BUILDROOT
+	default "debian" if RK_ROOTFS_SYSTEM_DEBIAN
+	default "yocto" if RK_ROOTFS_SYSTEM_YOCTO
+	default "ubuntu" if RK_ROOTFS_SYSTEM_UBUNTU
+
+choice
+	prompt "default rootfs system"
+	help
+	  Default rootfs system.
+
+config RK_ROOTFS_SYSTEM_BUILDROOT
+	bool "Buildroot"
+	depends on RK_BUILDROOT
+
+config RK_ROOTFS_SYSTEM_DEBIAN
+	bool "Debian"
+	depends on RK_DEBIAN
+
+config RK_ROOTFS_SYSTEM_YOCTO
+	bool "Yocto"
+	depends on RK_YOCTO
+
+config RK_ROOTFS_SYSTEM_UBUNTU
+	bool "Ubuntu"
+	depends on RK_UBUNTU
+
+endchoice # default rootfs
+
+config RK_ROOTFS_INITRD
+	bool "init ramfs/ramdisk"
+	# Based on kernel/init/do_mounts_rd.c identify_ramdisk_image()
+	depends on RK_ROOTFS_EXT2 || RK_ROOTFS_SQUASHFS || RK_ROOTFS_ROMFS || \
+		RK_ROOTFS_CPIO || RK_ROOTFS_CPIO_GZ
+
+config RK_ROOTFS_TYPE
+	string
+	default "ext2" if RK_ROOTFS_EXT2
+	default "ext4" if RK_ROOTFS_EXT4
+	default "squashfs" if RK_ROOTFS_SQUASHFS
+	default "btrfs" if RK_ROOTFS_BTRFS
+	default "f2fs" if RK_ROOTFS_F2FS
+	default "ubi" if RK_ROOTFS_UBI
+	default "erofs" if RK_ROOTFS_EROFS
+	default "romfs" if RK_ROOTFS_ROMFS
+	default "cpio" if RK_ROOTFS_CPIO
+	default "cpio.gz" if RK_ROOTFS_CPIO_GZ
+
+choice
+	prompt "filesystem type"
+	default RK_ROOTFS_EXT4
+
+config RK_ROOTFS_EXT4
+	bool "ext4"
+
+if RK_ROOTFS_SYSTEM_BUILDROOT
+
+config RK_ROOTFS_EXT2
+	bool "ext2"
+
+config RK_ROOTFS_SQUASHFS
+	bool "squashfs"
+
+config RK_ROOTFS_BTRFS
+	bool "btrfs"
+
+config RK_ROOTFS_F2FS
+	bool "f2fs"
+
+config RK_ROOTFS_UBI
+	bool "ubi"
+
+config RK_ROOTFS_EROFS
+	bool "erofs"
+
+config RK_ROOTFS_ROMFS
+	bool "romfs"
+	select RK_ROOTFS_INITRD
+
+config RK_ROOTFS_CPIO
+	bool "cpio"
+	select RK_ROOTFS_INITRD
+
+config RK_ROOTFS_CPIO_GZ
+	bool "cpio.gz"
+	select RK_ROOTFS_INITRD
+
+endif # buildroot
+
+endchoice # fstype
+
+source "post/Config.in.rootfs"
+source "post/Config.in.overlay"
+
+endif # Rootfs
+endmenuconfig # Rootfs

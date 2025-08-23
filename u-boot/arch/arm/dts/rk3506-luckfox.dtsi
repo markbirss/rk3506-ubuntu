@@ -1,0 +1,143 @@
+/*
+ * (C) Copyright 2024 Rockchip Electronics Co., Ltd
+ *
+ * SPDX-License-Identifier:     GPL-2.0+
+ */
+
+/ {
+	aliases {
+		mmc0 = &mmc;
+	};
+
+	chosen: chosen {
+		stdout-path = &uart0;
+		u-boot,spl-boot-order =&mmc, &spi_nand, &spi_nor;
+	};
+};
+
+&mmc {
+	bus-width = <4>;
+	u-boot,dm-spl;
+	status = "okay";
+};
+
+&cru {
+	u-boot,dm-spl;
+	status = "okay";
+};
+
+&grf {
+	u-boot,dm-spl;
+	status = "okay";
+};
+
+&ioc_grf {
+	u-boot,dm-spl;
+	status = "okay";
+};
+
+&pinctrl {
+	u-boot,dm-spl;
+	status = "okay";
+};
+
+&ioc1 {
+	u-boot,dm-spl;
+	status = "okay";
+};
+
+&grf_pmu {
+	u-boot,dm-spl;
+	status = "okay";
+};
+
+&ioc_pmu {
+	u-boot,dm-spl;
+	status = "okay";
+};
+
+&gpio0 {
+	u-boot,dm-spl;
+	status = "okay";
+};
+
+&gpio1 {
+	u-boot,dm-pre-reloc;
+	status = "okay";
+};
+
+&gpio2 {
+	u-boot,dm-pre-reloc;
+	status = "okay";
+};
+
+&gpio3 {
+	u-boot,dm-spl;
+	status = "okay";
+};
+
+&gpio4 {
+	u-boot,dm-pre-reloc;
+	status = "okay";
+};
+
+&psci {
+	u-boot,dm-pre-reloc;
+	status = "okay";
+};
+
+&crypto {
+	u-boot,dm-spl;
+	status = "okay";
+};
+
+&rng {
+	u-boot,dm-spl;
+	status = "okay";
+};
+
+&saradc {
+	u-boot,dm-spl;
+	status = "okay";
+};
+
+&fspi {
+	u-boot,dm-spl;
+	status = "okay";
+
+	#address-cells = <1>;
+	#size-cells = <0>;
+	spi_nand: flash@0 {
+		u-boot,dm-spl;
+		compatible = "spi-nand";
+		reg = <0>;
+		spi-tx-bus-width = <1>;
+		spi-rx-bus-width = <4>;
+		spi-max-frequency = <80000000>;
+	};
+
+	spi_nor: flash@1 {
+		u-boot,dm-spl;
+		compatible = "jedec,spi-nor";
+		label = "sfc_nor";
+		reg = <0>;
+		spi-tx-bus-width = <1>;
+		spi-rx-bus-width = <4>;
+		spi-max-frequency = <80000000>;
+	};
+};
+
+&usb2phy {
+	u-boot,dm-pre-reloc;
+	status = "okay";
+};
+
+&u2phy_otg0 {
+	u-boot,dm-pre-reloc;
+	status = "okay";
+};
+
+&usb20_otg0 {
+	u-boot,dm-pre-reloc;
+	status = "okay";
+};

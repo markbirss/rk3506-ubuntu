@@ -1,0 +1,49 @@
+From 3517abf47ddeb677c73866197db3917d21ac5f3e Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 10 Jun 2022 11:44:04 +0800
+Subject: [PATCH 06/11] Add hooks for term switching
+
+term foreground: /etc/frecon/term-switch on
+term background: /etc/frecon/term-switch off
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ term.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/term.c b/term.c
+index c48bdb4..c068d03 100644
+--- a/term.c
++++ b/term.c
+@@ -66,7 +66,7 @@ static char* interactive_cmd_line[] =
+ };
+ #endif
+ 
+-static bool in_background = false;
++static bool in_background = true;
+ static bool hotplug_occured = false;
+ 
+ 
+@@ -756,6 +756,9 @@ void term_background(bool onetry)
+ 	if (in_background)
+ 		return;
+ 	in_background = true;
++
++	if (system("/etc/frecon/term-switch off") < 0)
++		LOG(DEBUG, "Failed to exec hook script.");
+ }
+ 
+ void term_foreground(void)
+@@ -764,6 +767,9 @@ void term_foreground(void)
+ 		return;
+ 	in_background = false;
+ 
++	if (system("/etc/frecon/term-switch on") < 0)
++		LOG(DEBUG, "Failed to exec hook script.");
++
+ 	if (hotplug_occured) {
+ 		hotplug_occured = false;
+ 		term_monitor_hotplug();
+-- 
+2.20.1
+

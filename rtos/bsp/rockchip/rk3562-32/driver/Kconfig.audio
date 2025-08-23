@@ -1,0 +1,78 @@
+if RT_USING_AUDIO
+menu "Enable Audio"
+    source "$BSP_DIR/../common/drivers/audio/codecs/Kconfig"
+    source "$BSP_DIR/../common/drivers/audio/pcm/Kconfig"
+
+    menu "Audio Cards"
+
+    config RT_USING_AUDIO_CARD
+        bool "Audio Cards"
+        select RT_USING_CODEC
+        default n
+
+    config RT_USING_AUDIO_CARD_SAI0
+        bool "Enable SAI0 Digital audio card"
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_SAI0
+        default n
+        help
+          Say Y if you want to use sai0 digital audio card.
+
+    config RT_USING_AUDIO_CARD_SAI1
+        bool "Enable SAI1 Digital audio card"
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_SAI1
+        default n
+        help
+          Say Y if you want to use sai1 digital audio card.
+
+    config RT_USING_AUDIO_CARD_SAI2
+        bool "Enable SAI2 Digital audio card"
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_SAI2
+        default n
+        help
+          Say Y if you want to use sai2 digital audio card.
+
+    endmenu
+
+    menu "Audio Interfaces"
+
+    config RT_USING_PCM
+        bool
+        select RT_USING_DMA
+        default y
+
+    config RT_USING_MULTI_DAIS
+        bool
+
+    config RT_USING_MULTI_PCM
+        bool
+
+    config RT_USING_SAI
+        bool
+
+    config RT_USING_SAI0
+        bool
+        select RT_USING_SAI
+
+    config RT_USING_SAI1
+        bool
+        select RT_USING_SAI
+
+    config RT_USING_SAI2
+        bool
+        select RT_USING_SAI
+
+    config RT_USING_PDM
+        bool
+
+    config RT_USING_PDM0
+        bool
+        select RT_USING_PDM
+
+    endmenu
+
+endmenu
+
+endif

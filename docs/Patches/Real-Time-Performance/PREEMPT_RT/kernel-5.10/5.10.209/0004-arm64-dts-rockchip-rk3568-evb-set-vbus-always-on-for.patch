@@ -1,0 +1,65 @@
+From db6892b7d8b54297428b1e01b7ec20f998a55866 Mon Sep 17 00:00:00 2001
+From: Liang Chen <cl@rock-chips.com>
+Date: Mon, 27 Nov 2023 16:58:47 +0800
+Subject: [PATCH 4/5] arm64: dts: rockchip: rk3568-evb: set vbus-always-on for
+ u2phy0 for PREEMPT_RT
+
+Fix bug for PREEMPT_RT, this patch will disable usb charging.
+
+<3>[    5.254053] BUG: scheduling while atomic: kworker/0:3/176/0x00000002
+<4>[    5.254059] Modules linked in:
+<3>[    5.254066] Preemption disabled at:
+<3>[    5.254067] [<ffffffc0090297cc>] rt_mutex_slowlock+0x58/0xd0
+<4>[    5.254089] CPU: 0 PID: 176 Comm: kworker/0:3 Not tainted 5.10.160-rt89 #592
+<4>[    5.254094] Hardware name: Rockchip RK3568 EVB1 DDR4 V10 Board (DT)
+<4>[    5.254099] Workqueue: pm pm_runtime_work
+<4>[    5.254110] Call trace:
+<4>[    5.254112]  dump_backtrace+0x0/0x1e8
+<4>[    5.254120]  show_stack+0x18/0x24
+<4>[    5.254124]  dump_stack_lvl+0xc8/0x114
+<4>[    5.254129]  dump_stack+0x18/0x58
+<4>[    5.254132]  __schedule_bug+0x9c/0xb8
+<4>[    5.254141]  __schedule+0x4e4/0x5e4
+<4>[    5.254146]  schedule+0xac/0x104
+<4>[    5.254149]  rt_mutex_handle_deadlock+0x30/0x44
+<4>[    5.254156]  rt_mutex_slowlock_locked+0x258/0x270
+<4>[    5.254161]  rt_mutex_slowlock+0x78/0xd0
+<4>[    5.254165]  rt_mutex_fastlock+0x70/0x74
+<4>[    5.254169]  __rt_mutex_lock_state+0x10/0x1c
+<4>[    5.254174]  _mutex_lock+0x54/0x64
+<4>[    5.254178]  rockchip_usb2phy_power_off+0xb4/0x184
+<4>[    5.254188]  phy_power_off+0x48/0xcc
+<4>[    5.254192]  dwc3_core_exit+0xa0/0x11c
+<4>[    5.254198]  dwc3_suspend_common+0x128/0x138
+<4>[    5.254202]  dwc3_runtime_suspend+0x34/0x5c
+<4>[    5.254206]  pm_generic_runtime_suspend+0x28/0x3c
+<4>[    5.254211]  genpd_runtime_suspend+0xec/0x274
+<4>[    5.254216]  __rpm_callback+0x70/0x6f8
+<4>[    5.254220]  rpm_suspend+0x278/0x654
+<4>[    5.254224]  pm_runtime_work+0x98/0xa8
+<4>[    5.254228]  process_one_work+0x1dc/0x338
+<4>[    5.254233]  worker_thread+0x25c/0x488
+<4>[    5.254237]  kthread+0x168/0x30c
+<4>[    5.254243]  ret_from_fork+0x10/0x30
+
+Change-Id: Ieadf57495b99e7a1295deb58f1be8b882b509ed8
+Signed-off-by: Liang Chen <cl@rock-chips.com>
+---
+ arch/arm64/boot/dts/rockchip/rk3568-evb.dtsi | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/arm64/boot/dts/rockchip/rk3568-evb.dtsi b/arch/arm64/boot/dts/rockchip/rk3568-evb.dtsi
+index f13c2387f1d25..aa296ea62e92c 100644
+--- a/arch/arm64/boot/dts/rockchip/rk3568-evb.dtsi
++++ b/arch/arm64/boot/dts/rockchip/rk3568-evb.dtsi
+@@ -1756,6 +1756,7 @@ &u2phy0_host {
+ };
+ 
+ &u2phy0_otg {
++	rockchip,vbus-always-on;
+ 	vbus-supply = <&vcc5v0_otg>;
+ 	status = "okay";
+ };
+-- 
+2.38.5
+

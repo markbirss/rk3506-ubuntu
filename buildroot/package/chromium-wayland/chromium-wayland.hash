@@ -1,0 +1,4 @@
+# Locally calculated
+sha256  85995199c23c50c8defac8e735fce9e4b20186467d493cd743821ba72ee8458f  chromium-ozone-wayland_126.0.6478.126_aarch64.tar.xz
+sha256  21ae1b14ed756b48ed60bd47185a8e4ce1276ce04db27254b66e3adadfd4f180  chromium-ozone-wayland_126.0.6478.126_armhf.tar.xz
+sha256  368cca1106be99d39ecd32a38d8305585d802a475effb66380b91ffc9bcf709b  LICENSE

@@ -1,0 +1,28 @@
+# for module compiling
+import os
+Import('RTT_ROOT')
+
+PROJECT = 'RK2118'
+Export('PROJECT')
+cwd = str(Dir('#'))
+objs = []
+list = os.listdir(cwd)
+
+objs = SConscript(os.path.join(cwd, '../common/HalSConscript'), variant_dir = 'common/hal', duplicate=0)
+
+for d in list:
+    path = os.path.join(cwd, d)
+    if os.path.isfile(os.path.join(path, 'SConscript')):
+        objs = objs + SConscript(os.path.join(d, 'SConscript'))
+
+objs = objs + SConscript(os.path.join(RTT_ROOT, 'bsp/rockchip/common/drivers/SConscript'), variant_dir = 'common/drivers', duplicate=0)
+objs = objs + SConscript(os.path.join(RTT_ROOT, 'bsp/rockchip/common/tests/SConscript'), variant_dir = 'common/tests', duplicate=0)
+if(os.path.exists(os.path.join(RTT_ROOT, 'components/hifi4/rtt/SConscript'))):
+    objs = objs + SConscript(os.path.join(RTT_ROOT, 'components/hifi4/rtt/SConscript'), variant_dir = 'common/rtt', duplicate=0)
+if(os.path.exists(os.path.join(RTT_ROOT, 'components/hifi4/shared/SConscript'))):
+    objs = objs + SConscript(os.path.join(RTT_ROOT, 'components/hifi4/shared/SConscript'), variant_dir = 'common/shared', duplicate=0)
+objs = objs + SConscript(os.path.join(RTT_ROOT, 'third_party/ampak/SConscript'), variant_dir = 'common/wifi', duplicate=0)
+objs = objs + SConscript(os.path.join(RTT_ROOT, 'third_party/netutils/SConscript'), variant_dir = 'common/netutils', duplicate=0)
+objs = objs + SConscript(os.path.join(RTT_ROOT, 'bsp/rockchip/common/fwmgr/SConscript'), variant_dir = 'common/fwmgr', duplicate=0)
+
+Return('objs')

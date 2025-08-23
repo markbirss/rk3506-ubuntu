@@ -1,0 +1,16 @@
+config BR2_PACKAGE_LIBPNG
+	bool "libpng"
+	select BR2_PACKAGE_ZLIB
+	help
+	  Library for handling PNG (Portable Network Graphics)
+	  images.
+
+	  http://www.libpng.org/
+
+if BR2_PACKAGE_LIBPNG
+
+config BR2_PACKAGE_LIBPNG_STATIC
+	bool "Enable static"
+	default y if BR2_STATIC_LIBS
+
+endif

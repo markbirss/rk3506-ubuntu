@@ -1,0 +1,56 @@
+menuconfig RT_USING_RKADK
+    bool "rkadk"
+    select RT_USING_POSIX_FS
+    select RT_USING_POSIX_DEVIO
+    select RT_USING_POSIX_POLL
+    select RT_USING_POSIX_DELAY
+    select RT_USING_POSIX_CLOCK
+    select RT_USING_POSIX_PIPE
+    select RT_USING_POSIX_MMAN
+    select RT_USING_POSIX_MESSAGE_SEMAPHORE
+    select RT_USING_PTHREADS
+    select RT_USING_LWIP
+    select RT_USING_LWIP212
+    select RT_USING_ROCKIT
+    default n
+    help
+        rkadk: light-weight multimedia api
+
+if RT_USING_RKADK
+    config RT_RKADK_ENABLE_COMMON_FUNCTIONS
+        bool "common"
+        default n
+        help
+            rkadk common module
+
+    config RT_RKADK_ENABLE_AOV
+        bool "aov"
+        default n
+        help
+            rkadk aov module
+
+    config RT_RKADK_ENABLE_STORAGE
+        bool "storage"
+        default n
+        help
+            rkadk storage module
+
+    config RT_RKADK_ENABLE_DISPLAY
+        bool "display"
+        default n
+        help
+            rkadk display module
+
+    config RT_RKADK_ENABLE_PLAYER
+        bool "player"
+        default y
+        help
+            rkadk player module
+
+    config RT_RKADK_BUILD_EXAMPLES
+        bool "examples"
+        default y
+        help
+            rkadk examples module
+
+endif

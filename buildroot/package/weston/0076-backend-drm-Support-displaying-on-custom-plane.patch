@@ -1,0 +1,244 @@
+From 8dac648cab34e384919a306508d122f8623ecd8e Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Thu, 4 Jan 2024 10:50:02 +0800
+Subject: [PATCH 76/95] backend-drm: Support displaying on custom plane
+
+Tested on RK3588 EVB with:
+1/ gst-launch-1.0 videotestsrc ! kmssink force-modesetting=1
+2/ Set custom plane-id in weston.ini:
+[output]
+name=DSI-1
+plane-id=159
+3/ echo "output:DSI-1:rect=<0,0,600,1000>" > /tmp/.weston_drm.conf
+4/ Launch weston and check /sys/kernel/debug/dri/0/summary
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/backend-drm/drm-internal.h |  1 +
+ libweston/backend-drm/drm.c          | 74 +++++++++++++++++++++++++++-
+ libweston/backend-drm/kms.c          | 36 +++++++++++---
+ 3 files changed, 102 insertions(+), 9 deletions(-)
+
+diff --git a/libweston/backend-drm/drm-internal.h b/libweston/backend-drm/drm-internal.h
+index 9fe1afe..65e2a44 100644
+--- a/libweston/backend-drm/drm-internal.h
++++ b/libweston/backend-drm/drm-internal.h
+@@ -611,6 +611,7 @@ struct drm_output {
+ 
+ 	/* Plane being displayed directly on the CRTC */
+ 	struct drm_plane *scanout_plane;
++	unsigned int custom_plane;
+ 
+ 	/* The last state submitted to the kernel for this CRTC. */
+ 	struct drm_output_state *state_cur;
+diff --git a/libweston/backend-drm/drm.c b/libweston/backend-drm/drm.c
+index 462b5c0..ca0fd28 100644
+--- a/libweston/backend-drm/drm.c
++++ b/libweston/backend-drm/drm.c
+@@ -483,6 +483,9 @@ drm_output_get_disable_state(struct drm_pending_state *pending_state,
+ static int
+ drm_output_apply_mode(struct drm_output *output);
+ 
++static unsigned int
++drm_waitvblank_pipe(struct drm_crtc *crtc);
++
+ /**
+  * Mark a drm_output_state (the output's last state) as complete. This handles
+  * any post-completion actions such as updating the repaint timer, disabling the
+@@ -500,13 +503,37 @@ drm_output_update_complete(struct drm_output *output, uint32_t flags,
+ 	if (output->pageflip_timer)
+ 		wl_event_source_timer_update(output->pageflip_timer, 0);
+ 
++	if (!sec && !usec) {
++		drmVBlank vbl = {
++			.request.type = DRM_VBLANK_RELATIVE,
++			.request.sequence = 0,
++			.request.signal = 0,
++		};
++		int ret;
++
++		/* Try to get current msc and timestamp via instant query */
++		vbl.request.type |= drm_waitvblank_pipe(output->crtc);
++		ret = drmWaitVBlank(device->drm.fd, &vbl);
++
++		/* Error ret or zero timestamp means failure to get valid timestamp */
++		if ((ret == 0) &&
++		    (vbl.reply.tval_sec > 0 || vbl.reply.tval_usec > 0)) {
++			ts.tv_sec = vbl.reply.tval_sec;
++			ts.tv_nsec = vbl.reply.tval_usec * 1000;
++			sec = ts.tv_sec;
++			usec = ts.tv_nsec / 1000;
++
++			drm_output_update_msc(output, vbl.reply.sequence);
++		}
++	}
++
+ 	wl_list_for_each(ps, &output->state_cur->plane_list, link)
+ 		ps->complete = true;
+ 
+ 	drm_output_state_free(output->state_last);
+ 	output->state_last = NULL;
+ 
+-	if (output->fb_dummy) {
++	if (output->fb_dummy && !output->custom_plane) {
+ 		drm_fb_unref(output->fb_dummy);
+ 		output->fb_dummy = NULL;
+ 	}
+@@ -550,7 +577,7 @@ drm_output_update_complete(struct drm_output *output, uint32_t flags,
+ 	ts.tv_sec = sec;
+ 	ts.tv_nsec = usec * 1000;
+ 
+-	if (output->state_cur->dpms != WESTON_DPMS_OFF)
++	if (output->state_cur->dpms != WESTON_DPMS_OFF && (sec || usec))
+ 		weston_output_finish_frame(&output->base, &ts, flags);
+ 	else
+ 		weston_output_finish_frame(&output->base, NULL,
+@@ -1679,6 +1706,15 @@ retry:
+ 		struct weston_output *base;
+ 		bool found_elsewhere = false;
+ 
++		if (type == WDRM_PLANE_TYPE_PRIMARY && output->custom_plane) {
++			if (output->custom_plane != plane->plane_id)
++				continue;
++
++			/* Pretend to be primary plane */
++			output->crtc->primary_plane_id = output->custom_plane;
++			plane->type = WDRM_PLANE_TYPE_PRIMARY;
++		}
++
+ 		if (plane->type != type)
+ 			continue;
+ 		if (!drm_plane_is_available(plane, output))
+@@ -1809,6 +1845,9 @@ create_sprites(struct drm_device *device, drmModeRes *resources)
+ 			assert(drm_crtc);
+ 			drm_crtc->cursor_plane_id = drm_plane->plane_id;
+ 		} else if (drm_plane->type == WDRM_PLANE_TYPE_OVERLAY) {
++			if (device->sprites_are_broken)
++				continue;
++
+ 			weston_compositor_stack_plane(b->compositor,
+ 						      &drm_plane->base,
+ 						      NULL);
+@@ -2558,6 +2597,22 @@ drm_output_init_planes(struct drm_output *output)
+ {
+ 	struct drm_backend *b = output->backend;
+ 	struct drm_device *device = output->device;
++	struct weston_config_section *section;
++	struct weston_head *head;
++
++	wl_list_for_each(head, &output->base.head_list, output_link) {
++		section = head->section;
++		if (section) {
++			weston_config_section_get_uint(section, "plane-id",
++						       &output->custom_plane,
++						       0);
++			break;
++		}
++	}
++
++	if (output->custom_plane)
++		weston_log("Using custom plane: %d for output %s\n",
++			   output->custom_plane, output->base.name);
+ 
+ 	output->scanout_plane =
+ 		drm_output_find_special_plane(device, output,
+@@ -2572,6 +2627,13 @@ drm_output_init_planes(struct drm_output *output)
+ 				      &output->scanout_plane->base,
+ 				      &output->base.primary_plane);
+ 
++	if (output->custom_plane) {
++		device->atomic_modeset = false;
++		device->cursors_are_broken = true;
++		device->sprites_are_broken = true;
++		return 0;
++	}
++
+ 	/* Failing to find a cursor plane is not fatal, as we'll fall back
+ 	 * to software cursor. */
+ 	output->cursor_plane =
+@@ -2722,6 +2784,14 @@ drm_output_detach_crtc(struct drm_output *output)
+ 	crtc->output = NULL;
+ 	output->crtc = NULL;
+ 
++	if (output->custom_plane && !output->fb_dummy) {
++		if (output->scanout_plane)
++			drmModeSetPlane(crtc->device->drm.fd,
++					output->scanout_plane->plane_id,
++					0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
++		return;
++	}
++
+ 	/* HACK: Do it here rather than in the kms.c for drm-master config */
+ 	drmModeSetCrtc(crtc->device->drm.fd,
+ 		       crtc->crtc_id, 0, 0, 0, NULL, 0, NULL);
+diff --git a/libweston/backend-drm/kms.c b/libweston/backend-drm/kms.c
+index 6f730aa..2bd5da4 100644
+--- a/libweston/backend-drm/kms.c
++++ b/libweston/backend-drm/kms.c
+@@ -890,6 +890,12 @@ drm_output_apply_state_legacy(struct drm_output_state *state)
+ 	struct timespec now;
+ 	int ret = 0;
+ 	bool scaling;
++	bool mode_valid;
++	drmModeCrtc *drm_crtc;
++
++	drm_crtc = drmModeGetCrtc(device->drm.fd, output->crtc->crtc_id);
++	mode_valid = drm_crtc->mode_valid;
++	drmModeFreeCrtc(drm_crtc);
+ 
+ 	wl_list_for_each(head, &output->base.head_list, base.output_link) {
+ 		if (!drm_head_is_connected(head)) {
+@@ -922,11 +928,20 @@ drm_output_apply_state_legacy(struct drm_output_state *state)
+ 					   strerror(errno));
+ 		}
+ 
+-		ret = drmModeSetCrtc(device->drm.fd, crtc->crtc_id, 0, 0, 0,
+-				     NULL, 0, NULL);
+-		if (ret)
+-			weston_log("drmModeSetCrtc failed disabling: %s\n",
+-				   strerror(errno));
++		if (!output->custom_plane || output->fb_dummy) {
++			ret = drmModeSetCrtc(device->drm.fd, crtc->crtc_id,
++					     0, 0, 0, NULL, 0, NULL);
++			if (ret)
++				weston_log("drmModeSetCrtc failed disabling: %s\n",
++					   strerror(errno));
++		} else {
++			ret = drmModeSetPlane(device->drm.fd,
++					      output->scanout_plane->plane_id,
++					      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
++			if (ret)
++				weston_log("drmModeSetPlane failed disabling: %s\n",
++					   strerror(errno));
++		}
+ 
+ 		drm_output_assign_state(state, DRM_STATE_APPLY_SYNC);
+ 		weston_compositor_read_presentation_clock(output->base.compositor, &now);
+@@ -947,8 +962,8 @@ drm_output_apply_state_legacy(struct drm_output_state *state)
+ 
+ 	mode = to_drm_mode(output->base.current_mode);
+ 
+-	if (output->state_invalid ||
+-	    !scanout_plane->state_cur->fb) {
++	if ((!output->custom_plane || !mode_valid) &&
++	    (output->state_invalid || !scanout_plane->state_cur->fb)) {
+ 		int fb_id = scanout_state->fb->fb_id;
+ 
+ 		if (scanout_state->dest_x || scanout_state->dest_y ||
+@@ -1015,6 +1030,13 @@ drm_output_apply_state_legacy(struct drm_output_state *state)
+ 			   crtc->crtc_id, scanout_state->plane->plane_id,
+ 			   pinfo ? pinfo->drm_format_name : "UNKNOWN");
+ 
++	if (output->custom_plane) {
++		drm_output_assign_state(state, DRM_STATE_APPLY_SYNC);
++		output->state_invalid = false;
++		drm_output_update_complete(output, 0, 0, 0);
++		return 0;
++	}
++
+ 	if (drmModePageFlip(device->drm.fd, crtc->crtc_id,
+ 			    scanout_state->fb->fb_id,
+ 			    DRM_MODE_PAGE_FLIP_EVENT, output) < 0) {
+-- 
+2.20.1
+

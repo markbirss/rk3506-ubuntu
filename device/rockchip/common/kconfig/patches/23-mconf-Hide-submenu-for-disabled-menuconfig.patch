@@ -1,0 +1,38 @@
+From 1b6df6dc745035bd722037419029b2f9e8b296a5 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Thu, 11 Apr 2024 10:04:17 +0800
+Subject: [PATCH] mconf: Hide submenu for disabled menuconfig
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ mconf.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/mconf.c b/mconf.c
+index 4430bff..4aab7cd 100644
+--- a/mconf.c
++++ b/mconf.c
+@@ -630,6 +630,9 @@ static void build_conf(struct menu *menu)
+ 			  (sym_has_value(sym) || !sym_is_changable(sym)) ?
+ 			  "" : _(" (NEW)"));
+ 		if (menu->prompt->type == P_MENU) {
++			if (sym_is_optional(sym) && val != yes)
++				return;
++
+ 			item_add_str("  %s", menu_is_empty(menu) ? "----" : "--->");
+ 			return;
+ 		}
+@@ -695,7 +698,9 @@ static void conf(struct menu *menu, struct menu *active_menu)
+ 			case 't':
+ 				if (sym_is_choice(sym) && sym_get_tristate_value(sym) == yes)
+ 					conf_choice(submenu);
+-				else if (submenu->prompt->type == P_MENU)
++				else if (submenu->prompt->type == P_MENU &&
++					 (!sym_is_optional(sym) ||
++					  sym_get_tristate_value(sym) == yes))
+ 					conf(submenu, NULL);
+ 				break;
+ 			case 's':
+-- 
+2.20.1
+

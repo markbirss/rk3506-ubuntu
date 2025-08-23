@@ -1,0 +1,143 @@
+from building import *
+Import("SOC")
+
+import os
+import subprocess
+from datetime import datetime
+import shutil
+import SCons.Script
+
+
+######### Generate include/version.h ###########
+# Initialize environment
+env = SCons.Script.Environment()
+
+# Get the path to the git executable file
+git_executable = env.WhereIs('git')
+if not git_executable:
+    raise EnvironmentError('git not found in the system')
+
+# working directory
+project_source_dir = GetCurrentDir()  # source directory
+env.Replace(WORKING_DIRECTORY=project_source_dir)
+
+# Get Git version information
+git_log_format = "git-%h %cd"
+process = subprocess.Popen([git_executable, 'log', '-1', '--oneline', '--pretty=format:' + git_log_format],
+                            cwd=project_source_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+stdout, stderr = process.communicate()
+if process.returncode != 0:
+    print("git ret", process.returncode)
+    print("error:", err.decode('utf-8').strip())
+else:
+    version_info = stdout.decode('utf-8').strip()
+    print("git current version:", version_info)
+    version_info = '"' + version_info + '"'
+
+# Execute git command and obtain output
+git_config_command = [git_executable, 'config', 'user.name']
+process = subprocess.Popen(git_config_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+stdout, stderr = process.communicate()
+# Define source and destination file paths
+source_file = GetCurrentDir()
+source_file += '/../version/version.in'
+target_file = GetCurrentDir()
+target_file += '/../include/version.h'
+
+if process.returncode != 0:
+    print(f'git ret {process.returncode}')
+    print(f'error: {stderr.decode()}')
+else:
+    build_author = stdout.decode().strip()[:3]  # take the first 3 characters
+    build_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # retrieve the current time and format it
+    build_info = f'built {build_time}'  # building Information
+    print("build info:", build_info)
+    build_info = '"' + build_info + '"'
+
+    try:
+        subprocess.run(['cp', source_file, target_file], check=True)
+    except subprocess.TimeoutExpired:
+        pass  # Wait for the command to complete execution
+
+    with open(target_file, 'r') as file:
+        file_contents = file.read()
+
+    # Replace placeholders
+    file_contents = file_contents.replace('@VERSION_INFO@', version_info).replace('@BUILD_INFO@', build_info)
+
+    # Write the replaced content back to the version. h file
+    with open(target_file, 'w') as file:
+        file.write(file_contents)
+############################################
+
+cwd     = GetCurrentDir()
+src     = Split('''
+common/rkadk_media_comm.c
+common/rkadk_signal.c
+common/rkadk_thread.c
+common/rkadk_version.c
+common/rkadk_log.c
+param/rkadk_param_map.c
+param/rkadk_param.c
+param/rkadk_struct2ini.c
+third-party/iniparser/dictionary.c
+third-party/iniparser/iniparser.c
+''')
+
+if GetDepend('RT_RKADK_ENABLE_COMMON_FUNCTIONS'):
+    src += ['common/rkadk_msg.c']
+    src += ['common/rkadk_thumb_comm.c']
+    src += ['audio/encoder/rkadk_audio_encoder_mp3.c']
+    src += ['audio/encoder/rkadk_audio_encoder.c']
+    src += ['muxer/rkadk_muxer.c']
+    src += ['record/rkadk_record.c']
+    src += ['photo/rkadk_photo.c']
+    src += ['stream/rkadk_stream.c']
+    src += ['live/rtsp/rkadk_rtsp.c']
+    src += ['osd/rkadk_osd.c.c']
+    src += ['live/rtmp/rkadk_rtmp.c']
+
+if GetDepend('RT_RKADK_ENABLE_AOV'):
+    src += ['aov/rkadk_aov.c']
+
+if GetDepend('RT_RKADK_ENABLE_STORAGE'):
+    src += ['storage/rkadk_storage.c']
+
+if GetDepend('RT_RKADK_ENABLE_DISPLAY'):
+    src += ['ui/rkadk_ui.c']
+    src += ['display/rkadk_disp.c']
+
+if GetDepend('RT_RKADK_ENABLE_PLAYER'):
+    src += ['audio/decoder/rkadk_audio_decoder_mp3.c']
+    src += ['audio/decoder/rkadk_audio_decoder.c']
+    src += ['demuxer/rkadk_demuxer.c']
+    src += ['player/rkadk_player.c']
+
+CPPPATH = [cwd]
+CPPPATH += ["../include"]
+CPPPATH += ["../../common_algorithm/misc/include"]
+CPPPATH += ["../../rockit/sdk/include"]
+CPPPATH += ["./common"]
+CPPPATH += ["./third-party"]
+CPPPATH += ["./audio/decoder"]
+
+CPPDEFINES = ['OS_RTT']
+libs = ['rkdemuxer']
+libs += ['rkaudio']
+libs += ['rockit']
+
+libpath = [cwd + '/../../common_algorithm/misc/lib/arm-none-eabi']
+
+if SOC == 'RK3308':
+    CPPPATH += ["../../rockit/sdk/lib/arm/rk3308"]
+    libpath1 = [cwd + '/../../rockit/mpi/sdk/lib/arm/rk3308/rtt']
+
+if SOC == 'RK3506':
+    CPPPATH += ["../../rockit/sdk/lib/arm/rk3506"]
+    libpath1 = [cwd + '/../../rockit/mpi/sdk/lib/arm/rk3506/rtt']
+
+
+group = DefineGroup('rkadk', src, depend = ['RT_USING_RKADK'], CPPPATH = CPPPATH, CPPDEFINES=CPPDEFINES, LIBS = libs, LIBPATH = libpath + libpath1)
+# group = DefineGroup('rkadk', src, depend = ['RT_USING_RKADK'], CPPPATH = CPPPATH, CPPDEFINES=CPPDEFINES)
+
+Return('group')

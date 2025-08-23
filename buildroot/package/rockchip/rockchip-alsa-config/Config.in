@@ -1,0 +1,12 @@
+config BR2_PACKAGE_ROCKCHIP_ALSA_CONFIG
+	bool "rockchip-alsa-config"
+	depends on BR2_PACKAGE_ALSA_LIB
+	help
+	  Rockchip sound cards' alsa configs.
+
+	config BR2_ROCKCHIP_ALSA_CONFIG_INSTALL_INIT_SCRIPT
+		bool "Install init script"
+		depends on BR2_PACKAGE_ROCKCHIP_ALSA_CONFIG
+		default n
+		help
+		  Install init script.

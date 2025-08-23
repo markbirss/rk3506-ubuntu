@@ -1,0 +1,60 @@
+From a18c2e67a5441d70ca0d3179c2bc614a14fd81a5 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 2 Apr 2021 01:50:22 +0800
+Subject: [PATCH 42/95] desktop-shell: Resize views when work area changed
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ desktop-shell/shell.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/desktop-shell/shell.c b/desktop-shell/shell.c
+index 621cbbf..b815834 100644
+--- a/desktop-shell/shell.c
++++ b/desktop-shell/shell.c
+@@ -51,6 +51,9 @@
+ static void
+ set_maximized_position(struct desktop_shell *shell, struct shell_surface *shsurf);
+ 
++static void
++handle_output_resized_shsurfs(struct desktop_shell *shell);
++
+ struct focus_state {
+ 	struct desktop_shell *shell;
+ 	struct weston_seat *seat;
+@@ -2933,6 +2936,7 @@ panel_committed(struct weston_surface *es,
+ 	struct weston_output *output = sh_output->output;
+ 	struct weston_coord_global pos = output->pos;
+ 	struct desktop_shell *shell = sh_output->shell;
++	pixman_rectangle32_t old_area, new_area;
+ 
+ 	if (!weston_surface_has_content(es))
+ 		return;
+@@ -2955,6 +2959,7 @@ panel_committed(struct weston_surface *es,
+ 		break;
+ 	}
+ 
++	get_output_work_area(shell, output, &old_area);
+ 	if (!weston_surface_is_mapped(es)) {
+ 		weston_surface_map(es);
+ 		assert(wl_list_empty(&es->views));
+@@ -2965,10 +2970,16 @@ panel_committed(struct weston_surface *es,
+ 
+ 		weston_view_set_output(sh_output->panel_view, output);
+ 	}
++	get_output_work_area(shell, output, &new_area);
+ 
+ 	assert(sh_output->panel_view);
+ 	pos = weston_coord_global_add(output->pos, sh_output->panel_offset);
+ 	weston_view_set_position(sh_output->panel_view, pos);
++
++	if (old_area.x != new_area.x || old_area.y != new_area.y ||
++	    old_area.width != new_area.width ||
++	    old_area.height != new_area.height)
++		handle_output_resized_shsurfs(shell);
+ }
+ 
+ static void
+-- 
+2.20.1
+

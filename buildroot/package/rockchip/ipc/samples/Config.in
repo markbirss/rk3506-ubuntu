@@ -1,0 +1,27 @@
+
+config BR2_PACKAGE_SAMPLES
+	bool "rockchip samples"
+	select BR2_PACKAGE_CAMERA_ENGINE_RKAIQ
+	select BR2_PACKAGE_WPA_SUPPLICANT
+	select BR2_PACKAGE_FREETYPE
+	help
+	  rockchip samples
+
+choice
+prompt "Platform type"
+	default BR2_PACKAGE_SAMPLES_RK3576
+	help
+	  Select a platform type.
+
+config BR2_PACKAGE_SAMPLES_RK3588
+	bool "Compile for rk3588 samples"
+	select BR2_PACKAGE_ROCKIT
+	select BR2_PACKAGE_ROCKCHIP_RGA
+	depends on BR2_PACKAGE_SAMPLES
+
+config BR2_PACKAGE_SAMPLES_RK3576
+	bool "Compile for rk3576 samples"
+	select BR2_PACKAGE_ROCKIT
+	select BR2_PACKAGE_ROCKCHIP_RGA
+	depends on BR2_PACKAGE_SAMPLES
+endchoice

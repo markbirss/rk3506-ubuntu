@@ -1,0 +1,9 @@
+config M4_JTAG_ENABLE
+    bool "Enable Cortex M4 JTAG"
+    default n
+    help
+        Select to enable M4F Jtag
+
+config DSP_JTAG_ENABLE
+    bool "Enable DSP JTAG"
+    default n

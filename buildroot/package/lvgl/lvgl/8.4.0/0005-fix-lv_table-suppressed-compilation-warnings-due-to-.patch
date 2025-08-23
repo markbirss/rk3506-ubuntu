@@ -1,0 +1,26 @@
+From 1b8a7ade1edd3940d07aed83190040319dbb6d57 Mon Sep 17 00:00:00 2001
+From: ym-terada <159906927+ym-terada@users.noreply.github.com>
+Date: Wed, 8 May 2024 06:34:16 +0900
+Subject: [PATCH 05/35] fix(lv_table): suppressed compilation warnings due to
+ zero-size arrays (#6190)
+
+---
+ src/widgets/lv_table.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/widgets/lv_table.h b/src/widgets/lv_table.h
+index d36d3c6ca..4aed65768 100644
+--- a/src/widgets/lv_table.h
++++ b/src/widgets/lv_table.h
+@@ -52,7 +52,7 @@ typedef struct {
+ #if LV_USE_USER_DATA
+     void * user_data; /**< Custom user data*/
+ #endif
+-    char txt[];
++    char txt[1];
+ } lv_table_cell_t;
+ 
+ /*Data of table*/
+-- 
+2.25.1
+

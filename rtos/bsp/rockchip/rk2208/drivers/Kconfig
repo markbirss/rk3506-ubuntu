@@ -1,0 +1,94 @@
+source "$BSP_DIR/../common/drivers/Kconfig"
+
+menu "RT-Thread rockchip RK2208 drivers"
+
+config RT_USING_CRU
+    bool "Enable CRU"
+    default n
+
+config RT_USING_DMA
+    bool "Enable General DMA Framework"
+    default n
+
+if RT_USING_DMA
+config RT_USING_DMA_PL330
+    bool "Enable PL330 DMA Controller"
+    default n
+
+config RT_USING_DMA0
+    bool "Enable PL330 DMA0 Controller"
+    default n
+
+config RT_USING_DMA1
+    bool "Enable PL330 DMA1 Controller"
+    default n
+endif
+
+if RT_USING_I2C
+menu "Enable I2C"
+    config RT_USING_I2C0
+        bool "Enable I2C0"
+        default n
+
+    config RT_USING_I2C1
+        bool "Enable I2C1"
+        default n
+
+    config RT_USING_I2C2
+        bool "Enable I2C2"
+        default n
+endmenu
+endif
+
+if RT_USING_PWM
+config RT_USING_PWM0
+    bool "Enable PWM0"
+    default n
+endif
+
+config RT_USING_SARADC
+    select RT_USING_ADC
+    bool "Enable SARADC"
+    default n
+
+if RT_USING_SPI
+menu "Enable SPI"
+    config RT_USING_SPI0
+        bool "Enable SPI0"
+        default n
+
+    config RT_USING_SPI1
+        bool "Enable SPI1"
+        default n
+
+    config RT_USING_SPI2
+        bool "Enable SPI2"
+        default n
+endmenu
+endif
+
+config RT_USING_SYSTICK
+    bool "Enable SYSTICK"
+    default y
+
+config RT_USING_TSADC
+    bool "Enable TSADC"
+    default n
+
+menu "Enable UART"
+    config RT_USING_UART
+        bool "Enable UART"
+        default n
+
+    if RT_USING_UART
+    config RT_USING_UART0
+        bool "Enable UART0"
+        default n
+
+    config RT_USING_UART1
+        bool "Enable UART1"
+        default n
+    endif
+endmenu
+
+endmenu

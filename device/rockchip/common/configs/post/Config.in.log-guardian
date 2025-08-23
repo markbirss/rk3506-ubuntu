@@ -1,0 +1,24 @@
+#
+
+menuconfig RK_ROOTFS_LOG_GUARDIAN
+	bool "log guardian (Truncate logs when disk is full)"
+	default y
+	help
+	  Truncate log files when no space left on device.
+
+if RK_ROOTFS_LOG_GUARDIAN
+
+config RK_ROOTFS_LOG_GUARDIAN_INTERVAL
+	string "check interval (s|m|h|d)"
+	default "10m"
+
+config RK_ROOTFS_LOG_GUARDIAN_MIN_SIZE
+	string "minimal available size (K|M|G)"
+	default "100M"
+
+config RK_ROOTFS_LOG_GUARDIAN_LOG_DIRS
+	string "log directories"
+	default "/var/log/,/tmp/"
+
+endif # log-guardian
+endmenuconfig # log-guardian

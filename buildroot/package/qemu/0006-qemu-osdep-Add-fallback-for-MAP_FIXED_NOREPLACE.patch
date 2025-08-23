@@ -1,0 +1,52 @@
+From f355f88f7727a6c2d2c2c846240a1f0d621f6191 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 13 Mar 2024 15:13:28 +0800
+Subject: [PATCH] qemu/osdep: Add fallback for MAP_FIXED_NOREPLACE
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The MAP_FIXED_NOREPLACE would be available in glibc >= 2.28 and
+kernel >= 4.17.
+
+Let's add a fallback for the older ones (might not work).
+
+From repology.org:
+                  Fedora 36: 2.35
+          CentOS 8 (RHEL-8): 2.28
+                  Debian 11: 2.31
+         OpenSUSE Leap 15.4: 2.31
+           Ubuntu LTS 20.04: 2.31
+
+From 'man mmap':
+MAP_FIXED_NOREPLACE (since Linux 4.17)
+...
+Note that older kernels which do not recognize the  MAP_FIXED_NORE‐
+PLACE flag will typically (upon detecting a collision with a preex‐
+isting mapping) fall back to a "non-MAP_FIXED"  type  of  behavior:
+they  will  return  an address that is different from the requested
+address.  Therefore, backward-compatible software should check  the
+returned address against the requested address.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ include/qemu/osdep.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/include/qemu/osdep.h b/include/qemu/osdep.h
+index 21ef8f1..9e19ab0 100644
+--- a/include/qemu/osdep.h
++++ b/include/qemu/osdep.h
+@@ -289,6 +289,9 @@ void QEMU_ERROR("code path is reachable")
+ #ifndef MAP_ANONYMOUS
+ #define MAP_ANONYMOUS MAP_ANON
+ #endif
++#ifndef MAP_FIXED_NOREPLACE
++#define MAP_FIXED_NOREPLACE 0x100000
++#endif
+ #ifndef MAP_NORESERVE
+ #define MAP_NORESERVE 0
+ #endif
+-- 
+2.20.1
+

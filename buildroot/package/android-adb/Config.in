@@ -1,0 +1,16 @@
+config BR2_PACKAGE_ANDROID_ADB
+	bool "android-adb"
+	depends on !BR2_PACKAGE_ANDROID_TOOLS_ADB
+  select BR2_PACKAGE_LIBUSB
+	select BR2_PACKAGE_OPENSSL
+	help
+	  Client tool for Android Debug Bridge.
+
+if BR2_PACKAGE_ANDROID_ADB
+
+config BR2_PACKAGE_ANDROID_ADB_STATIC
+	bool "Enable static"
+  select BR2_PACKAGE_LIBUSB_STATIC
+	default y if BR2_STATIC_LIBS
+
+endif

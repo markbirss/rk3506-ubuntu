@@ -1,0 +1,12 @@
+#!/bin/sh -e
+
+type weston >/dev/null 2>/dev/null || exit 0
+
+case $1 in
+	on)
+		echo "compositor:state:freeze" > /tmp/.weston_drm.conf
+		;;
+	off)
+		echo "compositor:state:on" > /tmp/.weston_drm.conf
+		;;
+esac

@@ -1,0 +1,172 @@
+From 2250bc164374184028aa4ca453c583d06b89d4b5 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 23 Nov 2022 10:21:13 +0800
+Subject: [PATCH 09/95] gl-renderer: Force using GL_TEXTURE_EXTERNAL_OES for
+ imported dma-buf
+
+Mali depends on that.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/renderer-gl/gl-renderer-internal.h |   2 -
+ libweston/renderer-gl/gl-renderer.c          | 100 +------------------
+ 2 files changed, 3 insertions(+), 99 deletions(-)
+
+diff --git a/libweston/renderer-gl/gl-renderer-internal.h b/libweston/renderer-gl/gl-renderer-internal.h
+index 744b222..938aa30 100644
+--- a/libweston/renderer-gl/gl-renderer-internal.h
++++ b/libweston/renderer-gl/gl-renderer-internal.h
+@@ -249,8 +249,6 @@ struct gl_renderer {
+ 	bool has_surfaceless_context;
+ 
+ 	bool has_dmabuf_import;
+-	struct wl_list dmabuf_images;
+-	struct wl_list dmabuf_formats;
+ 
+ 	bool has_texture_type_2_10_10_10_rev;
+ 	bool has_gl_texture_rg;
+diff --git a/libweston/renderer-gl/gl-renderer.c b/libweston/renderer-gl/gl-renderer.c
+index cb5522e..6090cc8 100644
+--- a/libweston/renderer-gl/gl-renderer.c
++++ b/libweston/renderer-gl/gl-renderer.c
+@@ -3156,88 +3156,6 @@ import_yuv_dmabuf(struct gl_renderer *gr, struct gl_buffer_state *gb,
+ 	return true;
+ }
+ 
+-static void
+-gl_renderer_query_dmabuf_modifiers_full(struct gl_renderer *gr, int format,
+-					uint64_t **modifiers,
+-					unsigned **external_only,
+-					int *num_modifiers);
+-
+-static struct dmabuf_format*
+-dmabuf_format_create(struct gl_renderer *gr, uint32_t format)
+-{
+-	struct dmabuf_format *dmabuf_format;
+-
+-	dmabuf_format = calloc(1, sizeof(struct dmabuf_format));
+-	if (!dmabuf_format)
+-		return NULL;
+-
+-	dmabuf_format->format = format;
+-
+-	gl_renderer_query_dmabuf_modifiers_full(gr, format,
+-			&dmabuf_format->modifiers,
+-			&dmabuf_format->external_only,
+-			&dmabuf_format->num_modifiers);
+-
+-	if (dmabuf_format->num_modifiers == 0) {
+-		free(dmabuf_format);
+-		return NULL;
+-	}
+-
+-	wl_list_insert(&gr->dmabuf_formats, &dmabuf_format->link);
+-	return dmabuf_format;
+-}
+-
+-static void
+-dmabuf_format_destroy(struct dmabuf_format *format)
+-{
+-	free(format->modifiers);
+-	free(format->external_only);
+-	wl_list_remove(&format->link);
+-	free(format);
+-}
+-
+-static GLenum
+-choose_texture_target(struct gl_renderer *gr,
+-		      struct dmabuf_attributes *attributes)
+-{
+-	struct dmabuf_format *tmp, *format = NULL;
+-
+-	wl_list_for_each(tmp, &gr->dmabuf_formats, link) {
+-		if (tmp->format == attributes->format) {
+-			format = tmp;
+-			break;
+-		}
+-	}
+-
+-	if (!format)
+-		format = dmabuf_format_create(gr, attributes->format);
+-
+-	if (format) {
+-		int i;
+-
+-		for (i = 0; i < format->num_modifiers; ++i) {
+-			if (format->modifiers[i] == attributes->modifier) {
+-				if (format->external_only[i])
+-					return GL_TEXTURE_EXTERNAL_OES;
+-				else
+-					return GL_TEXTURE_2D;
+-			}
+-		}
+-	}
+-
+-	switch (attributes->format & ~DRM_FORMAT_BIG_ENDIAN) {
+-	case DRM_FORMAT_YUYV:
+-	case DRM_FORMAT_YVYU:
+-	case DRM_FORMAT_UYVY:
+-	case DRM_FORMAT_VYUY:
+-	case DRM_FORMAT_AYUV:
+-	case DRM_FORMAT_XYUV8888:
+-		return GL_TEXTURE_EXTERNAL_OES;
+-	default:
+-		return GL_TEXTURE_2D;
+-	}
+-}
+-
+ static struct gl_buffer_state *
+ import_dmabuf(struct gl_renderer *gr,
+ 	      struct linux_dmabuf_buffer *dmabuf)
+@@ -3258,19 +3176,12 @@ import_dmabuf(struct gl_renderer *gr,
+ 
+ 	egl_image = import_simple_dmabuf(gr, &dmabuf->attributes);
+ 	if (egl_image != EGL_NO_IMAGE_KHR) {
+-		GLenum target = choose_texture_target(gr, &dmabuf->attributes);
++		/* HACK: Mali use GL_TEXTURE_EXTERNAL_OES for importing */
++		GLenum target = GL_TEXTURE_EXTERNAL_OES;
+ 
+ 		gb->num_images = 1;
+ 		gb->images[0] = egl_image;
+-
+-		switch (target) {
+-		case GL_TEXTURE_2D:
+-			gb->shader_variant = SHADER_VARIANT_RGBA;
+-			break;
+-		default:
+-			gb->shader_variant = SHADER_VARIANT_EXTERNAL;
+-		}
+-
++		gb->shader_variant = SHADER_VARIANT_EXTERNAL;
+ 		ensure_textures(gb, target, gb->num_images);
+ 
+ 		return gb;
+@@ -4394,7 +4305,6 @@ static void
+ gl_renderer_destroy(struct weston_compositor *ec)
+ {
+ 	struct gl_renderer *gr = get_renderer(ec);
+-	struct dmabuf_format *format, *next_format;
+ 	struct gl_capture_task *gl_task, *tmp;
+ 
+ 	wl_signal_emit(&gr->destroy_signal, gr);
+@@ -4417,9 +4327,6 @@ gl_renderer_destroy(struct weston_compositor *ec)
+ 		       EGL_NO_SURFACE, EGL_NO_SURFACE,
+ 		       EGL_NO_CONTEXT);
+ 
+-	wl_list_for_each_safe(format, next_format, &gr->dmabuf_formats, link)
+-		dmabuf_format_destroy(format);
+-
+ 	weston_drm_format_array_fini(&gr->supported_formats);
+ 
+ 	gl_renderer_allocator_destroy(gr->allocator);
+@@ -4575,7 +4482,6 @@ gl_renderer_display_create(struct weston_compositor *ec,
+ 				goto fail_feedback;
+ 		}
+ 	}
+-	wl_list_init(&gr->dmabuf_formats);
+ 
+ 	wl_signal_init(&gr->destroy_signal);
+ 
+-- 
+2.20.1
+

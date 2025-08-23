@@ -1,0 +1,25 @@
+From 98b8d1d165a33188501c3dc45744f7ed3b799305 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Thu, 22 Aug 2024 11:59:02 +0800
+Subject: [PATCH] Fix race in stop handler
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ src/aml.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/aml.c b/src/aml.c
+index 48253fc..cf2be30 100644
+--- a/src/aml.c
++++ b/src/aml.c
+@@ -673,6 +673,7 @@ static int aml__stop_handler(struct aml* self, struct aml_handler* handler)
+ 		return -1;
+ 
+ 	handler->parent = NULL;
++	handler->obj.cb = NULL;
+ 
+ 	return 0;
+ }
+-- 
+2.20.1
+

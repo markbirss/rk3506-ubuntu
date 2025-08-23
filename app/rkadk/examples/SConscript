@@ -1,0 +1,28 @@
+from building import *
+Import("SOC")
+
+cwd     = GetCurrentDir()
+src     = Split('''
+
+''')
+
+if GetDepend('RT_RKADK_BUILD_EXAMPLES'):
+    if GetDepend('RT_RKADK_ENABLE_PLAYER'):
+        src += ['rkadk_player_test.c']
+
+CPPPATH = [cwd]
+CPPPATH += ["../../../rockit/sdk/include"]
+CPPPATH += ["../../../common_algorithm/misc/include"]
+CPPPATH += ["../include"]
+
+CPPDEFINES = ['OS_RTT']
+if SOC == 'RK3308':
+    CPPPATH += ["../../../rockit/sdk/lib/arm/rk3308"]
+    CPPDEFINES = ['RK3308']
+if SOC == 'RK3506':
+    CPPPATH += ["../../../rockit/sdk/lib/arm/rk3506"]
+    CPPDEFINES = ['RK3506']
+
+group = DefineGroup('rkadk', src, depend = ['RT_USING_RKADK'], CPPPATH = CPPPATH, CPPDEFINES=CPPDEFINES)
+
+Return('group')

@@ -1,0 +1,27 @@
+mainmenu "RT-Thread Configuration"
+
+config BSP_DIR
+    string
+    option env="BSP_ROOT"
+    default "."
+
+config RTT_DIR
+    string
+    option env="RTT_ROOT"
+    default "../../.."
+
+config PKGS_DIR
+    string
+    option env="PKGS_ROOT"
+    default "packages"
+
+config BSP_RK3576
+    select ARCH_ARM_CORTEX_M0
+    bool
+    default y
+
+source "$RTT_DIR/Kconfig"
+source "$BSP_DIR/drivers/Kconfig"
+source "$BSP_DIR/board/Kconfig"
+#source "$PKGS_DIR/Kconfig"
+source "$BSP_DIR/../common/tests/Kconfig"

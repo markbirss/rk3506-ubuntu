@@ -1,0 +1,7 @@
+This is a copy of the kconfig code in the buildroot (currently 2024.02) tweaked
+to suit Rockchip Linux SDK.
+
+Changes:
+1/ sed -i -e "s/buildroot/kernel/" -e "s/Buildroot/Rockchip Linux SDK/" \
+	-e "s/BR2_/RK_/" *conf*
+2/ Apply 0001-HACK-Support-using-endmenuconfig-to-quit-menuconfig.patch

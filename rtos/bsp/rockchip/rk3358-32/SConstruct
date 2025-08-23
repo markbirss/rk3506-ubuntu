@@ -1,0 +1,42 @@
+import os
+import sys
+import rtconfig
+
+from rtconfig import RTT_ROOT
+
+sys.path = sys.path + [os.path.join(RTT_ROOT, 'tools'), os.path.join(os.getcwd(), '../tools')]
+from building import *
+
+TARGET = 'rtthread.' + rtconfig.TARGET_EXT
+
+ld_dst = 'gcc_arm.ld'
+cmd = '{cppcmd} -P -C -E -I. {cflags} -D__ASSEMBLY__ {ld_src} -o {ld_dst}'.format(
+    cppcmd = os.path.join(rtconfig.EXEC_PATH, 'arm-none-eabi-gcc'),
+    cflags = rtconfig.CFLAGS,
+    ld_src = rtconfig.LINK_SCRIPT,
+    ld_dst = ld_dst)
+if os.system(cmd) != 0:
+    print('failed to generate linker script %s' % ld_dst)
+    sys.exit(255)
+# if the linker script changed, relink the target
+Depends(TARGET, ld_dst)
+
+DefaultEnvironment(tools=[])
+env = Environment(tools = ['mingw'],
+    AS = rtconfig.AS, ASFLAGS = rtconfig.AFLAGS,
+    CC = rtconfig.CC, CFLAGS = rtconfig.CFLAGS,
+    CXX = rtconfig.CXX, CXXFLAGS = rtconfig.CXXFLAGS,
+    AR = rtconfig.AR, ARFLAGS = '-rc',
+    LINK = rtconfig.LINK, LINKFLAGS = rtconfig.LFLAGS)
+env.PrependENVPath('PATH', rtconfig.EXEC_PATH)
+env['ASCOM'] = env['ASPPCOM']
+
+Export('RTT_ROOT')
+Export('rtconfig')
+
+# prepare building environment
+objs = PrepareBuilding(env, RTT_ROOT, has_libcpu = False)
+
+# make a building
+DoBuilding(TARGET, objs)
+

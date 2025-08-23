@@ -1,0 +1,41 @@
+config BR2_PACKAGE_LV_DRIVERS
+	bool "lv-drivers"
+	default n
+	help
+	  The concrete implementation of hardware
+
+if BR2_PACKAGE_LV_DRIVERS
+	config BR2_LV_DRIVERS_USE_SDL_GPU
+		bool "Use SDL to open window on PC and handle mouse and keyboard"
+		default y if LV_USE_GPU_SDL
+		help
+		  Enbale sdl renderer
+
+	config BR2_LV_DRIVERS_USE_OPENGL
+		bool "Enable OpenGLES"
+		depends on BR2_LV_DRIVERS_USE_SDL_GPU
+		help
+		  Enbale OpenGLES
+
+	config BR2_LV_DRIVERS_USE_DRM
+		bool "Use Linux DRM device"
+		select BR2_PACKAGE_LIBDRM
+		help
+		  Enbale drm renderer
+
+	config BR2_LV_DRIVERS_USE_RGA
+		bool "Use RGA in DRM rendering"
+		default n
+		depends on BR2_PACKAGE_ROCKCHIP_RGA
+		depends on BR2_LV_DRIVERS_USE_DRM
+		help
+		  Enbale RGA to copy image
+
+	config BR2_LV_DRIVERS_USE_RKADK
+		bool "Use RKADK"
+		select BR2_PACKAGE_RKADK
+		select BR2_PACKAGE_RKADK_PLAYER
+		select BR2_PACKAGE_RKADK_DISPLAY
+		help
+		  Enbale rkadk renderer
+endif

@@ -1,0 +1,15 @@
+#!/bin/sh -e
+
+type X >/dev/null 2>/dev/null || exit 0
+
+case $1 in
+	on)
+		# Create it earlier for Xserver VT detection
+		touch /var/run/frecon/current
+
+		killall -q -USR1 Xorg X || true
+		;;
+	off)
+		killall -q -USR1 Xorg X || true
+		;;
+esac

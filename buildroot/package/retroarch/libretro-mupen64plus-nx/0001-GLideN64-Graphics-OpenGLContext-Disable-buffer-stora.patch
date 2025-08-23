@@ -1,0 +1,32 @@
+From 644c7d27899d9d5613d5bb41f01f8efc4035293d Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Thu, 12 Sep 2024 08:52:39 +0800
+Subject: [PATCH] GLideN64: Graphics: OpenGLContext: Disable buffer storage by
+ default
+
+Set env "MUPEN64PLUS_NX_BUFFER_STORAGE"=1 to allow it.
+
+Fix crash when glMapBufferRange failed.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ GLideN64/src/Graphics/OpenGLContext/opengl_GLInfo.cpp | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/GLideN64/src/Graphics/OpenGLContext/opengl_GLInfo.cpp b/GLideN64/src/Graphics/OpenGLContext/opengl_GLInfo.cpp
+index 55e42dd..24a5512 100644
+--- a/GLideN64/src/Graphics/OpenGLContext/opengl_GLInfo.cpp
++++ b/GLideN64/src/Graphics/OpenGLContext/opengl_GLInfo.cpp
+@@ -132,6 +132,9 @@ void GLInfo::init() {
+ 	bufferStorage = (!isGLESX && (numericVersion >= 44)) || Utils::isExtensionSupported(*this, "GL_ARB_buffer_storage") ||
+ 			Utils::isExtensionSupported(*this, "GL_EXT_buffer_storage");
+ 
++	if (!getenv("MUPEN64PLUS_NX_BUFFER_STORAGE"))
++		bufferStorage = false;
++
+ 	texStorage = (isGLESX && (numericVersion >= 30)) || (!isGLESX && numericVersion >= 42) ||
+ 			Utils::isExtensionSupported(*this, "GL_ARB_texture_storage");
+ 
+-- 
+2.20.1
+

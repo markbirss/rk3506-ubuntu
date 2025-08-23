@@ -1,0 +1,19 @@
+#include "base/base.config"
+#include "chips/rk3308_arm.config"
+#include "fs/vfat.config"
+#include "multimedia/audio.config"
+#include "wifibt/bt.config"
+#include "wifibt/wireless.config"
+#include "lvgl/lvgl_drm.config"
+#include "lvgl/rk_demo.config"
+# BR2_PACKAGE_ANDROID_ADBD is reset to default
+# BR2_PACKAGE_EUDEV_ENABLE_HWDB is not set
+BR2_PACKAGE_HOST_LINUX_HEADERS_CUSTOM_5_10=y
+# BR2_PACKAGE_INPUT_EVENT_DAEMON is reset to default
+BR2_PACKAGE_LOCKFILE_PROGS=y
+# BR2_PACKAGE_PM_UTILS is reset to default
+# BR2_PACKAGE_RKSCRIPT is reset to default
+# BR2_PACKAGE_ROCKCHIP_ALSA_CONFIG is reset to default
+# BR2_PACKAGE_USBMOUNT is reset to default
+BR2_STRIP_EXCLUDE_FILES="rk_demo librkadk.so libgraphic_lsf.so librockit.so librkaudio.so librkdemuxer.so librkmuxer.so"
+BR2_TARGET_GENERIC_HOSTNAME="rk3308_32"

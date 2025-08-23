@@ -1,0 +1,88 @@
+From f12e78e258cf54d0a3e590130ba43d859698f55f Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 10 May 2024 18:19:15 +0800
+Subject: [PATCH 2/2] Support creation time
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ src/mtp_properties.c | 50 +++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 49 insertions(+), 1 deletion(-)
+
+diff --git a/src/mtp_properties.c b/src/mtp_properties.c
+index 60d0d2f..9711c4e 100644
+--- a/src/mtp_properties.c
++++ b/src/mtp_properties.c
+@@ -31,6 +31,7 @@
+ #include <stdio.h>
+ #include <fcntl.h>
+ #include <unistd.h>
++#include <syscall.h>
+ #include <sys/types.h>
+ #include <sys/stat.h>
+ #include <time.h>
+@@ -802,6 +803,52 @@ int objectproplist_element(mtp_ctx * ctx, void * buffer, int * ofs, int maxsize,
+ 	return 0;
+ }
+ 
++static int creation_time(const char * path, time_t *t)
++{
++#ifdef __NR_statx
++#ifndef STATX_BTIME
++#define STATX_BTIME         0x00000800U     /* Want/got stx_btime */
++#endif
++
++	/* From: musl-1.2.3/src/stat/fstatat.c */
++	struct statx {
++		uint32_t stx_mask;
++		uint32_t stx_blksize;
++		uint64_t stx_attributes;
++		uint32_t stx_nlink;
++		uint32_t stx_uid;
++		uint32_t stx_gid;
++		uint16_t stx_mode;
++		uint16_t pad1;
++		uint64_t stx_ino;
++		uint64_t stx_size;
++		uint64_t stx_blocks;
++		uint64_t stx_attributes_mask;
++		struct {
++			int64_t tv_sec;
++			uint32_t tv_nsec;
++			int32_t pad;
++		} stx_atime, stx_btime, stx_ctime, stx_mtime;
++		uint32_t stx_rdev_major;
++		uint32_t stx_rdev_minor;
++		uint32_t stx_dev_major;
++		uint32_t stx_dev_minor;
++		uint64_t spare[14];
++	} stx;
++
++	int ret = syscall(SYS_statx, AT_FDCWD, path, 0, STATX_BTIME, &stx);
++	if (ret < 0)
++		return ret;
++
++	if (stx.stx_mask & STATX_BTIME) {
++		*t = stx.stx_btime.tv_sec;
++		return 0;
++	}
++#endif
++
++	return -1;
++}
++
+ int build_objectproplist_dataset(mtp_ctx * ctx, void * buffer, int maxsize,fs_entry * entry, uint32_t handle,uint32_t format_id, uint32_t prop_code, uint32_t prop_group_code, uint32_t depth)
+ {
+ 	struct stat64 entrystat;
+@@ -867,7 +914,8 @@ int build_objectproplist_dataset(mtp_ctx * ctx, void * buffer, int maxsize,fs_en
+ 
+ 	// Date Created (NR) "YYYYMMDDThhmmss.s"
+ 	set_default_date(&lt);
+-	t = entrystat.st_mtime;
++	if (creation_time(path, &t) < 0)
++		t = entrystat.st_mtime;
+ 	localtime_r(&t, &lt);
+ 	snprintf(timestr,sizeof(timestr),"%.4d%.2d%.2dT%.2d%.2d%.2d",1900 + lt.tm_year, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec);
+ 	numberofelements += objectproplist_element(ctx, buffer, &ofs, maxsize, MTP_PROPERTY_DATE_CREATED, handle, &timestr,prop_code);
+-- 
+2.20.1
+

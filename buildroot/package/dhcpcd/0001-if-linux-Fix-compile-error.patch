@@ -1,0 +1,33 @@
+From 65eea6f9f2d5dd5eb3f16d02075ccac02d2b1f0d Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Tue, 30 Jan 2024 18:29:17 +0800
+Subject: [PATCH] if-linux: Fix compile error
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ src/if-linux.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/src/if-linux.c b/src/if-linux.c
+index 2a59951..2119757 100644
+--- a/src/if-linux.c
++++ b/src/if-linux.c
+@@ -105,8 +105,13 @@ int if_getssid_wext(const char *ifname, uint8_t *ssid);
+ /* For some reason, glibc doesn't include newer flags from linux/if.h
+  * However, we cannot include linux/if.h directly as it conflicts
+  * with the glibc version. D'oh! */
+-#ifndef IFF_LOWER_UP
+-#define IFF_LOWER_UP	0x10000		/* driver signals L1 up		*/
++#ifdef IFF_LOWER_UP
++#undef IFF_LOWER_UP
++#define IFF_LOWER_UP	1<<16		/* driver signals L1 up		*/
++#endif
++#ifdef IFF_DORMANT
++#undef IFF_DORMANT
++#define IFF_DORMANT	1<<17
+ #endif
+ 
+ /* Buggy CentOS and RedHat */
+-- 
+2.20.1
+

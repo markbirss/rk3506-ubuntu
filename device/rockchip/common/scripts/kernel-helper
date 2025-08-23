@@ -1,0 +1,30 @@
+#!/bin/bash -e
+
+# Make sure that we are sourced and called inside of RK build scripts.
+if [ "$BASH_SOURCE" = "$0" -o -z "$RK_SESSION" ];then
+	error "$(realpath $0) is not supposed to be executed directly"
+	exit 1
+fi
+
+if [ "$RK_KERNEL_PREFERRED" ] && \
+	[ "$RK_KERNEL_VERSION" != "$RK_KERNEL_PREFERRED" ]; then
+	warning "kernel $RK_KERNEL_VERSION is not preferred ($RK_KERNEL_PREFERRED)\n"
+fi
+
+if echo $RK_KERNEL_CFG $RK_KERNEL_CFG_FRAGMENTS | grep -q aarch32 && \
+	[ "$RK_KERNEL_ARCH" = arm64 ]; then
+	error "Wrong kernel arch ($RK_KERNEL_ARCH) for config:" \
+		"$RK_KERNEL_CFG $RK_KERNEL_CFG_FRAGMENTS\n"
+	export RK_KERNEL_ARCH=arm
+fi
+
+export RK_KERNEL_TOOLCHAIN="$(get_toolchain kernel "$RK_KERNEL_ARCH")"
+[ "$RK_KERNEL_TOOLCHAIN" ] || exit 1
+
+export KMAKE="make -C "$RK_SDK_DIR/kernel/" -j$(( $(nproc) + 1 )) \
+	CROSS_COMPILE=$RK_KERNEL_TOOLCHAIN ARCH=$RK_KERNEL_ARCH"
+
+if [ -z "$DRY_RUN" ] && [ "$RK_SUDO_ROOT" ]; then
+	# Sudo to source code owner for Debian's post stage
+	export KMAKE="sudo -u #$RK_OWNER_UID $KMAKE"
+fi

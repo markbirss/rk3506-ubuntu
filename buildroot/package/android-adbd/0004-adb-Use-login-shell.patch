@@ -1,0 +1,26 @@
+From 504ca4f3cc4a3b72ead7404160f74794fa0f77e2 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Sun, 8 Oct 2023 17:49:35 +0800
+Subject: [PATCH 4/8] adb: Use login shell
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ adb/shell_service.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/adb/shell_service.cpp b/adb/shell_service.cpp
+index 8ad6460..b548a31 100644
+--- a/adb/shell_service.cpp
++++ b/adb/shell_service.cpp
+@@ -338,7 +338,7 @@ bool Subprocess::ForkAndExec(std::string* error) {
+         signal(SIGPIPE, SIG_DFL);
+ 
+         if (command_.empty()) {
+-            execle(_PATH_BSHELL, _PATH_BSHELL, "-", nullptr, cenv.data());
++            execle(_PATH_BSHELL, _PATH_BSHELL, "-l", nullptr, cenv.data());
+         } else {
+             execle(_PATH_BSHELL, _PATH_BSHELL, "-c", command_.c_str(), nullptr, cenv.data());
+         }
+-- 
+2.20.1
+

@@ -1,0 +1,21 @@
+menu "RT-Thread board config"
+
+config IS_FPGA
+    bool "Is FPGA Board"
+    default n
+
+choice
+    prompt "Board Type"
+    default RT_USING_BOARD_FPGA
+
+    config RT_USING_BOARD_FPGA
+        bool "Enable FPGA board"
+        select IS_FPGA
+endchoice
+
+source "$RTT_DIR/components/hifi4/rtt/app/Kconfig"
+source "$RTT_DIR/components/hifi4/rtt/codecs/Kconfig"
+source "$RTT_DIR/components/hifi4/rtt/rkstudio_comm/Kconfig"
+source "$RTT_DIR/components/hifi4/rtt/rkstudio_parser/Kconfig"
+source "$BSP_DIR/../common/fwmgr/Kconfig"
+endmenu

@@ -1,0 +1,1 @@
+../overlays/rootfs/chromium/install.sh

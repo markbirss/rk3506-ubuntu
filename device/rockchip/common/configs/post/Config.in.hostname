@@ -1,0 +1,22 @@
+#
+
+choice
+	prompt "hostname"
+
+config RK_ROOTFS_HOSTNAME_DEFAULT
+	bool "auto"
+	help
+	  Use "<chip>-<OS>" for non-debian OS.
+
+config RK_ROOTFS_HOSTNAME_ORIGINAL
+	bool "original"
+
+config RK_ROOTFS_HOSTNAME_CUSTOM
+	bool "custom"
+
+endchoice # hostname
+
+config RK_ROOTFS_HOSTNAME
+	string "custom hostname"
+	depends on RK_ROOTFS_HOSTNAME_CUSTOM
+	default RK_CHIP

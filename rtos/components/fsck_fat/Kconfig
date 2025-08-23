@@ -1,0 +1,4 @@
+config RT_USING_FSCK_FAT
+    bool "Enable fsck for fat"
+    default n
+    depends on RT_USING_DFS_ELMFAT

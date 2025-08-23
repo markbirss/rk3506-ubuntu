@@ -1,0 +1,26 @@
+From 4bd849625b90c480819a4fbcaee7c66a2ce3ab5b Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Mon, 5 Jun 2023 19:43:28 +0800
+Subject: [PATCH 28/35] src: lv_lru: Add error log for lru testing
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ src/misc/lv_lru.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/misc/lv_lru.c b/src/misc/lv_lru.c
+index b85554eb6..66b2a31f4 100644
+--- a/src/misc/lv_lru.c
++++ b/src/misc/lv_lru.c
+@@ -60,7 +60,7 @@ static lv_lru_item_t * lv_lru_pop_or_create_item(lv_lru_t * cache);
+  **********************/
+ 
+ /* error helpers */
+-#define error_for(conditions, error)  if(conditions) {return error;}
++#define error_for(conditions, error)  if(conditions) {LV_LOG_ERROR(#error);return error;}
+ #define test_for_missing_cache()      error_for(!cache, LV_LRU_MISSING_CACHE)
+ #define test_for_missing_key()        error_for(!key, LV_LRU_MISSING_KEY)
+ #define test_for_missing_value()      error_for(!value || value_length == 0, LV_LRU_MISSING_VALUE)
+-- 
+2.25.1
+

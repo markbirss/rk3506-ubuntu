@@ -1,0 +1,13 @@
+#include "rockchip_rk3588_defconfig"
+#include "gpu/gpu.config"
+#include "multimedia/audio.config"
+#include "multimedia/camera.config"
+#include "multimedia/mpp.config"
+#include "products/ipc.config"
+#include "npu2.config"
+# BR2_PACKAGE_PULSEAUDIO_DAEMON is reset to default
+# BR2_PACKAGE_ROCKCHIP_MALI_HAS_GBM is reset to default
+# BR2_PACKAGE_STRESS_NG is reset to default
+# BR2_PACKAGE_WESTON is reset to default
+BR2_ROOTFS_OVERLAY="board/rockchip/rk3588/fs-overlay-ipc/"
+# BR2_PACKAGE_WAYLAND is reset to default

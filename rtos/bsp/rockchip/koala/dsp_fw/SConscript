@@ -1,0 +1,11 @@
+Import('RTT_ROOT')
+Import('rtconfig')
+from building import *
+
+cwd     = GetCurrentDir()
+src = Glob('rkdsp_fw.c')
+CPPPATH = [cwd]
+
+group = DefineGroup('dsp_fw', src, depend = ['RT_USING_DSP'], CPPPATH = CPPPATH)
+
+Return('group')

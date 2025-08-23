@@ -1,0 +1,91 @@
+From e24d8dd77af71f362dd0d92e871014fc79e5d98d Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Thu, 19 Oct 2023 11:41:06 +0800
+Subject: [PATCH 71/97] backend-drm: Support delaying initial repaint
+
+Set env "WESTON_DRM_INITIAL_FREEZE_MS" for the initial freezing.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/backend-drm/drm-internal.h |  3 +++
+ libweston/backend-drm/drm.c          | 24 ++++++++++++++++++++++++
+ 2 files changed, 27 insertions(+)
+
+diff --git a/libweston/backend-drm/drm-internal.h b/libweston/backend-drm/drm-internal.h
+index 93a3ff6ca..9fe1afe94 100644
+--- a/libweston/backend-drm/drm-internal.h
++++ b/libweston/backend-drm/drm-internal.h
+@@ -278,6 +278,9 @@ struct drm_backend {
+ 	bool pending_update;
+ 	int64_t last_update_ms;
+ 
++	int64_t initial_update_ms;
++	int64_t initial_freeze_ms;
++
+ 	bool master;
+ 	bool single_head;
+ 	bool head_fallback;
+diff --git a/libweston/backend-drm/drm.c b/libweston/backend-drm/drm.c
+index 792e3c6c9..08fe12570 100644
+--- a/libweston/backend-drm/drm.c
++++ b/libweston/backend-drm/drm.c
+@@ -1061,11 +1061,15 @@ drm_output_repaint(struct weston_output *output_base)
+ 	struct drm_plane_state *cursor_state;
+ 	struct drm_pending_state *pending_state;
+ 	struct drm_device *device;
++	struct drm_backend *b;
++	struct timespec now;
++	int64_t now_ms;
+ 
+ 	assert(output);
+ 	assert(!output->is_virtual);
+ 
+ 	device = output->device;
++	b = device->backend;
+ 	pending_state = device->repaint_data;
+ 	assert(pending_state);
+ 
+@@ -1082,6 +1086,16 @@ drm_output_repaint(struct weston_output *output_base)
+ 		return 1;
+ 	}
+ 
++	weston_compositor_read_presentation_clock(b->compositor, &now);
++	now_ms = timespec_to_msec(&now);
++	if (now_ms < b->initial_update_ms + b->initial_freeze_ms) {
++		int64_t duration =
++			b->initial_update_ms + b->initial_freeze_ms - now_ms;
++		timespec_add_msec(&output_base->next_repaint,
++				  &output_base->next_repaint, duration);
++		return 1;
++	}
++
+ 	/* If planes have been disabled in the core, we might not have
+ 	 * hit assign_planes at all, so might not have valid output state
+ 	 * here. */
+@@ -3684,6 +3698,12 @@ drm_backend_update_connectors(struct drm_device *device,
+ 	uint32_t connector_id;
+ 	int i, ret;
+ 
++	if (!b->primary_head) {
++		struct timespec now;
++		weston_compositor_read_presentation_clock(b->compositor, &now);
++		b->initial_update_ms = timespec_to_msec(&now);
++	}
++
+ 	resources = drmModeGetResources(device->drm.fd);
+ 	if (!resources) {
+ 		weston_log("drmModeGetResources failed\n");
+@@ -5089,6 +5109,10 @@ drm_backend_create(struct weston_compositor *compositor,
+ 		weston_log("Entering mirror mode.\n");
+ 	}
+ 
++	buf = getenv("WESTON_DRM_INITIAL_FREEZE_MS");
++	if (buf)
++		b->initial_freeze_ms = atoi(buf);
++
+ 	device = zalloc(sizeof *device);
+ 	if (device == NULL)
+ 		goto err_backend;
+-- 
+2.20.1
+

@@ -1,0 +1,43 @@
+
+/*
+ * Copyright (C) 2023 Rockchip Electronic Co.,Ltd
+ *
+ * Simple U-boot fit source file containing ATF/OP-TEE/U-Boot/dtb/MCU
+ */
+
+/dts-v1/;
+
+/ {
+	description = "FIT Image with RT-thread";
+	#address-cells = <1>;
+
+	images {
+
+		hal {
+			description = "Bare Metal";
+			data = /incbin/("../GCC/TestDemo.bin");
+			type = "standalone";
+			arch = "arm";
+			os = "rtos";
+			load = <0x00200000>;
+			udelay = <10000>;
+			hash {
+				algo = "sha256";
+			};
+		};
+	};
+
+	configurations {
+		default = "conf";
+		conf {
+			description = "rv1103-rtt";
+			loadables = "rt-thread";
+			signature {
+				algo = "sha26,rsa2048";
+				key-name-hint = "dev";
+				sign-images = "loadables";
+			};
+		};
+	};
+};
+

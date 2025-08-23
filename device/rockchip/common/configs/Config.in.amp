@@ -1,0 +1,57 @@
+#
+
+comment "AMP depends on loader"
+	depends on !RK_LOADER
+
+menuconfig RK_AMP
+	bool "AMP (Asymmetric Multi-Processing System)"
+	depends on RK_LOADER
+	select RK_UBOOT_SPL
+
+if RK_AMP
+
+config RK_AMP_ARCH
+	string
+	default "arm" if RK_AMP_ARM32
+	default "arm64" if RK_AMP_ARM64
+
+choice
+	prompt "arch"
+	default RK_AMP_ARM32
+
+config RK_AMP_ARM64
+	bool "arm64"
+	depends on !RK_CHIP_ARM32
+
+config RK_AMP_ARM32
+	bool "arm"
+
+endchoice # AMP arch
+
+config RK_AMP_HAL_TARGET
+	string "HAL target"
+	default RK_CHIP_FAMILY
+
+config RK_AMP_RTT_TARGET
+	string "RT-Thread target"
+	default "${RK_CHIP_FAMILY}-32"
+
+config RK_AMP_MCU_HAL_TARGET
+	string "MCU HAL target"
+	default "${RK_CHIP_FAMILY}-mcu"
+
+config RK_AMP_MCU_RTT_TARGET
+	string "MCU RT-Thread target"
+	default "${RK_CHIP_FAMILY}-mcu"
+
+config RK_AMP_CFG
+	string "config file"
+
+config RK_AMP_FIT_ITS
+	string "FIT ITS file"
+
+config RK_AMP_RTT_ROOT_DATA
+	string "root resource path"
+
+endif # AMP
+endmenuconfig # AMP

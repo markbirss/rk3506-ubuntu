@@ -1,0 +1,15 @@
+#include "base/base.config"
+#include "chips/rk3576_aarch64.config"
+#include "fs/exfat.config"
+#include "fs/ntfs.config"
+#include "fs/vfat.config"
+#include "gpu/gpu.config"
+#include "multimedia/audio.config"
+#include "multimedia/camera.config"
+#include "multimedia/mpp.config"
+#include "products/ipc.config"
+#include "npu2.config"
+BR2_PACKAGE_CAMERA_ENGINE_RKAIQ_INSTALL_AIISP=y
+BR2_PACKAGE_IVA_RK3576=y
+BR2_PACKAGE_RKIPC_RK3576=y
+BR2_ROOTFS_OVERLAY="board/rockchip/common/base board/rockchip/rk3576/fs-overlay-ipc/"

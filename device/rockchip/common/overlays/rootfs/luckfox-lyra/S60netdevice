@@ -1,0 +1,102 @@
+#!/bin/sh
+
+ETH0_MAC_FILE="/etc/.eth0_macaddr"
+ETH1_MAC_FILE="/etc/.eth1_macaddr"
+USB0_MAC_FILE="/etc/.usb0_macaddr"
+
+start() {
+	if ifconfig -a | grep -q 'eth0'; then
+		ifconfig eth0 up
+
+		ETH0_CURRENT_MAC=$(cat /sys/class/net/eth0/address)
+
+		if [ -f "$ETH0_MAC_FILE" ]; then
+			ETH0_SAVED_MAC=$(cat "$ETH0_MAC_FILE")
+			if [ -z "$ETH0_SAVED_MAC" ];then
+				rm $ETH0_MAC_FILE
+				echo "$ETH0_CURRENT_MAC" > "$ETH0_MAC_FILE"
+				echo "[S60netdevice] Saved current MAC address ($ETH0_CURRENT_MAC) to $ETH0_MAC_FILE"
+			else
+				echo "[S60netdevice] Saved eth0 Mac address:$ETH0_SAVED_MAC"
+				ifconfig eth0 down
+				ifconfig eth0 hw ether "$ETH0_SAVED_MAC"
+				ifconfig eth0 up
+				echo "[S60netdevice] Set eth0 MAC address to $ETH0_SAVED_MAC"
+			fi
+		else
+			echo "$ETH0_CURRENT_MAC" > "$ETH0_MAC_FILE"
+			echo "[S60netdevice] Saved current MAC address ($ETH0_CURRENT_MAC) to $ETH0_MAC_FILE"
+		fi
+
+		udhcpc -i eth0 > /tmp/eth0_udhcpc.log 2>&1 &
+	else
+		echo "[S60netdevice] eth0 not found"
+	fi
+
+	if ifconfig -a | grep -q 'eth1'; then
+		ifconfig eth1 up
+
+		ETH1_CURRENT_MAC=$(cat /sys/class/net/eth1/address)
+
+		if [ -f "$ETH1_MAC_FILE" ]; then
+			ETH1_SAVED_MAC=$(cat "$ETH1_MAC_FILE")
+			if [ -z "$ETH1_SAVED_MAC" ];then
+				rm $ETH1_MAC_FILE
+				echo "$ETH1_CURRENT_MAC" > "$ETH1_MAC_FILE"
+				echo "[S60netdevice] Saved current MAC address ($ETH1_CURRENT_MAC) to $ETH1_MAC_FILE"
+			else
+				echo "[S60netdevice] Saved eth1 Mac address:$ETH1_SAVED_MAC"
+				ifconfig eth1 down
+				ifconfig eth1 hw ether "$ETH1_SAVED_MAC"
+				ifconfig eth1 up
+				echo "[S60netdevice] Set eth1 MAC address to $ETH1_SAVED_MAC"
+			fi
+		else
+			echo "$ETH1_CURRENT_MAC" > "$ETH1_MAC_FILE"
+			echo "[S60netdevice] Saved current MAC address ($ETH1_CURRENT_MAC) to $ETH1_MAC_FILE"
+		fi
+
+		udhcpc -i eth1 > /tmp/eth1_udhcpc.log 2>&1 &
+	else
+		echo "[S60netdevice] eth1 not found"
+	fi
+
+	sleep 8
+
+	if ifconfig -a | grep -q 'usb0'; then
+		ifconfig usb0 up
+
+		USB0_CURRENT_MAC=$(cat /sys/class/net/usb0/address)
+
+		if [ -f "$USB0_MAC_FILE" ]; then
+			USB0_SAVED_MAC=$(cat "$USB0_MAC_FILE")
+			if [ -z "$USB0_SAVED_MAC" ];then
+				rm $USB0_MAC_FILE
+				echo "$USB0_CURRENT_MAC" > "$USB0_MAC_FILE"
+				echo "[S60netdevice] Saved current MAC address ($USB0_CURRENT_MAC) to $USB0_MAC_FILE"
+			else
+				echo "[S60netdevice] Saved usb0 Mac address:$USB0_SAVED_MAC"
+				ifconfig usb0 down
+				ifconfig usb0 hw ether "$USB0_SAVED_MAC"
+				ifconfig usb0 up
+				echo "[S60netdevice] Set usb0 MAC address to $USB0_SAVED_MAC"
+			fi
+		else
+			echo "$USB0_CURRENT_MAC" > "$USB0_MAC_FILE"
+			echo "[S60netdevice] Saved current MAC address ($USB0_CURRENT_MAC) to $USB0_MAC_FILE"
+		fi
+
+		ifconfig usb0 192.168.123.100
+	else
+		echo "[S60netdevice] usb0 not found"
+	fi
+}
+
+case "$1" in
+	start)
+		start &
+		;;
+	*)
+		exit 1
+		;;
+esac

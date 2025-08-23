@@ -1,0 +1,137 @@
+From 5def3e3c1c36643a47fc7fb42ef2c4da9be9d848 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Thu, 1 Feb 2024 11:31:08 +0800
+Subject: [PATCH 34/97] backend-drm: Support changing touch calibration
+ dynamically
+
+Use config file to set touch device's calibration.
+
+Default config file is "/tmp/.weston_drm.conf", can override with
+"WESTON_DRM_CONFIG" environment.
+
+Supported configs format is "calibration:<device name>:<matrix>", for
+example:
+echo "calibration:event9:-1 0 1 0 -1 1" > /tmp/.weston_drm.conf
+echo "calibration:goodix-ts:1 0 0 0 -1 1" > /tmp/.weston_drm.conf
+echo "calibration:event9:restore" > /tmp/.weston_drm.conf
+echo "calibration:goodix-ts:clear" > /tmp/.weston_drm.conf
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ include/libweston/libweston.h |  1 +
+ libweston/backend-drm/drm.c   | 54 +++++++++++++++++++++++++++++++++++
+ libweston/input.c             |  1 +
+ libweston/libinput-device.c   |  1 +
+ 4 files changed, 57 insertions(+)
+
+diff --git a/include/libweston/libweston.h b/include/libweston/libweston.h
+index a23c270ef..573accfc5 100644
+--- a/include/libweston/libweston.h
++++ b/include/libweston/libweston.h
+@@ -978,6 +978,7 @@ enum weston_touch_mode {
+ /** Represents a physical touchscreen input device */
+ struct weston_touch_device {
+ 	char *syspath;			/**< unique name */
++	char *name;			/**< device name */
+ 
+ 	struct weston_touch *aggregate;	/**< weston_touch this is part of */
+ 	struct wl_list link;		/**< in weston_touch::device_list */
+diff --git a/libweston/backend-drm/drm.c b/libweston/backend-drm/drm.c
+index d1f341f2b..bd3546ed0 100644
+--- a/libweston/backend-drm/drm.c
++++ b/libweston/backend-drm/drm.c
+@@ -4758,6 +4758,58 @@ config_handle_compositor(struct drm_backend *b, const char *key,
+ 	}
+ }
+ 
++static void
++config_handle_calibration(struct drm_backend *b, const char *name,
++			  const char *config)
++{
++	struct weston_seat *seat;
++	struct weston_touch *touch;
++	struct weston_touch_device *device;
++	struct weston_touch_device_matrix calibration;
++
++	wl_list_for_each(seat, &b->compositor->seat_list, link) {
++		touch = weston_seat_get_touch(seat);
++		if (!touch)
++			continue;
++
++		wl_list_for_each(device, &touch->device_list, link) {
++			if (!weston_touch_device_can_calibrate(device))
++				continue;
++
++			if (!strcmp(strrchr(device->syspath, '/') + 1, name))
++				goto found;
++
++			if (!strcmp(device->name, name))
++				goto found;
++		}
++	}
++
++	/* No such touch device */
++	return;
++
++found:
++	if (!strcmp(config, "restore")) {
++		calibration = device->saved_calibration;
++	} else if (!strcmp(config, "clear")) {
++		calibration.m[0] = 1;
++		calibration.m[1] = 0;
++		calibration.m[2] = 0;
++		calibration.m[3] = 0;
++		calibration.m[4] = 1;
++		calibration.m[5] = 0;
++	} else if (sscanf(config, "%f %f %f %f %f %f",
++			  &calibration.m[0],
++			  &calibration.m[1],
++			  &calibration.m[2],
++			  &calibration.m[3],
++			  &calibration.m[4],
++			  &calibration.m[5]) != 6) {
++		return;
++	}
++
++	device->ops->set_calibration(device, &calibration);
++}
++
+ static int
+ config_timer_handler(void *data)
+ {
+@@ -4811,6 +4863,8 @@ config_timer_handler(void *data)
+ 			config_handle_output(b, key, value);
+ 		else if (!strcmp(type, "compositor"))
+ 			config_handle_compositor(b, key, value);
++		else if (!strcmp(type, "calibration"))
++			config_handle_calibration(b, key, value);
+ 	}
+ 
+ 	fclose(conf_fp);
+diff --git a/libweston/input.c b/libweston/input.c
+index 0f7f09a88..08c25247b 100644
+--- a/libweston/input.c
++++ b/libweston/input.c
+@@ -179,6 +179,7 @@ weston_touch_device_destroy(struct weston_touch_device *device)
+ 	wl_list_remove(&device->link);
+ 	wl_signal_emit(&device->destroy_signal, device);
+ 	free(device->syspath);
++	free(device->name);
+ 	free(device);
+ }
+ 
+diff --git a/libweston/libinput-device.c b/libweston/libinput-device.c
+index 0d9ba2e3b..580a1bf50 100644
+--- a/libweston/libinput-device.c
++++ b/libweston/libinput-device.c
+@@ -424,6 +424,7 @@ create_touch_device(struct evdev_device *device)
+ 	touch_device = weston_touch_create_touch_device(device->seat->touch_state,
+ 					udev_device_get_syspath(udev_device),
+ 					device, ops);
++	touch_device->name = strdup(libinput_device_get_name(device->device));
+ 
+ 	udev_device_unref(udev_device);
+ 
+-- 
+2.20.1
+

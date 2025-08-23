@@ -1,0 +1,13 @@
+menu "RT-Thread board config"
+
+config RT_BOARD_NAME
+    string "the board name of you use"
+    default "rk2108b_evb"
+
+config RK_SRAM_END
+    hex "the address of sram end"
+    default 0x20100000
+
+source "$BSP_DIR/board/$RT_BOARD_NAME/Kconfig"
+
+endmenu

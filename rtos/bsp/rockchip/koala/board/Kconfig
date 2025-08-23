@@ -1,0 +1,12 @@
+menu "RT-Thread board config"
+
+choice
+    prompt "Board Type"
+    default RT_USING_BOARD_KOALA_EVB
+
+    config RT_USING_BOARD_KOALA_EVB
+        bool "Enable KOALA EVB board"
+
+endchoice
+
+endmenu

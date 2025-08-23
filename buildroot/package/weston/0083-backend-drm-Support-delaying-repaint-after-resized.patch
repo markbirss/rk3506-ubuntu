@@ -1,0 +1,129 @@
+From 06027088f88054eeb824683f6b580fc6705c26ce Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 17 Apr 2024 15:41:33 +0800
+Subject: [PATCH 83/97] backend-drm: Support delaying repaint after resized
+
+Freeze after drm outputs resized, to avoid glith.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/backend-drm/drm-internal.h |  6 +++++
+ libweston/backend-drm/drm.c          | 34 +++++++++++++++++++++++++---
+ 2 files changed, 37 insertions(+), 3 deletions(-)
+
+diff --git a/libweston/backend-drm/drm-internal.h b/libweston/backend-drm/drm-internal.h
+index 65e2a443e..2d8021fc2 100644
+--- a/libweston/backend-drm/drm-internal.h
++++ b/libweston/backend-drm/drm-internal.h
+@@ -119,6 +119,9 @@
+ /* Min duration between drm outputs update requests, to avoid glith */
+ #define DRM_MIN_UPDATE_MS	1000
+ 
++/* Freeze after drm outputs resized, to avoid glith */
++#define DRM_RESIZE_FREEZE_MS    150
++
+ #define WESTON_DRM_CONFIG_FILE	"/tmp/.weston_drm.conf"
+ #define DRM_CONFIG_UPDATE_MS	100
+ 
+@@ -277,6 +280,8 @@ struct drm_backend {
+ 	struct wl_event_source *hotplug_timer;
+ 	bool pending_update;
+ 	int64_t last_update_ms;
++	int64_t last_resize_ms;
++	int64_t resize_freeze_ms;
+ 
+ 	int64_t initial_update_ms;
+ 	int64_t initial_freeze_ms;
+@@ -288,6 +293,7 @@ struct drm_backend {
+ 	drm_head_match_t *head_matches;
+ 	struct drm_head *primary_head;
+ 	struct wl_listener output_create_listener;
++	struct wl_listener output_resized_listener;
+ 
+ 	int virtual_width;
+ 	int virtual_height;
+diff --git a/libweston/backend-drm/drm.c b/libweston/backend-drm/drm.c
+index 223ebea9b..4f2fdc553 100644
+--- a/libweston/backend-drm/drm.c
++++ b/libweston/backend-drm/drm.c
+@@ -214,6 +214,7 @@ static void
+ drm_backend_update_outputs(struct drm_backend *b)
+ {
+ 	struct weston_output *base, *primary;
++	struct timespec now;
+ 
+ 	if (!b->primary_head)
+ 		return;
+@@ -247,6 +248,8 @@ drm_backend_update_outputs(struct drm_backend *b)
+ 	weston_compositor_damage_all(b->compositor);
+ 
+ 	/* Ensure maximized and fullscreen surfaces resized */
++	weston_compositor_read_presentation_clock(b->compositor, &now);
++	b->last_resize_ms = timespec_to_msec(&now);
+ 	if (b->compositor->block_output_resizing)
+ 		primary->resizing = true;
+ }
+@@ -1115,11 +1118,15 @@ drm_output_repaint(struct weston_output *output_base)
+ 
+ 	weston_compositor_read_presentation_clock(b->compositor, &now);
+ 	now_ms = timespec_to_msec(&now);
+-	if (now_ms < b->initial_update_ms + b->initial_freeze_ms) {
+-		int64_t duration =
++	if (now_ms < b->initial_update_ms + b->initial_freeze_ms ||
++	    now_ms < b->last_resize_ms + b->resize_freeze_ms) {
++		int64_t initial_duration =
+ 			b->initial_update_ms + b->initial_freeze_ms - now_ms;
++		int64_t resize_duration =
++			b->last_resize_ms + b->resize_freeze_ms - now_ms;
+ 		timespec_add_msec(&output_base->next_repaint,
+-				  &output_base->next_repaint, duration);
++				  &output_base->next_repaint,
++				  MAX(initial_duration, resize_duration));
+ 		return 1;
+ 	}
+ 
+@@ -4640,6 +4647,17 @@ output_create_notify(struct wl_listener *listener, void *data)
+ 	config_timer_handler(b);
+ }
+ 
++static void
++output_resized_notify(struct wl_listener *listener, void *data)
++{
++	struct drm_backend *b = container_of(listener, struct drm_backend,
++					     output_resized_listener);
++	struct timespec now;
++
++	weston_compositor_read_presentation_clock(b->compositor, &now);
++	b->last_resize_ms = timespec_to_msec(&now);
++}
++
+ static const struct weston_drm_output_api api = {
+ 	drm_output_set_mode,
+ 	drm_output_set_gbm_format,
+@@ -5173,6 +5191,12 @@ drm_backend_create(struct weston_compositor *compositor,
+ 	if (buf)
+ 		sscanf(buf, "%dx%d", &b->virtual_width, &b->virtual_height);
+ 
++	buf = getenv("WESTON_DRM_RESIZE_FREEZE_MS");
++	if (buf)
++		b->resize_freeze_ms = atoi(buf);
++	else
++		b->resize_freeze_ms = DRM_RESIZE_FREEZE_MS;
++
+ 	buf = getenv("WESTON_DRM_MIRROR");
+ 	if (buf && buf[0] == '1') {
+ 		b->mirror_mode = true;
+@@ -5361,6 +5385,10 @@ drm_backend_create(struct weston_compositor *compositor,
+ 	wl_signal_add(&b->compositor->output_created_signal,
+ 		      &b->output_create_listener);
+ 
++	b->output_resized_listener.notify = output_resized_notify;
++	wl_signal_add(&b->compositor->output_resized_signal,
++		      &b->output_resized_listener);
++
+ 	weston_compositor_add_debug_binding(compositor, KEY_O,
+ 					    planes_binding, b);
+ 	weston_compositor_add_debug_binding(compositor, KEY_C,
+-- 
+2.20.1
+

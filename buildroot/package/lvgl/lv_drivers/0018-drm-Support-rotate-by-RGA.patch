@@ -1,0 +1,124 @@
+From a5d73baafe5abfd46ba732f9d2d4eb90e785731b Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Sat, 31 Aug 2024 14:43:40 +0800
+Subject: [PATCH] drm: Support rotate by RGA
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ display/drm.c | 46 ++++++++++++++++++++++++++++++++++++----------
+ 1 file changed, 36 insertions(+), 10 deletions(-)
+
+diff --git a/display/drm.c b/display/drm.c
+index e78458e1..45e1e94e 100644
+--- a/display/drm.c
++++ b/display/drm.c
+@@ -91,6 +91,7 @@ static int lcd_h;
+ static int lcd_sw;
+ static char* drm_buff;
+ static lv_color_t *buf_1;
++static int disp_rot = 0;
+ 
+ static int quit = 0;
+ static pthread_t drm_thread_pid;
+@@ -945,10 +946,13 @@ static void *drm_thread(void *arg)
+             src.mmuFlag = 1;
+             dst.fd = bo->buf_fd;
+             dst.mmuFlag = 1;
+-            rga_set_rect(&src.rect, 0, 0, lcd_w, lcd_h,
+-                         lcd_sw, lcd_h, RK_FORMAT_BGRA_8888);
+-            rga_set_rect(&dst.rect, 0, 0, lcd_w, lcd_h,
+-                         lcd_sw, lcd_h, RK_FORMAT_BGRA_8888);
++            rga_set_rotation(&src, disp_rot);
++            rga_set_rect(&src.rect, 0, 0, gbo->w, gbo->h,
++                         gbo->pitch / (LV_COLOR_DEPTH >> 3),
++                         gbo->h, RK_FORMAT_BGRA_8888);
++            rga_set_rect(&dst.rect, 0, 0, bo->w, bo->h,
++                         bo->pitch / (LV_COLOR_DEPTH >> 3),
++                         bo->h, RK_FORMAT_BGRA_8888);
+             ret = c_RkRgaBlit(&src, &dst, NULL);
+             if (ret)
+                 printf("c_RkRgaBlit error : %s\n", strerror(errno));
+@@ -975,7 +979,7 @@ void drm_flush(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *color
+     int32_t y;
+     lv_coord_t w = (area->x2 - area->x1 + 1);
+     lv_coord_t h = (area->y2 - area->y1 + 1);
+-#if USE_RGA
++#if 0//USE_RGA
+     int wstride = w;
+     int hstride = h;
+     int lcd_ws = lcd_w;
+@@ -998,7 +1002,7 @@ void drm_flush(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *color
+     }
+ #endif
+     pthread_mutex_lock(&draw_mutex);
+-#if USE_RGA
++#if 0//USE_RGA
+     rga_info_t src;
+     rga_info_t dst;
+     int area_w = area->x2 - area->x1 + 1;
+@@ -1033,6 +1037,7 @@ void drm_flush(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *color
+ void disp_init(void)
+ {
+     int format = 0;
++    int buf_w, buf_h;
+     /*You code here*/
+     drm_init(32);
+     getdrmresolve(&lcd_w, &lcd_h);
+@@ -1042,13 +1047,23 @@ void disp_init(void)
+     } else {
+         format = DRM_FORMAT_ARGB8888;
+     }
++    if ((disp_rot == 0) || (disp_rot == 180))
++    {
++        buf_w = lcd_w;
++        buf_h = lcd_h;
++    }
++    else
++    {
++        buf_w = lcd_h;
++        buf_h = lcd_w;
++    }
+ #if USE_RGA
+-    gbo = malloc_drm_bo(lcd_w, lcd_h, format);
++    gbo = malloc_drm_bo(buf_w, buf_h, format);
+     drm_buff = gbo->ptr;
+     lcd_sw = gbo->pitch / (LV_COLOR_DEPTH >> 3);
+     c_RkRgaInit();
+ #else
+-    drm_buff = malloc(lcd_w * lcd_h * (LV_COLOR_DEPTH >> 3));
++    drm_buff = malloc(buf_w * buf_h * (LV_COLOR_DEPTH >> 3));
+     lcd_sw = lcd_w;
+ #endif
+     vop_buf[0] = malloc_drm_bo(lcd_w, lcd_h, format);
+@@ -1062,6 +1077,9 @@ void drm_disp_drv_init(int rot)
+     /*-------------------------
+      * Initialize your display
+      * -----------------------*/
++#if USE_RGA
++    disp_rot = rot;
++#endif
+     disp_init();
+ 
+     /*-----------------------------
+@@ -1105,8 +1123,16 @@ void drm_disp_drv_init(int rot)
+     /*Set up the functions to access to your display*/
+ 
+     /*Set the resolution of the display*/
+-    disp_drv.hor_res = lcd_w;
+-    disp_drv.ver_res = lcd_h;
++    if ((disp_rot == 0) || (disp_rot == 180))
++    {
++        disp_drv.hor_res = lcd_w;
++        disp_drv.ver_res = lcd_h;
++    }
++    else
++    {
++        disp_drv.hor_res = lcd_h;
++        disp_drv.ver_res = lcd_w;
++    }
+ 
+     disp_drv.sw_rotate = 0;
+     disp_drv.rotated = LV_DISP_ROT_NONE;
+-- 
+2.25.1
+

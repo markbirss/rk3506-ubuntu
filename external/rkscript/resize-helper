@@ -1,0 +1,65 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:       resize-all
+# Default-Start:  S
+# Default-Stop:
+# Description:    Resize all internal mounted partitions
+### END INIT INFO
+
+# Don't exit on error status
+set +e
+
+# Uncomment below to see more logs
+# set -x
+
+. $(dirname $0)/disk-helper
+
+LOGFILE=/var/log/resize-all.log
+
+do_part()
+{
+	DEV=$1
+	MOUNT_POINT=$2
+	FSTYPE=$3
+	OPTS=$4
+
+	# Check /etc/fstab
+	if ! sed "s/#.*//" /etc/fstab | xargs -n 6 | cut -d' ' -f2 | \
+		grep -q "^$MOUNT_POINT/*$"; then
+		if [ "$MOUNT_POINT" != "/" ]; then
+			return 0
+		fi
+	fi
+
+	# Setup check/mount tools and do some prepare
+	prepare_part || return
+
+	# Resize partition if needed
+	resize_part
+
+	# Restore ro/rw
+	remount_part $MOUNTED_RO_RW
+}
+
+resize_all()
+{
+	ID=0
+	while read LINE;do
+		do_part $LINE&
+		ID=$(( $ID + 1 ))
+	done < /proc/mounts
+}
+
+case "$1" in
+	start|"")
+		echo "Start resizing all internal mounted partitions"
+		echo "Log saved to $LOGFILE"
+		resize_all 2>&1 | tee $LOGFILE
+		;;
+	*)
+		echo "Usage: resize-helper start" >&2
+		exit 3
+		;;
+esac
+
+:

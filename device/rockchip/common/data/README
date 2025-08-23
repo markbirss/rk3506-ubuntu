@@ -1,0 +1,8 @@
+Misc files
+==========
+
+apply-all.sh: Script to apply all saved SDK patches
+
+busybox-reboot: Wrapper for busybox reboot commands
+
+kmsgrab.c: Tool for grabbing display buffer from DRM

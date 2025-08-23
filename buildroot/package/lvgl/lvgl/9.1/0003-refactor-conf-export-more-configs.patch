@@ -1,0 +1,183 @@
+From 21680dbdec76cbb90881ff269560c8e54859dd2f Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Tue, 30 Apr 2024 11:53:33 +0800
+Subject: [PATCH 03/12] refactor(conf): export more configs
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ Kconfig | 78 +++++++++++++++++++++++++++++++++++++++++++++++++--------
+ 1 file changed, 68 insertions(+), 10 deletions(-)
+
+diff --git a/Kconfig b/Kconfig
+index 098cdb7..3e94c70 100644
+--- a/Kconfig
++++ b/Kconfig
+@@ -7,7 +7,7 @@ menu "LVGL configuration"
+ 	# lv_conf_kconfig.h files are used instead.
+ 	config LV_CONF_SKIP
+ 		bool "Check this to not use custom lv_conf.h"
+-		default y
++		default n
+ 
+ 	config LV_CONF_MINIMAL
+ 		bool "LVGL minimal configuration"
+@@ -62,6 +62,14 @@ menu "LVGL configuration"
+ 
+ 		endchoice # "Malloc functions"
+ 
++		config LV_USE_STDLIB_MALLOC
++			int
++			default 0 if LV_USE_BUILTIN_MALLOC
++			default 1 if LV_USE_CLIB_MALLOC
++			default 2 if LV_USE_MICROPYTHON_MALLOC
++			default 3 if LV_USE_RTTHREAD_MALLOC
++			default 255 if LV_USE_CUSTOM_MALLOC
++
+ 		choice
+ 			prompt "String functions source"
+ 			default LV_USE_BUILTIN_STRING
+@@ -77,6 +85,12 @@ menu "LVGL configuration"
+ 
+ 		endchoice # "String functions"
+ 
++		config LV_USE_STDLIB_STRING
++			int
++			default 0 if LV_USE_BUILTIN_STRING
++			default 1 if LV_USE_CLIB_STRING
++			default 255 if LV_USE_CUSTOM_STRING
++
+ 		choice
+ 			prompt "Sprintf functions source"
+ 			default LV_USE_BUILTIN_SPRINTF
+@@ -92,6 +106,12 @@ menu "LVGL configuration"
+ 
+ 		endchoice # "Sprintf functions"
+ 
++		config LV_USE_STDLIB_SPRINTF
++			int
++			default 0 if LV_USE_BUILTIN_SPRINTF
++			default 1 if LV_USE_CLIB_SPRINTF
++			default 255 if LV_USE_CUSTOM_SPRINTF
++
+ 		config LV_MEM_SIZE_KILOBYTES
+ 			int "Size of the memory used by `lv_malloc()` in kilobytes (>= 2kB)"
+ 			default 64
+@@ -354,17 +374,17 @@ menu "LVGL configuration"
+ 					Specify how important log should be added.
+ 
+ 				config LV_LOG_LEVEL_TRACE
+-					bool "A lot of logs to give detailed information"
++					bool "[Trace]A lot of logs to give detailed information"
+ 				config LV_LOG_LEVEL_INFO
+-					bool "Log important events"
++					bool "[Info]Log important events"
+ 				config LV_LOG_LEVEL_WARN
+-					bool "Log if something unwanted happened but didn't cause a problem"
++					bool "[Warn]Log if something unwanted happened but didn't cause a problem"
+ 				config LV_LOG_LEVEL_ERROR
+-					bool "Only critical issues, when the system may fail"
++					bool "[Error]Only critical issues, when the system may fail"
+ 				config LV_LOG_LEVEL_USER
+-					bool "Only logs added by the user"
++					bool "[User]Only logs added by the user"
+ 				config LV_LOG_LEVEL_NONE
+-					bool "Do not log anything"
++					bool "[None]Do not log anything"
+ 			endchoice
+ 
+ 			config LV_LOG_LEVEL
+@@ -1133,6 +1153,9 @@ menu "LVGL configuration"
+ 				config LV_USE_THORVG_EXTERNAL
+ 					bool "Use ThorVG external"
+ 			endchoice
++		config BR2_PACKAGE_LVGL_DISABLE_THORVG
++			bool
++			default y if !LV_USE_THORVG
+ 
+ 		config LV_USE_LZ4
+ 			bool "Enable LZ4 compress/decompress lib"
+@@ -1556,12 +1579,22 @@ menu "LVGL configuration"
+ 	menu "Examples"
+ 		config LV_BUILD_EXAMPLES
+ 			bool "Enable the examples to be built"
+-			default y if !LV_CONF_MINIMAL
++			default n
++
++		config BR2_PACKAGE_LVGL_DISABLE_EXAMPLES
++			bool
++			default y if !LV_BUILD_EXAMPLES
+ 	endmenu
+ 
+ 	menu "Demos"
+ 		config LV_USE_DEMO_WIDGETS
+ 			bool "Show some widget"
++			select LV_FONT_MONTSERRAT_12
++			select LV_FONT_MONTSERRAT_14
++			select LV_FONT_MONTSERRAT_16
++			select LV_FONT_MONTSERRAT_18
++			select LV_FONT_MONTSERRAT_20
++			select LV_FONT_MONTSERRAT_24
+ 			default n
+ 
+ 		config LV_USE_DEMO_KEYPAD_AND_ENCODER
+@@ -1571,7 +1604,8 @@ menu "LVGL configuration"
+ 		config LV_USE_DEMO_BENCHMARK
+ 			bool "Benchmark your system"
+ 			default n
+-			depends on LV_FONT_MONTSERRAT_14 && LV_FONT_MONTSERRAT_24 && LV_USE_DEMO_WIDGETS
++			select LV_FONT_MONTSERRAT_14
++			select LV_FONT_MONTSERRAT_24
+ 		config LV_USE_DEMO_RENDER
+ 			bool "Render test for each primitives. Requires at least 480x272 display"
+ 			default n
+@@ -1587,7 +1621,7 @@ menu "LVGL configuration"
+ 		config LV_USE_DEMO_TRANSFORM
+ 			bool "Transform test for LVGL"
+ 			default n
+-			depends on LV_FONT_MONTSERRAT_18
++			select LV_FONT_MONTSERRAT_18
+ 
+ 		config LV_USE_DEMO_MUSIC
+ 			bool "Music player demo"
+@@ -1607,7 +1641,16 @@ menu "LVGL configuration"
+ 		config LV_DEMO_MUSIC_LARGE
+ 			bool "Enable Large"
+ 			depends on LV_USE_DEMO_MUSIC
++			select LV_FONT_MONTSERRAT_16
++			select LV_FONT_MONTSERRAT_22
++			select LV_FONT_MONTSERRAT_32
+ 			default n
++		config LV_DEMO_MUSIC_SMALL
++			bool
++			depends on LV_USE_DEMO_MUSIC
++			select LV_FONT_MONTSERRAT_12
++			select LV_FONT_MONTSERRAT_16
++			default y if !LV_DEMO_MUSIC_LARGE
+ 		config LV_DEMO_MUSIC_AUTO_PLAY
+ 			bool "Enable Auto play"
+ 			depends on LV_USE_DEMO_MUSIC
+@@ -1623,6 +1666,21 @@ menu "LVGL configuration"
+ 			bool "vector graphic demo"
+ 			default n
+ 			depends on LV_USE_VECTOR_GRAPHIC
++
++		config BR2_PACKAGE_LVGL_DISABLE_DEMOS
++			bool
++			default y if !LV_USE_DEMO_WIDGETS \
++			  && !LV_DEMO_WIDGETS_SLIDESHOW \
++			  && !LV_USE_DEMO_KEYPAD_AND_ENCODER \
++			  && !LV_USE_DEMO_BENCHMARK \
++			  && !LV_USE_DEMO_RENDER \
++			  && !LV_USE_DEMO_SCROLL \
++			  && !LV_USE_DEMO_STRESS \
++			  && !LV_USE_DEMO_TRANSFORM \
++			  && !LV_USE_DEMO_MUSIC \
++			  && !LV_USE_DEMO_FLEX_LAYOUT \
++			  && !LV_USE_DEMO_MULTILANG \
++			  && !LV_USE_DEMO_VECTOR_GRAPHIC
+ 	endmenu
+ 
+ endmenu
+-- 
+2.25.1
+

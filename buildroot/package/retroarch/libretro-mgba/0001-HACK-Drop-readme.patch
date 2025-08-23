@@ -1,0 +1,36 @@
+From 207c3dc8c6dca355cd14413618df1ad2bff85621 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Thu, 9 Nov 2023 10:35:57 +0800
+Subject: [PATCH] HACK: Drop readme
+
+Workaround compile error with LC_ALL=C:
+"The source text contains invalid characters for the used encoding US-ASCII"
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ CMakeLists.txt | 9 ---------
+ 1 file changed, 9 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index deb7714..55956ef 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1123,15 +1123,6 @@ else()
+ 	endif()
+ endif()
+ 
+-if(MARKDOWN)
+-	foreach(README ${READMES})
+-		get_filename_component(README_BASE "${README}" NAME_WE)
+-		add_custom_command(OUTPUT ${README_BASE}.html COMMAND ${MARKDOWN} "${README}" > ${README_BASE}.html MAIN_DEPENDENCY "${README}")
+-		add_custom_target(${README_BASE} ALL DEPENDS ${README_BASE}.html)
+-		install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${README_BASE}.html DESTINATION ${CMAKE_INSTALL_DOCDIR} COMPONENT ${BINARY_NAME})
+-	endforeach()
+-endif()
+-
+ set(CPACK_PACKAGE_VERSION ${VERSION_STRING})
+ set(CPACK_PACKAGE_VERSION_MAJOR ${LIB_VERSION_MAJOR})
+ set(CPACK_PACKAGE_VERSION_MINOR ${LIB_VERSION_MINOR})
+-- 
+2.20.1
+

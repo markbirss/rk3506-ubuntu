@@ -1,0 +1,7 @@
+menu "RT-Thread rv1106_evb board config"
+
+config RT_USING_SPL_RTT_SHARE_DDR_ADRESS
+    hex "SPL and RTThread share ddr address"
+    default 0x1e00000
+
+endmenu

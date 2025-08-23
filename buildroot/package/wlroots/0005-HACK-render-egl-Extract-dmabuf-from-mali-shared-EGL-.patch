@@ -1,0 +1,86 @@
+From 8118d6460532d42cb3a09f63a9cf10fa6913d32b Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 24 Apr 2024 11:03:24 +0800
+Subject: [PATCH 5/5] HACK: render: egl: Extract dmabuf from mali shared EGL
+ wl_buffer
+
+For scanning out fullscreen view.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ render/egl.c | 45 +++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 45 insertions(+)
+
+diff --git a/render/egl.c b/render/egl.c
+index 27a26b5..c4e7999 100644
+--- a/render/egl.c
++++ b/render/egl.c
+@@ -6,6 +6,7 @@
+ #include <stdlib.h>
+ #include <unistd.h>
+ #include <gbm.h>
++#include <sys/stat.h>
+ #include <wlr/interfaces/wlr_buffer.h>
+ #include <wlr/render/egl.h>
+ #include <wlr/util/log.h>
+@@ -378,6 +379,49 @@ static bool egl_init_display(struct wlr_egl *egl, EGLDisplay display) {
+ 	return true;
+ }
+ 
++static bool egl_buffer_get_dmabuf(struct wlr_buffer *wlr_buffer,
++		struct wlr_dmabuf_attributes *attribs) {
++	struct wlr_egl_buffer *buffer =
++		wl_container_of(wlr_buffer, buffer, base);
++
++	/* HACK: It's a guessed struct for mali_buffer_sharing extension */
++	struct mali_buffer_sharing_info {
++		int fd;
++		int width;
++		int height;
++		int stride;
++		uint32_t fourcc;
++	};
++
++	struct mali_buffer_sharing_info *info =
++		wl_resource_get_user_data(buffer->resource);
++	if (!info) {
++		return false;
++	}
++
++	/* Check it carefully! */
++	struct stat s;
++	if (fstat(info->fd, &s) < 0 ||
++		s.st_size < (wlr_buffer->width * wlr_buffer->height) ||
++		info->width != wlr_buffer->width ||
++		info->height != wlr_buffer->height ||
++		info->stride < wlr_buffer->width) {
++		return false;
++	}
++
++	attribs->width = wlr_buffer->width;
++	attribs->height = wlr_buffer->height;
++	attribs->modifier = DRM_FORMAT_MOD_INVALID;
++	attribs->n_planes = 1;
++	attribs->offset[0] = 0;
++
++	attribs->stride[0] = info->stride;
++	attribs->fd[0] = info->fd;
++	attribs->format = info->fourcc;
++
++	return true;
++}
++
+ static void egl_buffer_destroy(struct wlr_buffer *wlr_buffer) {
+ 	struct wlr_egl_buffer *buffer =
+ 		wl_container_of(wlr_buffer, buffer, base);
+@@ -387,6 +431,7 @@ static void egl_buffer_destroy(struct wlr_buffer *wlr_buffer) {
+ }
+ 
+ static const struct wlr_buffer_impl egl_buffer_impl = {
++	.get_dmabuf = egl_buffer_get_dmabuf,
+ 	.destroy = egl_buffer_destroy,
+ };
+ 
+-- 
+2.20.1
+

@@ -1,0 +1,30 @@
+From 365d036a10e9377be8171333a247736384851932 Mon Sep 17 00:00:00 2001
+From: Peter Seiderer <ps.report@gmx.net>
+Date: Mon, 25 Nov 2019 15:59:15 +0100
+Subject: [PATCH 1/4] tests/meson.build: disable nouveau tests for static build
+
+Signed-off-by: Peter Seiderer <ps.report@gmx.net>
+---
+ tests/meson.build | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/tests/meson.build b/tests/meson.build
+index ac9e66b..ece003b 100644
+--- a/tests/meson.build
++++ b/tests/meson.build
+@@ -40,8 +40,11 @@ endif
+ if with_etnaviv
+   subdir('etnaviv')
+ endif
++lib_type = get_option('default_library')
+ if with_nouveau
+-  subdir('nouveau')
++  if lib_type != 'static'
++    subdir('nouveau')
++  endif
+ endif
+ 
+ drmsl = executable(
+-- 
+2.20.1
+

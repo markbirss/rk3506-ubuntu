@@ -1,0 +1,15 @@
+config BR2_PACKAGE_LABWC
+	bool "labwc"
+	depends on !BR2_STATIC_LIBS # wlroots
+	depends on BR2_TOOLCHAIN_HAS_THREADS # wlroots
+	depends on BR2_PACKAGE_HAS_LIBEGL # wlroots
+	depends on BR2_PACKAGE_HAS_LIBEGL_WAYLAND # wlroots
+	depends on BR2_PACKAGE_HAS_LIBGLES # wlroots
+	depends on BR2_PACKAGE_HAS_UDEV # wlroots
+	depends on BR2_PACKAGE_XKEYBOARD_CONFIG
+	select BR2_PACKAGE_LIBRSVG
+	select BR2_PACKAGE_WLROOTS
+	help
+	  A Wayland window-stacking compositor.
+
+	  https://github.com/labwc/labwc

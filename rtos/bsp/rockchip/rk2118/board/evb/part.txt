@@ -1,0 +1,12 @@
+loader=0x00000100
+cpu0_secure_a=0x00000180
+cpu1_secure_a=0x00000080
+recovery=0x00000200
+cpu0_os_a=0x00000400
+misc=0x00000080
+dsp0_a=0x00000800
+dsp1_a=0x00000800
+dsp2_a=0x00000800
+rkstudio_a=0x00000100
+root=0x00000800
+mtd_userdata=grow

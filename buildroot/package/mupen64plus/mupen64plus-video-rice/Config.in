@@ -1,0 +1,9 @@
+config BR2_PACKAGE_MUPEN64PLUS_VIDEO_RICE
+        bool "mupen64plus-video-rice"
+	depends on BR2_PACKAGE_MUPEN64PLUS_CORE
+	depends on BR2_PACKAGE_LIBPNG
+	depends on BR2_PACKAGE_SDL2
+        help
+          mupen64plus video rice.
+
+	  https://mupen64plus.org/

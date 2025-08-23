@@ -1,0 +1,3 @@
+config BR2_PACKAGE_ROCKCHIP_UVC_APP
+    bool "rockchip uvc app"
+    select BR2_PACKAGE_LIBDRM

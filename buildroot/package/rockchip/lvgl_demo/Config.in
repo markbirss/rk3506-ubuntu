@@ -1,0 +1,91 @@
+config BR2_PACKAGE_LVGL_DEMO
+	bool "LVGL DEMO"
+	default n
+	help
+	  lvgl demos in app/lvgl_demo
+
+if BR2_PACKAGE_LVGL_DEMO
+	config BR2_LVGL_DEMO_BACKEND_SDL
+		bool
+		default y if BR2_LV_DRIVERS_USE_SDL_GPU
+		default y if BR2_LV_USE_SDL && BR2_PACKAGE_LVGL_VERSION_9
+
+	config BR2_LVGL_DEMO_BACKEND_DRM
+		bool
+		default y if BR2_LV_DRIVERS_USE_DRM
+		default y if BR2_LV_USE_LINUX_DRM && BR2_PACKAGE_LVGL_VERSION_9
+		select BR2_PACKAGE_LIBEVDEV
+
+	config BR2_LVGL_DEMO_BACKEND_RKADK
+		bool
+		default y if BR2_LV_DRIVERS_USE_RKADK
+		default y if BR2_LV_USE_RKADK && BR2_PACKAGE_LVGL_VERSION_9
+		select BR2_PACKAGE_LIBEVDEV
+
+	config BR2_LVGL_DEMO_OFFICIAL_DEMOS
+		bool "Enable demos from LVGL team"
+		default n
+		help
+			LVGL official demos from lvgl team.
+
+	choice
+		prompt "LVGL APP select"
+		depends on BR2_LVGL_DEMO_OFFICIAL_DEMOS
+		config BR2_LVGL_DEMO_WIDGETS
+			bool "lvgl demo widgets"
+			select BR2_LV_USE_DEMO_WIDGETS
+			help
+			  Enbale lvgl demo widgets
+
+		config BR2_LVGL_DEMO_BENCHMARK
+			bool "lvgl demo benchmark"
+			select BR2_LV_USE_DEMO_BENCHMARK
+			help
+			  Enbale lvgl demo benchmark
+
+		config BR2_LVGL_DEMO_MUSIC
+			bool "lvgl demo music"
+			select BR2_LV_USE_DEMO_MUSIC
+			help
+			  Enbale lvgl demo music
+	endchoice
+
+	config BR2_LVGL_DEMO_RK_DEMO
+		bool "Enable demos from Rockchip"
+		help
+		  Rockchip LVGL demo
+
+	if BR2_LVGL_DEMO_RK_DEMO
+		config BR2_RK_DEMO_ENABLE_MULTIMEDIA
+			default n
+			bool "RK demo enable multimedia"
+			select BR2_PACKAGE_RKWIFIBT_APP
+			select BR2_PACKAGE_RKADK
+			select BR2_PACKAGE_RKADK_PLAYER
+			select BR2_PACKAGE_COMMON_ALGORITHM
+			help
+			  Rockchip LVGL demo enable all multimedia functions,
+			  e.g. RKADK Rockit.
+
+		config BR2_RK_DEMO_ENABLE_SENSOR
+			bool "RK demo enable sensor"
+			default n
+			help
+			  Rockchip LVGL demo enable sensor functions,
+			  e.g. lsensor, psensor.
+
+		config BR2_RK_DEMO_ENABLE_WIFIBT
+			bool "RK demo enable WiFi and BT"
+			default n
+			help
+			  Rockchip LVGL demo enable wifibt functions.
+
+		config BR2_RK_DEMO_ENABLE_ASR
+			bool "RK demo enable ASR"
+			default n
+			help
+			  Rockchip LVGL demo enable ASR functions.
+	endif
+
+endif
+

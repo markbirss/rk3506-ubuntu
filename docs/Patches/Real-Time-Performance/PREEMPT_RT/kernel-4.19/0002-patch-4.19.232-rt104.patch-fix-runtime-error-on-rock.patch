@@ -1,0 +1,264 @@
+From 63a933eb31c060bc38f27efe3321a094dd3108d5 Mon Sep 17 00:00:00 2001
+From: Liang Chen <cl@rock-chips.com>
+Date: Wed, 13 Sep 2023 10:32:33 +0800
+Subject: [PATCH 2/3] patch-4.19.232-rt104.patch: fix runtime error on rockchip
+
+Change-Id: I6a61272ef92c562ea3f42dbe992654670ee29481
+Signed-off-by: Liang Chen <cl@rock-chips.com>
+---
+ arch/arm64/kernel/cpufeature.c                |  6 ++--
+ drivers/cpufreq/cpufreq_interactive.c         |  3 +-
+ .../rockchip_wlan/rkwifi/bcmdhd/dhd_pno.c     |  2 +-
+ drivers/staging/android/ion/ion_trace.h       |  2 +-
+ include/net/sock.h                            |  4 +--
+ kernel/power/wakeup_reason.c                  | 36 +++++++++----------
+ kernel/time/timer.c                           |  3 +-
+ 7 files changed, 28 insertions(+), 28 deletions(-)
+
+diff --git a/arch/arm64/kernel/cpufeature.c b/arch/arm64/kernel/cpufeature.c
+index 38ee272bbd51..641d064760ca 100644
+--- a/arch/arm64/kernel/cpufeature.c
++++ b/arch/arm64/kernel/cpufeature.c
+@@ -1115,14 +1115,14 @@ static struct undef_hook ssbs_emulation_hook = {
+ static void cpu_enable_ssbs(const struct arm64_cpu_capabilities *__unused)
+ {
+ 	static bool undef_hook_registered = false;
+-	static DEFINE_SPINLOCK(hook_lock);
++	static DEFINE_RAW_SPINLOCK(hook_lock);
+ 
+-	spin_lock(&hook_lock);
++	raw_spin_lock(&hook_lock);
+ 	if (!undef_hook_registered) {
+ 		register_undef_hook(&ssbs_emulation_hook);
+ 		undef_hook_registered = true;
+ 	}
+-	spin_unlock(&hook_lock);
++	raw_spin_unlock(&hook_lock);
+ 
+ 	if (arm64_get_ssbd_state() == ARM64_SSBD_FORCE_DISABLE) {
+ 		sysreg_clear_set(sctlr_el1, 0, SCTLR_ELx_DSSBS);
+diff --git a/drivers/cpufreq/cpufreq_interactive.c b/drivers/cpufreq/cpufreq_interactive.c
+index 83db0bc4fb42..d9c8c7d051da 100644
+--- a/drivers/cpufreq/cpufreq_interactive.c
++++ b/drivers/cpufreq/cpufreq_interactive.c
+@@ -522,7 +522,8 @@ static void cpufreq_interactive_idle_end(void)
+ 			sampling_rate = icpu->ipolicy->tunables->sampling_rate;
+ 			icpu->last_sample_time = local_clock();
+ 			icpu->next_sample_jiffies = usecs_to_jiffies(sampling_rate) + jiffies;
+-			cpufreq_interactive_update(icpu);
++			icpu->work_in_progress = true;
++			irq_work_queue_on(&icpu->irq_work, icpu->cpu);
+ 		}
+ 	}
+ 
+diff --git a/drivers/net/wireless/rockchip_wlan/rkwifi/bcmdhd/dhd_pno.c b/drivers/net/wireless/rockchip_wlan/rkwifi/bcmdhd/dhd_pno.c
+index e002405fc864..5ba5df6feafa 100644
+--- a/drivers/net/wireless/rockchip_wlan/rkwifi/bcmdhd/dhd_pno.c
++++ b/drivers/net/wireless/rockchip_wlan/rkwifi/bcmdhd/dhd_pno.c
+@@ -3472,7 +3472,7 @@ _dhd_pno_get_for_batch(dhd_pub_t *dhd, char *buf, int bufsize, int reason)
+ 		wake_up(&_pno_state->get_batch_done);
+ 	}
+ #else
+-	if (waitqueue_active(&_pno_state->get_batch_done.wait))
++	if (swait_active(&_pno_state->get_batch_done.wait))
+ 		complete(&_pno_state->get_batch_done);
+ #endif
+ 	return err;
+diff --git a/drivers/staging/android/ion/ion_trace.h b/drivers/staging/android/ion/ion_trace.h
+index 8233691a73eb..3b1a8b3f482d 100644
+--- a/drivers/staging/android/ion/ion_trace.h
++++ b/drivers/staging/android/ion/ion_trace.h
+@@ -14,7 +14,7 @@
+ #include <linux/tracepoint.h>
+ 
+ #ifndef __ION_PTR_TO_HASHVAL
+-static unsigned int __ion_ptr_to_hash(const void *ptr)
++static inline unsigned int __ion_ptr_to_hash(const void *ptr)
+ {
+ 	unsigned long hashval;
+ 
+diff --git a/include/net/sock.h b/include/net/sock.h
+index 79dde11135d4..c080fc9bca05 100644
+--- a/include/net/sock.h
++++ b/include/net/sock.h
+@@ -472,7 +472,7 @@ struct sock {
+ 	u32			sk_ack_backlog;
+ 	u32			sk_max_ack_backlog;
+ 	kuid_t			sk_uid;
+-#if IS_ENABLED(CONFIG_DEBUG_SPINLOCK) || IS_ENABLED(CONFIG_DEBUG_LOCK_ALLOC)
++#if IS_ENABLED(CONFIG_DEBUG_SPINLOCK) || IS_ENABLED(CONFIG_DEBUG_LOCK_ALLOC) || IS_ENABLED(CONFIG_PREEMPT_RT)
+ 	spinlock_t		sk_peer_lock;
+ #else
+ 	/* sk_peer_lock is in the ANDROID_KABI_RESERVE(1) field below */
+@@ -517,7 +517,7 @@ struct sock {
+ 	struct sock_reuseport __rcu	*sk_reuseport_cb;
+ 	struct rcu_head		sk_rcu;
+ 
+-#if IS_ENABLED(CONFIG_DEBUG_SPINLOCK) || IS_ENABLED(CONFIG_DEBUG_LOCK_ALLOC)
++#if IS_ENABLED(CONFIG_DEBUG_SPINLOCK) || IS_ENABLED(CONFIG_DEBUG_LOCK_ALLOC) || IS_ENABLED(CONFIG_PREEMPT_RT)
+ 	ANDROID_KABI_RESERVE(1);
+ #else
+ 	ANDROID_KABI_USE(1, spinlock_t sk_peer_lock);
+diff --git a/kernel/power/wakeup_reason.c b/kernel/power/wakeup_reason.c
+index 0a5f97a9a7e1..e8f68d34254f 100644
+--- a/kernel/power/wakeup_reason.c
++++ b/kernel/power/wakeup_reason.c
+@@ -44,7 +44,7 @@ struct wakeup_irq_node {
+ 	const char *irq_name;
+ };
+ 
+-static DEFINE_SPINLOCK(wakeup_reason_lock);
++static DEFINE_RAW_SPINLOCK(wakeup_reason_lock);
+ 
+ static LIST_HEAD(leaf_irqs);   /* kept in ascending IRQ sorted order */
+ static LIST_HEAD(parent_irqs); /* unordered */
+@@ -149,17 +149,17 @@ void log_irq_wakeup_reason(int irq)
+ {
+ 	unsigned long flags;
+ 
+-	spin_lock_irqsave(&wakeup_reason_lock, flags);
++	raw_spin_lock_irqsave(&wakeup_reason_lock, flags);
+ 
+ 	if (!capture_reasons) {
+-		spin_unlock_irqrestore(&wakeup_reason_lock, flags);
++		raw_spin_unlock_irqrestore(&wakeup_reason_lock, flags);
+ 		return;
+ 	}
+ 
+ 	if (find_node_in_list(&parent_irqs, irq) == NULL)
+ 		add_sibling_node_sorted(&leaf_irqs, irq);
+ 
+-	spin_unlock_irqrestore(&wakeup_reason_lock, flags);
++	raw_spin_unlock_irqrestore(&wakeup_reason_lock, flags);
+ }
+ 
+ void log_threaded_irq_wakeup_reason(int irq, int parent_irq)
+@@ -177,10 +177,10 @@ void log_threaded_irq_wakeup_reason(int irq, int parent_irq)
+ 	if (!capture_reasons)
+ 		return;
+ 
+-	spin_lock_irqsave(&wakeup_reason_lock, flags);
++	raw_spin_lock_irqsave(&wakeup_reason_lock, flags);
+ 
+ 	if (!capture_reasons || (find_node_in_list(&leaf_irqs, irq) != NULL)) {
+-		spin_unlock_irqrestore(&wakeup_reason_lock, flags);
++		raw_spin_unlock_irqrestore(&wakeup_reason_lock, flags);
+ 		return;
+ 	}
+ 
+@@ -196,7 +196,7 @@ void log_threaded_irq_wakeup_reason(int irq, int parent_irq)
+ 		}
+ 	}
+ 
+-	spin_unlock_irqrestore(&wakeup_reason_lock, flags);
++	raw_spin_unlock_irqrestore(&wakeup_reason_lock, flags);
+ }
+ 
+ static void __log_abort_or_abnormal_wake(bool abort, const char *fmt,
+@@ -204,11 +204,11 @@ static void __log_abort_or_abnormal_wake(bool abort, const char *fmt,
+ {
+ 	unsigned long flags;
+ 
+-	spin_lock_irqsave(&wakeup_reason_lock, flags);
++	raw_spin_lock_irqsave(&wakeup_reason_lock, flags);
+ 
+ 	/* Suspend abort or abnormal wake reason has already been logged. */
+ 	if (suspend_abort || abnormal_wake) {
+-		spin_unlock_irqrestore(&wakeup_reason_lock, flags);
++		raw_spin_unlock_irqrestore(&wakeup_reason_lock, flags);
+ 		return;
+ 	}
+ 
+@@ -216,7 +216,7 @@ static void __log_abort_or_abnormal_wake(bool abort, const char *fmt,
+ 	abnormal_wake = !abort;
+ 	vsnprintf(non_irq_wake_reason, MAX_SUSPEND_ABORT_LEN, fmt, args);
+ 
+-	spin_unlock_irqrestore(&wakeup_reason_lock, flags);
++	raw_spin_unlock_irqrestore(&wakeup_reason_lock, flags);
+ }
+ 
+ void log_suspend_abort_reason(const char *fmt, ...)
+@@ -241,7 +241,7 @@ void clear_wakeup_reasons(void)
+ {
+ 	unsigned long flags;
+ 
+-	spin_lock_irqsave(&wakeup_reason_lock, flags);
++	raw_spin_lock_irqsave(&wakeup_reason_lock, flags);
+ 
+ 	delete_list(&leaf_irqs);
+ 	delete_list(&parent_irqs);
+@@ -249,7 +249,7 @@ void clear_wakeup_reasons(void)
+ 	abnormal_wake = false;
+ 	capture_reasons = true;
+ 
+-	spin_unlock_irqrestore(&wakeup_reason_lock, flags);
++	raw_spin_unlock_irqrestore(&wakeup_reason_lock, flags);
+ }
+ 
+ static void print_wakeup_sources(void)
+@@ -257,13 +257,13 @@ static void print_wakeup_sources(void)
+ 	struct wakeup_irq_node *n;
+ 	unsigned long flags;
+ 
+-	spin_lock_irqsave(&wakeup_reason_lock, flags);
++	raw_spin_lock_irqsave(&wakeup_reason_lock, flags);
+ 
+ 	capture_reasons = false;
+ 
+ 	if (suspend_abort) {
+ 		pr_info("Abort: %s\n", non_irq_wake_reason);
+-		spin_unlock_irqrestore(&wakeup_reason_lock, flags);
++		raw_spin_unlock_irqrestore(&wakeup_reason_lock, flags);
+ 		return;
+ 	}
+ 
+@@ -276,7 +276,7 @@ static void print_wakeup_sources(void)
+ 	else
+ 		pr_info("Resume cause unknown\n");
+ 
+-	spin_unlock_irqrestore(&wakeup_reason_lock, flags);
++	raw_spin_unlock_irqrestore(&wakeup_reason_lock, flags);
+ }
+ 
+ static ssize_t last_resume_reason_show(struct kobject *kobj,
+@@ -286,12 +286,12 @@ static ssize_t last_resume_reason_show(struct kobject *kobj,
+ 	struct wakeup_irq_node *n;
+ 	unsigned long flags;
+ 
+-	spin_lock_irqsave(&wakeup_reason_lock, flags);
++	raw_spin_lock_irqsave(&wakeup_reason_lock, flags);
+ 
+ 	if (suspend_abort) {
+ 		buf_offset = scnprintf(buf, PAGE_SIZE, "Abort: %s",
+ 				       non_irq_wake_reason);
+-		spin_unlock_irqrestore(&wakeup_reason_lock, flags);
++		raw_spin_unlock_irqrestore(&wakeup_reason_lock, flags);
+ 		return buf_offset;
+ 	}
+ 
+@@ -304,7 +304,7 @@ static ssize_t last_resume_reason_show(struct kobject *kobj,
+ 		buf_offset = scnprintf(buf, PAGE_SIZE, "-1 %s",
+ 				       non_irq_wake_reason);
+ 
+-	spin_unlock_irqrestore(&wakeup_reason_lock, flags);
++	raw_spin_unlock_irqrestore(&wakeup_reason_lock, flags);
+ 
+ 	return buf_offset;
+ }
+diff --git a/kernel/time/timer.c b/kernel/time/timer.c
+index a2be2277506d..3e2c0bd03004 100644
+--- a/kernel/time/timer.c
++++ b/kernel/time/timer.c
+@@ -1397,8 +1397,7 @@ static void expire_timers(struct timer_base *base, struct hlist_head *head)
+ 
+ 		fn = timer->function;
+ 
+-		if (!IS_ENABLED(CONFIG_PREEMPT_RT_FULL) &&
+-		    timer->flags & TIMER_IRQSAFE) {
++		if (timer->flags & TIMER_IRQSAFE) {
+ 			raw_spin_unlock(&base->lock);
+ 			call_timer_fn(timer, fn);
+ 			base->running_timer = NULL;
+-- 
+2.25.1
+

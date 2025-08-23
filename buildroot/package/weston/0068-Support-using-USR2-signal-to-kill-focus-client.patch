@@ -1,0 +1,150 @@
+From 2a869cc963615184c1607650e2be9da4931866ad Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Sun, 13 Aug 2023 10:48:36 +0800
+Subject: [PATCH 68/97] Support using USR2 signal to kill focus client
+
+Tested with:
+1/ weston-terminal&
+2/ weston-simple-egl&
+3/ pkill -USR2 -x weston
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ desktop-shell/shell.c         | 21 +++++++++++++++++++++
+ desktop-shell/shell.h         |  2 ++
+ frontend/main.c               | 20 +++++++++++++++++---
+ include/libweston/libweston.h |  1 +
+ libweston/compositor.c        |  1 +
+ 5 files changed, 42 insertions(+), 3 deletions(-)
+
+diff --git a/desktop-shell/shell.c b/desktop-shell/shell.c
+index eda84aa88..8c5fd9574 100644
+--- a/desktop-shell/shell.c
++++ b/desktop-shell/shell.c
+@@ -4937,6 +4937,8 @@ shell_destroy(struct wl_listener *listener, void *data)
+ 	text_backend_destroy(shell->text_backend);
+ 	input_panel_destroy(shell);
+ 
++	wl_list_remove(&shell->kill_focus_listener.link);
++
+ 	if (shell->fade.animation) {
+ 		weston_view_animation_destroy(shell->fade.animation);
+ 		shell->fade.animation = NULL;
+@@ -5096,6 +5098,22 @@ handle_seat_created(struct wl_listener *listener, void *data)
+ 	create_shell_seat(shell, seat);
+ }
+ 
++static void
++handle_kill_focus(struct wl_listener *listener, void *data)
++{
++	struct desktop_shell *shell =
++		container_of(listener, struct desktop_shell, kill_focus_listener);
++	struct weston_seat *seat, *next;
++
++	wl_list_for_each_safe(seat, next, &shell->compositor->seat_list, link) {
++		struct weston_keyboard *keyboard =
++			weston_seat_get_keyboard(seat);
++
++		if (keyboard)
++			force_kill_binding(keyboard, NULL, 0, shell);
++	}
++}
++
+ WL_EXPORT int
+ wet_shell_init(struct weston_compositor *ec,
+ 	       int *argc, char *argv[])
+@@ -5181,6 +5199,9 @@ wet_shell_init(struct weston_compositor *ec,
+ 
+ 	setup_output_destroy_handler(ec, shell);
+ 
++	shell->kill_focus_listener.notify = handle_kill_focus;
++	wl_signal_add(&ec->kill_focus_signal, &shell->kill_focus_listener);
++
+ 	loop = wl_display_get_event_loop(ec->wl_display);
+ 	wl_event_loop_add_idle(loop, launch_desktop_shell_process, shell);
+ 
+diff --git a/desktop-shell/shell.h b/desktop-shell/shell.h
+index 9dc38b2c5..6b57f065a 100644
+--- a/desktop-shell/shell.h
++++ b/desktop-shell/shell.h
+@@ -157,6 +157,8 @@ struct desktop_shell {
+ 	struct wl_list seat_list;
+ 	struct wl_list shsurf_list;
+ 
++	struct wl_listener kill_focus_listener;
++
+ 	enum weston_desktop_shell_panel_position panel_position;
+ 
+ 	char *client;
+diff --git a/frontend/main.c b/frontend/main.c
+index 49c527945..385c538e4 100644
+--- a/frontend/main.c
++++ b/frontend/main.c
+@@ -835,6 +835,19 @@ static int on_term_signal(int signal_number, void *data)
+ 	return 1;
+ }
+ 
++static int on_user2_signal(int signal_number, void *data)
++{
++	struct wet_compositor *wet = data;
++	struct weston_compositor *compositor = wet->compositor;
++
++	weston_log("caught signal %d\n", signal_number);
++
++	if (compositor)
++		wl_signal_emit(&compositor->kill_focus_signal, NULL);
++
++	return 1;
++}
++
+ static const char *
+ clock_name(clockid_t clk_id)
+ {
+@@ -4443,7 +4456,7 @@ screenshot_allow_all(struct wl_listener *l,
+ static void
+ sigint_helper(int sig)
+ {
+-	raise(SIGUSR2);
++	raise(SIGTERM);
+ }
+ 
+ WL_EXPORT int
+@@ -4584,8 +4597,9 @@ wet_main(int argc, char *argv[], const struct weston_testsuite_data *test_data)
+ 	loop = wl_display_get_event_loop(display);
+ 	signals[0] = wl_event_loop_add_signal(loop, SIGTERM, on_term_signal,
+ 					      display);
+-	signals[1] = wl_event_loop_add_signal(loop, SIGUSR2, on_term_signal,
+-					      display);
++
++	signals[1] = wl_event_loop_add_signal(loop, SIGUSR2, on_user2_signal,
++					      &wet);
+ 
+ 	wl_list_init(&wet.child_process_list);
+ 	signals[2] = wl_event_loop_add_signal(loop, SIGCHLD, sigchld_handler,
+diff --git a/include/libweston/libweston.h b/include/libweston/libweston.h
+index d4ec323dd..fb35a3e9c 100644
+--- a/include/libweston/libweston.h
++++ b/include/libweston/libweston.h
+@@ -1517,6 +1517,7 @@ struct weston_compositor {
+ 	struct wl_signal kill_signal;
+ 	struct wl_signal idle_signal;
+ 	struct wl_signal wake_signal;
++	struct wl_signal kill_focus_signal;
+ 
+ 	struct wl_signal show_input_panel_signal;
+ 	struct wl_signal hide_input_panel_signal;
+diff --git a/libweston/compositor.c b/libweston/compositor.c
+index 4b4535892..c6b809bb1 100644
+--- a/libweston/compositor.c
++++ b/libweston/compositor.c
+@@ -9772,6 +9772,7 @@ weston_compositor_create(struct wl_display *display,
+ 	wl_signal_init(&ec->kill_signal);
+ 	wl_signal_init(&ec->idle_signal);
+ 	wl_signal_init(&ec->wake_signal);
++	wl_signal_init(&ec->kill_focus_signal);
+ 	wl_signal_init(&ec->show_input_panel_signal);
+ 	wl_signal_init(&ec->hide_input_panel_signal);
+ 	wl_signal_init(&ec->update_input_panel_signal);
+-- 
+2.20.1
+

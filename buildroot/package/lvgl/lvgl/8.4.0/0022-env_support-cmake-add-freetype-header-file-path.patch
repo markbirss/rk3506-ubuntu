@@ -1,0 +1,28 @@
+From 3e7b89e16bc6247ab0ffef59ee103e66458ba5ae Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Tue, 20 Dec 2022 11:34:51 +0800
+Subject: [PATCH 22/35] env_support: cmake: add freetype header file path
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ env_support/cmake/custom.cmake | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/env_support/cmake/custom.cmake b/env_support/cmake/custom.cmake
+index 1a854ea18..fe4de5111 100644
+--- a/env_support/cmake/custom.cmake
++++ b/env_support/cmake/custom.cmake
+@@ -54,7 +54,9 @@ target_compile_definitions(
+               $<$<BOOL:${LV_CONF_INCLUDE_SIMPLE}>:LV_CONF_INCLUDE_SIMPLE>)
+ 
+ # Include root and optional parent path of LV_CONF_PATH
+-target_include_directories(lvgl SYSTEM PUBLIC ${LVGL_ROOT_DIR} ${LV_CONF_DIR})
++target_include_directories(
++  lvgl SYSTEM PUBLIC ${LVGL_ROOT_DIR} ${LV_CONF_DIR}
++                     ${CMAKE_SYSROOT}/usr/include/freetype2/)
+ 
+ # Include /examples folder
+ #target_include_directories(lvgl_examples SYSTEM
+-- 
+2.25.1
+

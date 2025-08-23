@@ -1,0 +1,10 @@
+# Configuration for es8388 driver
+
+#playback
+CTL{reset}="mixer"
+CTL{name}="OUT1 Switch", CTL{value}="ON"
+
+#record
+CTL{name}="Main Mic Switch", CTL{value}="ON"
+
+RESULT="true", EXIT="return"

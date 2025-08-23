@@ -1,0 +1,3390 @@
+#!/bin/bash
+
+################################################################
+# ---------------------- Global Variable -----------------------
+################################################################
+export LUCKFOX_CHIP_MODEL
+export LUCKFOX_CHIP_MEDIA
+export LUCKFOX_CHIP_MEDIA_CLASS
+
+# Temp
+LUCKFOX_FDT_DUMP_TXT=/tmp/.fdt_dump.txt
+LUCKFOX_PIN_DIAGRAM_FILE=/tmp/.pin_diagram.txt
+
+# Overlay
+LUCKFOX_DYNAMIC_DTS=/tmp/.overlay.dts
+LUCKFOX_DYNAMIC_DTBO=/tmp/.overlay.dtbo
+LUCKFOX_FDT_DTB=/tmp/.fdt.dtb
+LUCKFOX_FDT_OVERLAY_DTS=/tmp/.fdt_overlay.dts
+LUCKFOX_FDT_OVERLAY_DTBO=/tmp/.fdt_overlay.dtbo
+LUCKFOX_FDT_HDR_DTB=/tmp/.fdt_header.dtb
+LUCKFOX_FDT_HDR_OVERLAY_DTS=/tmp/.fdt_header_overlay.dts
+LUCKFOX_FDT_HDR_OVERLAY_DTBO=/tmp/.fdt_header_overlay.dtbo
+LUCKFOX_RESOURCE_FDT_DTB=/tmp/.resource_fdt.dtb
+LUCKFOX_RESOURCE_FDT_CONTENT=/tmp/.resource_fdt_content.bin
+
+# Config
+LUCKFOX_CFG_FILE=/etc/luckfox.cfg
+
+# GUI and log
+LF_OK=0
+LF_ERR=1
+LF_NONE=2
+LF_GUI_ENABLE=0
+
+################################################################
+# ------------------------ Pin Diagram -------------------------
+################################################################
+
+rmio_map="
+RM_IO0  - GPIO0_A0
+RM_IO1  - GPIO0_A1
+RM_IO2  - GPIO0_A2
+RM_IO3  - GPIO0_A3
+RM_IO4  - GPIO0_A4
+RM_IO5  - GPIO0_A5
+RM_IO6  - GPIO0_A6
+RM_IO7  - GPIO0_A7
+RM_IO8  - GPIO0_B0
+RM_IO9  - GPIO0_B1
+RM_IO10 - GPIO0_B2
+RM_IO11 - GPIO0_B3
+RM_IO12 - GPIO0_B4
+RM_IO13 - GPIO0_B5
+RM_IO14 - GPIO0_B6
+RM_IO15 - GPIO0_B7
+RM_IO16 - GPIO0_C0
+RM_IO17 - GPIO0_C1
+RM_IO18 - GPIO0_C2
+RM_IO19 - GPIO0_C3
+RM_IO20 - GPIO0_C4
+RM_IO21 - GPIO0_C5
+RM_IO22 - GPIO0_C6
+RM_IO23 - GPIO0_C7
+RM_IO24 - GPIO1_B1
+RM_IO25 - GPIO1_B2
+RM_IO26 - GPIO1_B3
+RM_IO27 - GPIO1_B4
+RM_IO28 - GPIO1_C3
+RM_IO29 - GPIO1_D1
+RM_IO30 - GPIO1_D2
+RM_IO31 - GPIO1_D3
+"
+
+function rmio_get_gpio(){
+	local rmio_num="$1"
+	local gpio_type="$2"
+
+	local gpio_line gpio
+	if [ -z "$rmio_num" ]; then
+		luckfox_result_handle "$LF_NONE" "rmio_num"
+	fi
+
+	gpio_line=$(echo "$rmio_map" | grep "RM_IO$rmio_num")
+	if [[ -z "$gpio_line" ]]; then
+		luckfox_result_handle "$LF_NONE" "gpio_line"
+	fi
+
+	gpio=$(echo "$gpio_line" | awk '{print $NF}')
+	if [[ $gpio =~ GPIO([0-9]+)_([A-D])([0-9]+) ]]; then
+	gpio_bank="${BASH_REMATCH[1]}"
+	gpio_group="${BASH_REMATCH[2]}"
+	gpio_num="${BASH_REMATCH[3]}"
+	else
+		luckfox_result_handle "$LF_ERR" "Get gpio from rmio number error!"
+	fi
+
+	case $gpio_type in
+		"bank")
+			echo "$gpio_bank"
+			;;
+		"group")
+			echo "$gpio_group"
+			;;
+		"number")
+			echo "$gpio_num"
+			;;
+		*)
+			luckfox_result_handle "$LF_ERR" "GPIO_TYPE $gpio_type is not support in rmio_get_gpio!"
+			;;
+	esac
+}
+
+function luckfox_lyra_plus_pin_diagram_file() {
+	cat >$LUCKFOX_PIN_DIAGRAM_FILE <<EOF
+            Luckfox_Lyra/Luckfox_Lyra_Plus
+                     + -USB- +
+- RM_IO22 - GPIO0_C6 |       | VBUS     -         -
+- RM_IO23 - GPIO0_C7 |       | VSYS     -         -
+-         -      GND |       | GND      -         -
+- RM_IO12 - GPIO0_B4 |       | 3V3_EN   -         -
+- RM_IO13 - GPIO0_B5 |       | 3V3_OUT  -         -
+- RM_IO0  - GPIO0_A0 |       | NC       -         -
+- RM_IO1  - GPIO0_A1 |       | GPIO1_B1 - RM_IO24 -
+-         -      GND |       | GND      -         -
+- RM_IO11 - GPIO0_B3 |       | GPIO4_B3 - ADC_IN3 -
+- RM_IO10 - GPIO0_B2 |       | GPIO4_B2 - ADC_IN2 -
+- RM_IO9  - GPIO0_B1 |       | RESET    -         -
+- RM_IO8  - GPIO0_B0 |       | GPIO1_B2 - RM_IO25 -
+-         -      GND |       | GND      -         -
+- RM_IO7  - GPIO0_A7 |       | GPIO1_B3 - RM_IO26 -
+- RM_IO6  - GPIO0_A6 |       | GPIO1_C2 - RM_IO27 -
+- RM_IO5  - GPIO0_A5 |       | GPIO1_C3 - RM_IO28 -
+- RM_IO4  - GPIO0_A4 |       | GPIO1_D1 - RM_IO29 -
+-         -      GND |       | GND      -         -
+- RM_IO3  - GPIO0_A3 |       | GPIO1_D2 - RM_IO30 -
+- RM_IO2  - GPIO0_A2 |       | GPIO1_D3 - RM_IO31 -
+                     + - + - +
+EOF
+}
+
+function luckfox_lyra_ultra_pin_diagram_file() {
+	cat >$LUCKFOX_PIN_DIAGRAM_FILE <<EOF
+                Luckfox_Lyra Ultra
+                     + -USB- +
+-         -  3V3_OUT |       | VSYS     -         -
+- RM_IO0  - GPIO0_A0 |       | VSYS     -         -
+- RM_IO1  - GPIO0_A1 |       | GND      -         -
+- RM_IO2  - GPIO0_A2 |       | GPIO0_C6 - RM_IO22 -
+-         -      GND |       | GPIO0_C7 - RM_IO23 -
+- RM_IO3  - GPIO0_A3 |       | GPIO0_B6 - RM_IO14 -
+- RM_IO4  - GPIO0_A4 |       | GND      -         -
+- RM_IO5  - GPIO0_A5 |       | GPIO0_B5 - RM_IO13 -
+-         -  3V3_OUT |       | GPIO0_B4 - RM_IO12 -
+- RM_IO6  - GPIO0_A6 |       | GND      -         -
+- RM_IO7  - GPIO0_A7 |       | GPIO0_B3 - RM_IO11 -
+- RM_IO8  - GPIO0_B0 |       | GPIO0_B2 - RM_IO10 -
+-         -      GND |       | GPIO0_B1 - RM_IO9  -
+                     + - + - +
+                     + - + - +
+-         -     VSYS |       | 1V8      -         -
+-         -      GND |       | GND      -         -
+-         -  3V3_OUT |       | GPIO4_B3 - ADC_IN3 -
+-         -      GND |       | GPIO4_B2 - ADC_IN2 -
+- RM_IO24 - GPIO1_B1 |       | GND      -         -
+- RM_IO25 - GPIO1_B2 |       | GPIO0_C0 - RM_IO16 -
+- RM_IO26 - GPIO1_B3 |       | GPIO2_B7 -         -
+- RM_IO27 - GPIO1_C2 |       | GPIO2_B6 -         -
+- RM_IO28 - GPIO1_C3 |       | GND      -         -
+- RM_IO29 - GPIO1_D1 |       | GPIO0_C1 - RM_IO17 -
+- RM_IO30 - GPIO1_D2 |       | GPIO0_C2 - RM_IO18 -
+- RM_IO31 - GPIO1_D3 |       | GPIO0_C4 - RM_IO20 -
+-         -      GND |       | GND      -         -
+                     + - + - +
+EOF
+}
+
+function luckfox_lyra_zero_pin_diagram_file() {
+	cat >$LUCKFOX_PIN_DIAGRAM_FILE <<EOF
+                Luckfox_Lyra Zero
+                     + -USB- +
+-         -  3V3_OUT |       | VSYS     -         -
+- RM_IO0  - GPIO0_A0 |       | VSYS     -         -
+- RM_IO1  - GPIO0_A1 |       | GND      -         -
+- RM_IO2  - GPIO0_A2 |       | GPIO0_C6 - RM_IO22 -
+-         -      GND |       | GPIO0_C7 - RM_IO23 -
+- RM_IO3  - GPIO0_A3 |       | GPIO0_B6 - RM_IO14 -
+- RM_IO4  - GPIO0_A4 |       | GND      -         -
+- RM_IO5  - GPIO0_A5 |       | GPIO0_B5 - RM_IO13 -
+-         -  3V3_OUT |       | GPIO0_B4 - RM_IO12 -
+- RM_IO6  - GPIO0_A6 |       | GND      -         -
+- RM_IO7  - GPIO0_A7 |       | GPIO0_B3 - RM_IO11 -
+- RM_IO8  - GPIO0_B0 |       | GPIO0_B2 - RM_IO10 -
+-         -      GND |       | GPIO0_B1 - RM_IO9  -
+- RM_IO24 - GPIO1_B1 |       | GPIO1_D3 - RM_IO31 -
+- RM_IO25 - GPIO1_B2 |       | GND      -         -
+- RM_IO26 - GPIO1_B3 |       | GPIO1_D2 - RM_IO30 -
+- RM_IO27 - GPIO1_C2 |       | GND	    -         -
+- RM_IO16 - GPIO0_C0 |       | GPIO1_D1 - RM_IO29 -
+- RM_IO28 - GPIO1_C3 |       | GPIO0_C1 - RM_IO17 -
+-         -      GND |       | GPIO0_C2 - RM_IO18 -
+                     + - + - +
+EOF
+}
+
+################################################################
+# ------------------------ Initialize --------------------------
+################################################################
+
+################################################################
+# @fu luckfox_config_init
+#
+# @brief 1. Check if the required software dependencies are installed.
+# 		 2. Determine the model and the storage medium in use.
+#
+# @return none
+###############################################################
+function luckfox_config_init() {
+	# check command
+	if ! command -v dialog &>/dev/null; then
+		echo "The dialog is not installed "
+		exit
+	fi
+
+	if ! command -v dtc &>/dev/null; then
+		echo "The dtc is not installed"
+		exit
+	fi
+
+	if ! command -v iomux &>/dev/null; then
+		echo "The iomux is not installed"
+		exit
+	fi
+
+	# get chip model
+	LUCKFOX_CHIP_MODEL="$(cat /proc/device-tree/model)" > /dev/null 2>&1
+
+	# cteate cfg file
+	if [ ! -f $LUCKFOX_CFG_FILE ]; then
+		touch $LUCKFOX_CFG_FILE
+	fi
+
+	# get media class
+	if [ ! -f $LUCKFOX_PIN_DIAGRAM_FILE ]; then
+		if [ "$LUCKFOX_CHIP_MODEL" == "Luckfox Lyra" ] || [ "$LUCKFOX_CHIP_MODEL" == "Luckfox Lyra Plus" ] ; then
+			luckfox_lyra_plus_pin_diagram_file
+		elif [ "$LUCKFOX_CHIP_MODEL" == "Luckfox Lyra Ultra" ] || [ "$LUCKFOX_CHIP_MODEL" == "Luckfox Lyra Ultra W" ] ; then
+			luckfox_lyra_ultra_pin_diagram_file
+		elif [ "$LUCKFOX_CHIP_MODEL" == "Luckfox Lyra Zero" ] || [ "$LUCKFOX_CHIP_MODEL" == "Luckfox Lyra Zero W" ] ; then
+			luckfox_lyra_zero_pin_diagram_file
+		fi
+	fi
+
+	if [[ -e /dev/mtdblock2 ]]; then
+		LUCKFOX_CHIP_MEDIA_CLASS="spi_nand"
+		LUCKFOX_CHIP_MEDIA=/dev/mtdblock1
+	elif [[ -e /dev/mmcblk0p2 ]]; then
+		LUCKFOX_CHIP_MEDIA_CLASS="mmc"
+		LUCKFOX_CHIP_MEDIA=/dev/mmcblk0p2
+	else
+		LUCKFOX_CHIP_MEDIA_CLASS="unknown"
+		echo "Do not know the storage medium of Luckfox!"
+		exit
+	fi
+
+	# init
+	luckfox_update_fdt > /dev/null 2>&1
+
+}
+
+################################################################
+# @fu luckfox_load_cfg
+#
+# @brief 1. Set up according to the contents of LUCKFOX_CFG_FILE when entering the rootfs.
+#
+# @return none
+################################################################
+function luckfox_load_cfg() {
+	# tp
+	#local tp_status
+	# pwm
+	#local pwm0_m0_status pwm0_m0_pin
+	#local pwm0_m1_status pwm0_m1_pin
+	#local pwm0_m2_status pwm0_m2_pin
+	#local pwm0_m3_status pwm0_m3_pin
+
+	#local pwm1_m0_status pwm1_m0_pin
+	#local pwm1_m1_status pwm1_m1_pin
+	#local pwm1_m2_status pwm1_m2_pin
+	#local pwm1_m3_status pwm1_m3_pin
+	#local pwm1_m4_status pwm1_m4_pin
+	#local pwm1_m5_status pwm1_m5_pin
+	#local pwm1_m6_status pwm1_m6_pin
+	#local pwm1_m7_status pwm1_m7_pin
+	# uart
+	#local uart1_status uart1_rx_pin uart1_tx_pin
+	#local uart2_status uart2_rx_pin uart2_tx_pin
+	#local uart3_status uart3_rx_pin uart3_tx_pin
+	#local uart4_status uart4_rx_pin uart4_tx_pin
+	# i2c
+	#local i2c0_status i2c0_scl_pin i2c0_sda_pin i2c0_speed
+	#local i2c1_status i2c1_scl_pin i2c1_sda_pin i2c1_speed
+	#local i2c2_status i2c2_scl_pin i2c2_sda_pin i2c2_speed
+	# spi
+	#local spi0_status spi0_speed spi0_sclk_pin spi0_mosi_pin spi0_miso_pin spi0_cs_pin
+	#local spi1_status spi1_speed spi1_sclk_pin spi1_mosi_pin spi1_miso_pin spi1_cs_pin
+	# can
+	#local $can0_status $can0_tx_pin $can0_rx_pin $can0_speed
+	#local $can1_status $can1_tx_pin $can1_rx_pin $can1_speed
+
+	if [ ! -f $LUCKFOX_CFG_FILE ]; then
+		touch $LUCKFOX_CFG_FILE
+	fi
+
+	luckfox_set_pin_mark "GPIO0_C6" 1
+	luckfox_set_pin_mark "GPIO0_C7" 1
+
+	####################################
+	# Devices configured using dtbo
+	####################################
+	# Get config from luckfox.cfg
+	# tp
+	tp_status=$(luckfox_get_pin_cfg "TP_STATUS")
+	if [ -z "$tp_status" ] || [ "$tp_status" == 1 ]; then
+		tp_status=1
+		luckfox_set_pin_cfg "TP_STATUS" 1
+		luckfox_set_pin_cfg "I2C2_STATUS" 1
+		luckfox_set_pin_cfg "I2C2_SCL_RM_IO" 1
+		luckfox_set_pin_cfg "I2C2_SDA_RM_IO" 0
+		luckfox_set_pin_mark "RM_IO0" 1
+		luckfox_set_pin_mark "RM_IO1" 1
+	fi
+
+	# pwm
+	pwm0_m0_status=$(luckfox_get_pin_cfg "PWM0_M0_STATUS")
+	pwm0_m0_pin=$(luckfox_get_pin_cfg    "PWM0_M0_PIN")
+
+	pwm0_m1_status=$(luckfox_get_pin_cfg "PWM0_M1_STATUS")
+	pwm0_m1_pin=$(luckfox_get_pin_cfg    "PWM0_M1_PIN")
+
+	pwm0_m2_status=$(luckfox_get_pin_cfg "PWM0_M2_STATUS")
+	pwm0_m2_pin=$(luckfox_get_pin_cfg    "PWM0_M2_PIN")
+
+	pwm0_m3_status=$(luckfox_get_pin_cfg "PWM0_M3_STATUS")
+	pwm0_m3_pin=$(luckfox_get_pin_cfg    "PWM0_M3_PIN")
+
+	pwm1_m0_status=$(luckfox_get_pin_cfg "PWM1_M0_STATUS")
+	pwm1_m0_pin=$(luckfox_get_pin_cfg    "PWM1_M0_PIN")
+
+	pwm1_m1_status=$(luckfox_get_pin_cfg "PWM1_M1_STATUS")
+	pwm1_m1_pin=$(luckfox_get_pin_cfg    "PWM1_M1_PIN")
+
+	pwm1_m2_status=$(luckfox_get_pin_cfg "PWM1_M2_STATUS")
+	pwm1_m2_pin=$(luckfox_get_pin_cfg    "PWM1_M2_PIN")
+
+	pwm1_m3_status=$(luckfox_get_pin_cfg "PWM1_M3_STATUS")
+	pwm1_m3_pin=$(luckfox_get_pin_cfg    "PWM1_M3_PIN")
+
+	pwm1_m4_status=$(luckfox_get_pin_cfg "PWM1_M4_STATUS")
+	pwm1_m4_pin=$(luckfox_get_pin_cfg    "PWM1_M4_PIN")
+
+	pwm1_m5_status=$(luckfox_get_pin_cfg "PWM1_M5_STATUS")
+	pwm1_m5_pin=$(luckfox_get_pin_cfg    "PWM1_M5_PIN")
+
+	pwm1_m6_status=$(luckfox_get_pin_cfg "PWM1_M6_STATUS")
+	pwm1_m6_pin=$(luckfox_get_pin_cfg    "PWM1_M6_PIN")
+
+	pwm1_m7_status=$(luckfox_get_pin_cfg "PWM1_M7_STATUS")
+	pwm1_m7_pin=$(luckfox_get_pin_cfg    "PWM1_M7_PIN")
+
+	# uart
+	uart1_status=$(luckfox_get_pin_cfg  "UART1_STATUS")
+	uart1_rx_pin=$(luckfox_get_pin_cfg  "UART1_RX_RM_IO")
+	uart1_tx_pin=$(luckfox_get_pin_cfg  "UART1_TX_RM_IO")
+
+	uart2_status=$(luckfox_get_pin_cfg  "UART2_STATUS")
+	uart2_rx_pin=$(luckfox_get_pin_cfg  "UART2_RX_RM_IO")
+	uart2_tx_pin=$(luckfox_get_pin_cfg  "UART2_TX_RM_IO")
+
+	uart3_status=$(luckfox_get_pin_cfg  "UART3_STATUS")
+	uart3_rx_pin=$(luckfox_get_pin_cfg  "UART3_RX_RM_IO")
+	uart3_tx_pin=$(luckfox_get_pin_cfg  "UART3_TX_RM_IO")
+
+	uart4_status=$(luckfox_get_pin_cfg  "UART4_STATUS")
+	uart4_rx_pin=$(luckfox_get_pin_cfg  "UART4_RX_RM_IO")
+	uart4_tx_pin=$(luckfox_get_pin_cfg  "UART4_TX_RM_IO")
+
+	# i2c
+	i2c0_status=$(luckfox_get_pin_cfg   "I2C0_STATUS")
+	i2c0_scl_pin=$(luckfox_get_pin_cfg  "I2C0_SCL_RM_IO")
+	i2c0_sda_pin=$(luckfox_get_pin_cfg  "I2C0_SDA_RM_IO")
+	i2c0_speed=$(luckfox_get_pin_cfg    "I2C0_SPEED")
+
+	i2c1_status=$(luckfox_get_pin_cfg   "I2C1_STATUS")
+	i2c1_scl_pin=$(luckfox_get_pin_cfg  "I2C1_SCL_RM_IO")
+	i2c1_sda_pin=$(luckfox_get_pin_cfg  "I2C1_SDA_RM_IO")
+	i2c1_speed=$(luckfox_get_pin_cfg    "I2C1_SPEED")
+
+	i2c2_status=$(luckfox_get_pin_cfg   "I2C2_STATUS")
+	i2c2_scl_pin=$(luckfox_get_pin_cfg  "I2C2_SCL_RM_IO")
+	i2c2_sda_pin=$(luckfox_get_pin_cfg  "I2C2_SDA_RM_IO")
+	i2c2_speed=$(luckfox_get_pin_cfg    "I2C2_SPEED")
+
+	# spi
+	spi0_status=$(luckfox_get_pin_cfg   "SPI0_STATUS")
+	spi0_speed=$(luckfox_get_pin_cfg    "SPI0_SPEED")
+	spi0_sclk_pin=$(luckfox_get_pin_cfg "SPI0_SCLK_RM_IO")
+	spi0_miso_pin=$(luckfox_get_pin_cfg "SPI0_MISO_RM_IO")
+	spi0_mosi_pin=$(luckfox_get_pin_cfg "SPI0_MOSI_RM_IO")
+	spi0_cs_pin=$(luckfox_get_pin_cfg   "SPI0_CS_RM_IO")
+
+	spi1_status=$(luckfox_get_pin_cfg   "SPI1_STATUS")
+	spi1_speed=$(luckfox_get_pin_cfg    "SPI1_SPEED")
+	spi1_sclk_pin=$(luckfox_get_pin_cfg "SPI1_SCLK_RM_IO")
+	spi1_miso_pin=$(luckfox_get_pin_cfg "SPI1_MISO_RM_IO")
+	spi1_mosi_pin=$(luckfox_get_pin_cfg "SPI1_MOSI_RM_IO")
+	spi1_cs_pin=$(luckfox_get_pin_cfg   "SPI1_CS_RM_IO")
+
+	# can
+	can0_status=$(luckfox_get_pin_cfg "CAN0_STATUS")
+	can0_tx_pin=$(luckfox_get_pin_cfg "CAN0_TX_RM_IO")
+	can0_rx_pin=$(luckfox_get_pin_cfg "CAN0_RX_RM_IO")
+	can0_speed=$(luckfox_get_pin_cfg  "CAN0_SPEED")
+
+	can1_status=$(luckfox_get_pin_cfg "CAN1_STATUS")
+	can1_tx_pin=$(luckfox_get_pin_cfg "CAN1_TX_RM_IO")
+	can1_rx_pin=$(luckfox_get_pin_cfg "CAN1_RX_RM_IO")
+	can1_speed=$(luckfox_get_pin_cfg  "CAN1_SPEED")
+
+	# pwm
+	if [ -n "$pwm0_m0_status" ] && [ -n "$pwm0_m0_pin" ]; then
+		luckfox_pwm_app "$pwm0_m0_status" 0 0 "$pwm0_m0_pin"
+	fi
+
+	if [ -n "$pwm0_m1_status" ] && [ -n "$pwm0_m1_pin" ]; then
+		luckfox_pwm_app "$pwm0_m1_status" 0 1 "$pwm0_m1_pin"
+	fi
+
+	if [ -n "$pwm0_m2_status" ] && [ -n "$pwm0_m2_pin" ]; then
+		luckfox_pwm_app "$pwm0_m2_status" 0 2 "$pwm0_m2_pin"
+	fi
+
+	if [ -n "$pwm0_m3_status" ] && [ -n "$pwm0_m3_pin" ]; then
+		luckfox_pwm_app "$pwm0_m3_status" 0 3 "$pwm0_m3_pin"
+	fi
+
+	if [ -n "$pwm1_m0_status" ] && [ -n "$pwm1_m0_pin" ]; then
+		luckfox_pwm_app "$pwm1_m0_status" 1 0 "$pwm1_m0_pin"
+	fi
+
+	if [ -n "$pwm1_m1_status" ] && [ -n "$pwm1_m1_pin" ]; then
+		luckfox_pwm_app "$pwm1_m1_status" 1 1 "$pwm1_m1_pin"
+	fi
+
+	if [ -n "$pwm1_m2_status" ] && [ -n "$pwm1_m2_pin" ]; then
+		luckfox_pwm_app "$pwm1_m2_status" 1 2 "$pwm1_m2_pin"
+	fi
+
+	if [ -n "$pwm1_m3_status" ] && [ -n "$pwm1_m3_pin" ]; then
+		luckfox_pwm_app "$pwm1_m3_status" 1 3 "$pwm1_m3_pin"
+	fi
+
+	if [ -n "$pwm1_m4_status" ] && [ -n "$pwm1_m4_pin" ]; then
+		luckfox_pwm_app "$pwm1_m4_status" 1 4 "$pwm1_m4_pin"
+	fi
+
+	if [ -n "$pwm1_m5_status" ] && [ -n "$pwm1_m5_pin" ]; then
+		luckfox_pwm_app "$pwm1_m5_status" 1 5 "$pwm1_m5_pin"
+	fi
+
+	if [ -n "$pwm1_m6_status" ] && [ -n "$pwm1_m6_pin" ]; then
+		luckfox_pwm_app "$pwm1_m6_status" 1 6 "$pwm1_m6_pin"
+	fi
+
+	if [ -n "$pwm1_m7_status" ] && [ -n "$pwm1_m7_pin" ]; then
+		luckfox_pwm_app "$pwm1_m7_status" 1 7 "$pwm1_m7_pin"
+	fi
+
+	# uart
+	if [ -n "$uart1_status" ] && [ -n "$uart1_tx_pin" ] && [ -n "$uart1_rx_pin" ]; then
+		luckfox_uart_app "$uart1_status" 1 "$uart1_tx_pin" "$uart1_rx_pin"
+	fi
+
+	if [ -n "$uart2_status" ] && [ -n "$uart2_tx_pin" ] && [ -n "$uart2_rx_pin" ]; then
+		luckfox_uart_app "$uart2_status" 2 "$uart2_tx_pin" "$uart2_rx_pin"
+	fi
+
+	if [ -n "$uart3_status" ] && [ -n "$uart3_tx_pin" ] && [ -n "$uart3_rx_pin" ]; then
+		luckfox_uart_app "$uart3_status" 3 "$uart3_tx_pin" "$uart3_rx_pin"
+	fi
+
+	if [ -n "$uart4_status" ] && [ -n "$uart4_tx_pin" ] && [ -n "$uart4_rx_pin" ]; then
+		luckfox_uart_app "$uart4_status" 4 "$uart4_tx_pin" "$uart4_rx_pin"
+	fi
+
+	# i2c
+	if [ -n "$i2c0_status" ] && [ -n "$i2c0_scl_pin" ] && [ -n "$i2c0_sda_pin" ]; then
+		luckfox_i2c_app "$i2c0_status" 0 "$i2c0_sda_pin" "$i2c0_scl_pin" "$i2c0_speed"
+	fi
+
+	if [ -n "$i2c1_status" ] && [ -n "$i2c1_scl_pin" ] && [ -n "$i2c1_sda_pin" ]; then
+		luckfox_i2c_app "$i2c1_status" 1 "$i2c1_sda_pin" "$i2c1_scl_pin" "$i2c1_speed"
+	fi
+
+	if [ "$tp_status" == 0 ] && [ -n "$i2c2_status" ] && [ -n "$i2c2_scl_pin" ] && [ -n "$i2c2_sda_pin" ]; then
+		luckfox_i2c_app "$i2c2_status" 2 "$i2c2_sda_pin" "$i2c2_scl_pin" "$i2c2_speed"
+	fi
+
+	# spi
+	if [ -n "$spi0_status" ]&&[ -n "$spi0_sclk_pin" ] && [ -n "$spi0_mosi_pin" ]\
+	&&[ -n "$spi0_miso_pin" ]&&[ -n "$spi0_cs_pin" ]; then
+		luckfox_spi_app "$spi0_status" 0 "$spi0_sclk_pin" "$spi0_mosi_pin" "$spi0_miso_pin" "$spi0_cs_pin" "$spi0_speed"
+	fi
+
+	if [ -n "$spi1_status" ]&&[ -n "$spi1_sclk_pin" ] && [ -n "$spi1_mosi_pin" ]\
+	&&[ -n "$spi1_miso_pin" ]&&[ -n "$spi1_cs_pin" ]; then
+		luckfox_spi_app "$spi1_status" 1 "$spi1_sclk_pin" "$spi1_mosi_pin" "$spi1_miso_pin" "$spi1_cs_pin" "$spi1_speed"
+	fi
+
+	# can
+	if [ -n "$can0_status" ] && [ -n "$can0_rx_pin" ] && [ -n "$can0_tx_pin" ]; then
+		luckfox_can_app "$can0_status" 0 "$can0_tx_pin" "$can0_rx_pin" "$can0_speed"
+	fi
+
+	if [ -n "$can1_status" ] && [ -n "$can1_rx_pin" ] && [ -n "$can1_tx_pin" ]; then
+		luckfox_can_app "$can1_status" 1 "$can1_tx_pin" "$can1_rx_pin" "$can1_speed"
+	fi
+
+	####################################
+	# Devices configured statically(must reboot)
+	####################################
+	# dsi
+	local dsi_type=$(luckfox_get_pin_cfg "DSI_TYPE")
+	local dsi_type=$(luckfox_get_pin_cfg "DSI_SIZE")
+	local dsi_logo_rotate_angle=$(luckfox_get_pin_cfg "DSI_LOGO_ROTATE")
+
+	if [ -n "$dsi_type"  ] && [ -n "$dsi_size" ] ;then
+		luckfox_dsi_app "$dsi_type" "$dsi_size"
+	fi
+
+	if [ -n "$dsi_type"  ] && [ -n "$dsi_size" ] ;then
+		luckfox_dsi_logo_rotate_app "$dsi_logo_rotate_angle"
+	fi
+}
+
+################################################################
+# -------------------- Pin Diagram Handle ----------------------
+################################################################
+
+################################################################
+# @fu luckfox_check_pin_diagram
+#
+# @brief 1. Check if all the provided pin names have other multiplexing functions.
+#
+# @param device_node - Multiple pin names can be passed in.
+#
+# @return none
+################################################################
+function luckfox_check_pin_diagram() {
+	local device_node
+	local left_group=()
+	local right_group=()
+
+	for device_node in "$@"; do
+		if [ "$device_node" == "*" ]; then
+			return
+		fi
+
+		if ! grep -q "$device_node" "$LUCKFOX_PIN_DIAGRAM_FILE"; then
+			luckfox_result_handle "$LF_NONE" "$device_node"
+			return
+		fi
+
+		# check mark
+		while IFS= read -r line; do
+			if [[ "$line" == *"|       |"* && "$line" == *"$device_node"* ]]; then
+				# clear group
+				left_group=()
+				right_group=()
+				# create left group
+				IFS='-' read -r -a left_group <<<"$(echo "$line" | cut -d'|' -f1)"
+				# create right group
+				IFS='-' read -r -a right_group <<<"$(echo "$line" | cut -d'|' -f3)"
+
+				# check left
+				for pin in "${left_group[@]}"; do
+					if [[ "$pin" == *"$device_node "* ]]; then
+						# Check if the pins are multiplexed
+						for mark in "${left_group[@]}"; do
+							if [[ "$mark" == "*"* ]] && [[ "$mark" != "*$device_node" ]]; then
+								luckfox_result_handle "$LF_ERR" "$mark and $device_node cannot be enabled at the same time "
+								return
+							fi
+						done
+					fi
+				done
+
+				# check right
+				for pin in "${right_group[@]}"; do
+					if [[ "$pin" == *"$device_node "* ]]; then
+						# Check if the pins are multiplexed
+						for mark in "${right_group[@]}"; do
+							if [[ "$mark" == "*"* ]] && [[ "$mark" != "*$device_node" ]]; then
+								luckfox_result_handle "$LF_ERR" "$mark and $device_node cannot be enabled at the same time"
+								return
+							fi
+						done
+					fi
+				done
+			fi
+		done <"$LUCKFOX_PIN_DIAGRAM_FILE"
+	done
+
+	return
+}
+
+################################################################
+# @fu luckfox_set_pin_diagram
+#
+# @brief 1. Set detailed parameters in the Pin Diagram.
+#
+# @param parameter_name  - Option name to be set
+# 		 parameter_value - Option value to be set
+#
+# @return none
+################################################################
+function luckfox_set_pin_parameter() {
+	local parameter_name="$1"
+	local parameter_value="$2"
+
+	if grep -q "$parameter_name=" "$LUCKFOX_PIN_DIAGRAM_FILE"; then
+		sed -i "s/^$parameter_name=.*/$parameter_name=$parameter_value/" "$LUCKFOX_PIN_DIAGRAM_FILE"
+	else
+		echo "$parameter_name=$parameter_value" >>"$LUCKFOX_PIN_DIAGRAM_FILE"
+	fi
+}
+
+################################################################
+# @fu luckfox_set_pin_mark
+#
+# @brief 1. Clear or add the "*" mark in the Pin Diagram.
+#
+# @param pin    - Option name to be set
+# 		 action - 1 indicates adding a mark, 0 indicates clearing a mark.
+#
+# @return none
+################################################################
+function luckfox_set_pin_mark() {
+	local pin="$1"
+	local action="$2"
+
+	#if grep -o -q "$pin" "$LUCKFOX_PIN_DIAGRAM_FILE" ; then
+	#    return
+	#fi
+
+	pin="$(echo "$pin ")"
+	if [ "$action" == 1 ]; then
+		sed -i "s/ \($pin\)/\*\1/" $LUCKFOX_PIN_DIAGRAM_FILE
+	elif [ "$action" == 0 ]; then
+		if [[ "$pin" == \** ]]; then
+			pin="${pin:1}"
+		fi
+		sed -i "s/\*\($pin\)/ \1/" $LUCKFOX_PIN_DIAGRAM_FILE
+	fi
+}
+
+################################################################
+# @fu luckfox_get_option_str
+#
+# @brief 1. Collect pins of a specific multiplexing type from the Pin Diagram for GUI display.
+#
+# @param search_param - Specific multiplexing type
+#
+# @return
+################################################################
+function luckfox_get_option_str() {
+	local search_param="$1"
+	local group=()
+	local right_group=()
+	local option_group=()
+	local option_str=""
+
+	while IFS= read -r line; do
+		if [[ "$line" == *"|       |"* && "$line" == *"$search_param"* ]]; then
+			group=()
+			right_group=()
+
+			IFS='-' read -r -a group <<<"$(echo "$line" | cut -d'|' -f1)"
+			IFS='-' read -r -a right_group <<<"$(echo "$line" | cut -d'|' -f3)"
+			group+=("${right_group[@]}")
+			for pin in "${group[@]}"; do
+				if [ "$search_param" == "UART" ]; then
+					if [[ "$pin" == *"$search_param"*"_RX"* ]]; then
+						option_group+=$(echo "$pin" | sed -E 's/(UART[0-9]+_M[0-9]+)_.*$/\1 x /g')
+					fi
+				elif [ "$search_param" == "PWM" ]; then
+					if [[ "$pin" == *"$search_param"* ]]; then
+						option_group+=$(echo "$pin" | sed -E 's/(PWM[0-9]+_M[0-9]+).*$/\1 x /g')
+					fi
+				elif [ "$search_param" == "I2C" ]; then
+					if [[ "$pin" == *"$search_param"*"_SCL"* ]]; then
+						option_group+=$(echo "$pin" | sed -E 's/(I2C[0-9]+_M[0-9]+)_.*$/\1 x /g')
+					fi
+				elif [ "$search_param" == "SPI" ]; then
+					if [[ "$pin" == *"$search_param"*"_CLK"* ]]; then
+						option_group+=$(echo "$pin" | sed -E 's/(SPI[0-9]+_M[0-9]+)_.*$/\1 x /g')
+					fi
+				fi
+			done
+		fi
+	done <"$LUCKFOX_PIN_DIAGRAM_FILE"
+
+	for element in "${option_group[@]}"; do
+		option_str+="$element"
+	done
+
+	echo "$option_str"
+}
+
+################################################################
+# ------------------- Luckfox Config File  ---------------------
+################################################################
+
+################################################################
+# @fu luckfox_set_pin_cfg
+#
+# @brief 1. Set the static parameters of LUCKFOX_CFG_FILE.
+#
+# @param parameter_name  - Option name to be set
+# 		 parameter_value - Option value to be set
+#
+# @return none
+################################################################
+function luckfox_set_pin_cfg() {
+	local parameter_name="$1"
+	local parameter_value="$2"
+
+	if grep -q "$parameter_name=" "$LUCKFOX_CFG_FILE"; then
+		sed -i "s/^$parameter_name=.*/$parameter_name=$parameter_value/" "$LUCKFOX_CFG_FILE"
+	else
+		echo "$parameter_name=$parameter_value" >>"$LUCKFOX_CFG_FILE"
+	fi
+}
+
+################################################################
+# @fu luckfox_get_pin_cfg
+#
+# @brief 1. Get the static parameters of LUCKFOX_CFG_FILE.
+#
+# @param setting - The name of the static parameters in LUCKFOX_CFG_FILE.
+#
+# @return The value of the static parameters in LUCKFOX_CFG_FILE
+################################################################
+function luckfox_get_pin_cfg() {
+	local setting="$1"
+	value=$(grep "${setting}=" $LUCKFOX_CFG_FILE | cut -d '=' -f 2)
+	echo "$value"
+}
+
+################################################################
+# ---------------------- Overlay General -----------------------
+################################################################
+
+################################################################
+# @fu luckfox_sha256_convert
+#
+# @brief 1. Organize the transmitted hash values into the format of the FDT Header specification.
+#
+# @param sha256_hash - The Transmitted hash values
+#
+# @return The format of the FDT Header specification
+################################################################
+function luckfox_sha256_convert() {
+	local sha256_hash=$1
+	local formatted_hash=""
+
+	for ((i = 0; i < ${#sha256_hash}; i += 8)); do
+		formatted_hash+="0x${sha256_hash:$i:8} "
+	done
+
+	echo "$formatted_hash"
+}
+
+################################################################
+# @fu luckfox_get_device_name
+#
+# @brief 1. Get the name of the device node corresponding to the device in the device tree from the input device node.
+#
+# @param device_node -
+#
+# @return The name of the device node corresponding to the device in the device tree
+################################################################
+function luckfox_get_device_name() {
+	local device_node="$1"
+	local device_node_name
+
+	device_node_name=$(grep "$device_node =" $LUCKFOX_FDT_DUMP_TXT | awk '{print $3}' | sed 's/["";]//g')
+	echo "$device_node_name"
+}
+
+################################################################
+# @fu luckfox_get_pinctrl_addr
+#
+# @brief 1. Find the corresponding phandle number through the passed pinctrl_node.
+#
+# @param pinctrl_node -
+#        search_num   - The search range using grep may be too large or too small, which could lead to finding the wrong phandle number.
+#
+# @return The number of pinctrl phandle
+################################################################
+function luckfox_get_pinctrl_addr() {
+	local pinctrl_node="$1"
+	local search_num="$2"
+
+	local phandle_value
+	if [ -z "$search_num" ]; then
+		search_num=3
+	fi
+
+	phandle_value=$(grep -A "$search_num" "$pinctrl_node {" $LUCKFOX_FDT_DUMP_TXT | grep 'phandle' | awk '{print $3}' | sed 's/[<>;]//g')
+	echo "$phandle_value"
+}
+
+################################################################
+# @fu luckfox_get_pin_mode
+#
+# @brief 1. Get the multiplexing mode of a specific pin in the pinctrl phandle from the DTB and compare it with the currently used multiplexing function.
+#
+# @param input - The entire pinctrl phandle configuration may contain the configuration information for multiple pins.
+#
+# @return Returning 1 indicates that the multiplexing configuration of the target pinctrl phandle in the current device tree matches the actual multiplexing configuration.
+################################################################
+function luckfox_get_pin_mode() {
+	local rmio_num="$1"
+
+	if [ -z "$rmio_num" ]; then
+		return
+	fi
+
+	gpio_map=(0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 \
+	41 42 43 50 51 57 58 59)
+	gpio=${gpio_map[$rmio_num]}
+	gpio_bank=$((gpio / 32))
+	gpio_num=$((gpio % 32))
+
+	gpio_mode_raw="$(iomux "$gpio_bank" "$gpio_num")"
+	gpio_mode=$(echo "$gpio_mode_raw" | sed 's/.*= \([0-9]*\)/\1/')
+
+	echo "$gpio_mode"
+}
+
+################################################################
+# @fu luckfox_set_pin_mode
+#
+# @brief 1. Set the pin multiplexing function.
+#
+# @param input        - The pin group to be set.
+#		 reset_action - When set to 1, the multiplexing function of the pin group will be set to GPIO.
+#
+# @return none
+################################################################
+function luckfox_set_pin_mode() {
+	#region
+	local rmio_num="$1"
+	local rmio_mode="$2"
+
+	if [ -z "$rmio_num" ] || [ -z "$rmio_mode" ] ;then
+		return
+	fi
+
+	gpio_map=(0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 \
+	41 42 43 50 51 57 58 59)
+	gpio=${gpio_map[$rmio_num]}
+	gpio_bank=$((gpio / 32))
+	gpio_num=$((gpio % 32))
+
+	iomux "$gpio_bank" "$gpio_num" "$rmio_mode"
+	#endregion
+}
+
+################################################################
+# ---------------------- Dynamic Overlay -----------------------
+################################################################
+
+################################################################
+# @fu luckfox_dtbo_overlay
+#
+# @brief 1. Dynamically load the DTBO, allowing configuration to be completed without a reboot.
+#
+# @param overlay_node    - The name of the overlay node will be used to create a DTBO management directory based on that name.
+#		 overlay_content - The Overlay system loads the content set in the DTB.
+#
+# @return none
+################################################################
+function luckfox_dtbo_overlay() {
+	local overlay_node="$1"
+	local overlay_content="$2"
+
+	if [ -z "$overlay_content" ]; then
+		"overlay_content"
+	fi
+	echo "$overlay_content" >$LUCKFOX_DYNAMIC_DTS
+
+	dtc -I dts -O dtb $LUCKFOX_DYNAMIC_DTS -o $LUCKFOX_DYNAMIC_DTBO
+	if [ -d /sys/kernel/config/device-tree/overlays/"$overlay_node" ]; then
+		echo 0 >/sys/kernel/config/device-tree/overlays/"$overlay_node"/status
+	else
+		mkdir -p /sys/kernel/config/device-tree/overlays/"$overlay_node"
+	fi
+	cat $LUCKFOX_DYNAMIC_DTBO >/sys/kernel/config/device-tree/overlays/"$overlay_node"/dtbo
+	echo 1 >/sys/kernel/config/device-tree/overlays/"$overlay_node"/status
+
+	# delete temp files
+	#rm $LUCKFOX_DYNAMIC_DTS
+	#rm $LUCKFOX_DYNAMIC_DTBO
+}
+
+################################################################
+# ---------------------- Static Overlay ------------------------
+################################################################
+
+################################################################
+# @fu luckfox_update_fdt
+#
+# @brief 1. Get dtb from boot partition and decompile it to /tmp
+#
+# @return none
+################################################################
+function luckfox_update_fdt() {
+	local rk_kernel_dtb_origin_size
+
+	# Get fdt_header
+	dd if=$LUCKFOX_CHIP_MEDIA of=$LUCKFOX_FDT_HDR_DTB bs=1 skip=0 count=2048 >/dev/null 2>&1
+
+	# Get resource.img data-position
+	export resource_img_data_position="$(fdtget $LUCKFOX_FDT_HDR_DTB /images/resource data-position)"
+
+	# Get resource.img rk-kernel.dtb content
+	dd if=$LUCKFOX_CHIP_MEDIA of=$LUCKFOX_RESOURCE_FDT_CONTENT bs=1 skip=$(($resource_img_data_position+512)) count=512 >/dev/null 2>&1
+
+	# Get rk-kernel.dtb sha1sum hash value
+	#rk_kernel_dtb_sha1sum_hash="$(xxd -s 0xe0 -l 20 -p $LUCKFOX_RESOURCE_FDT_CONTENT)"
+
+	# Get rk-kernel.dtb size
+	rk_kernel_dtb_origin_size=$(xxd -s 0x108 -l 4 -p $LUCKFOX_RESOURCE_FDT_CONTENT | awk '{print substr($1,7,2) substr($1,5,2) substr($1,3,2) substr($1,1,2)}')
+
+	# Get rk-kernel.dtb
+	dd if=$LUCKFOX_CHIP_MEDIA of=$LUCKFOX_RESOURCE_FDT_DTB bs=1 skip=$(($resource_img_data_position+2048)) count=$((0x"$rk_kernel_dtb_origin_size")) >/dev/null 2>&1
+
+	# Create LUCKFOX_FDT_DUMP_TXT
+	fdtdump $LUCKFOX_RESOURCE_FDT_DTB > $LUCKFOX_FDT_DUMP_TXT
+}
+
+################################################################
+# @fu luckfox_fdt_overlay
+#
+# @brief 1. After obtaining the fdt_content, overlay it onto the system's decompiled DTS.
+#        2. Compile the DTS into a DTB and reload it to the BOOT partition.
+#
+# @param fdt_content - The content to be overlaid into the DTB.
+#
+# @return none
+################################################################
+function luckfox_fdt_overlay() {
+	local fdt_content="$1"
+	local rk_kernel_dtb_sha1sum_hash
+	local rk_kernel_dtb_size
+
+	# dtbo overlay
+	if [ -n "$fdt_content" ]; then
+		echo "$fdt_content" >$LUCKFOX_FDT_OVERLAY_DTS
+		dtc -I dts -O dtb $LUCKFOX_FDT_OVERLAY_DTS -o $LUCKFOX_FDT_OVERLAY_DTBO
+		fdtoverlay -i $LUCKFOX_RESOURCE_FDT_DTB -o $LUCKFOX_RESOURCE_FDT_DTB $LUCKFOX_FDT_OVERLAY_DTBO >/dev/null 2>&1
+	fi
+
+	# Get rk-kernel.dtb hash value and size
+	rk_kernel_dtb_sha1sum_hash="$(sha1sum $LUCKFOX_RESOURCE_FDT_DTB | awk '{print $1}')"
+	rk_kernel_dtb_size="$(ls -al $LUCKFOX_RESOURCE_FDT_DTB | awk '{print $5}')"
+
+	# Modify rk-kernel.dtb content
+	printf "$rk_kernel_dtb_sha1sum_hash" | xxd -r -p | dd of=$LUCKFOX_RESOURCE_FDT_CONTENT bs=1 seek=$((0xe0)) conv=notrunc > /dev/null 2>&1
+	#printf "$(echo "obase=16; $rk_kernel_dtb_size" | bc | sed 's/\(..\)\(..\)/\2\1/')" | xxd -r -p | dd of=$LUCKFOX_RESOURCE_FDT_CONTENT bs=1 seek=$((0x108)) conv=notrunc > /dev/null 2>&1
+	hex=$(printf "%06X" "$rk_kernel_dtb_size")
+	reversed_hex=$(echo "$hex" | sed 's/../& /g' | awk '{ for(i=NF;i>=1;i--) printf $i }')
+	printf "$reversed_hex" | xxd -r -p | dd of=$LUCKFOX_RESOURCE_FDT_CONTENT bs=1 seek=$((0x108)) conv=notrunc > /dev/null 2>&1
+
+	# Overlay resource.img
+	dd if=$LUCKFOX_RESOURCE_FDT_CONTENT of=$LUCKFOX_CHIP_MEDIA bs=1 seek=$(($resource_img_data_position+512)) count=512 > /dev/null 2>&1
+	dd if=$LUCKFOX_RESOURCE_FDT_DTB of=$LUCKFOX_CHIP_MEDIA bs=1 seek=$(($resource_img_data_position+2048)) count=$rk_kernel_dtb_size >/dev/null 2>&1
+}
+
+################################################################
+# @fu luckfox_fdt_delete
+#
+# @brief 1. Remove the setting in the dtb that matches the fdt content field
+#
+# @param fdt_content - The content to be deleted into the DTB.
+#
+# @return none
+################################################################
+function luckfox_fdt_delete() {
+	local fdt_content="$1"
+
+	if [ -z "$fdt_content" ]; then
+		return
+	fi
+
+	if [ ! -f $LUCKFOX_RESOURCE_FDT_DTB ];then
+		luckfox_update_fdt
+	fi
+
+	# dtb -> dts
+	dtc -I dtb -O dts $LUCKFOX_RESOURCE_FDT_DTB -o $LUCKFOX_FDT_DUMP_TXT > /dev/null 2>&1
+
+	# delete fdt_content
+	sed -i "/$fdt_content/d" $LUCKFOX_FDT_DUMP_TXT > /dev/null 2>&1
+
+	# dts -> dtb
+	dtc -I dts -O dtb $LUCKFOX_FDT_DUMP_TXT -o $LUCKFOX_RESOURCE_FDT_DTB > /dev/null 2>&1
+
+}
+
+################################################################
+# @fu luckfox_fdt_clear
+#
+# @brief 1. Clear the temporary files used during the Static Overlay process.
+#
+# @return none
+################################################################
+function luckfox_fdt_clear() {
+	# delete temp file
+	local files=(
+		"$LUCKFOX_FDT_DUMP_TXT"
+		"$LUCKFOX_FDT_DTB"
+		"$LUCKFOX_FDT_OVERLAY_DTS"
+		"$LUCKFOX_FDT_OVERLAY_DTBO"
+		"$LUCKFOX_FDT_HDR_DTB"
+		"$LUCKFOX_FDT_HDR_OVERLAY_DTS"
+		"$LUCKFOX_FDT_HDR_OVERLAY_DTBO"
+	)
+
+	for file in "${files[@]}"; do
+		if [ -e "$file" ]; then
+			rm "$file"
+		fi
+	done
+}
+
+################################################################
+# ----------------------- MIPI DSI -----------------------------
+################################################################
+
+################################################################
+# @fu luckfox_dsi_app
+#
+# @brief 1. Set the mode of the dsi.
+#
+# @param dsi_type  - WS_DSI / RPI_Compatible_DSI / RPI_Official_DSI
+#        dsi_size  -
+#
+# @return none
+################################################################
+function luckfox_dsi_app() {
+	#region
+	local dsi_type="$1"
+	local dsi_size="$2"
+
+	if [ "$dsi_type" == "WS_DSI" ]; then
+		if [ "$dsi_size" == "7_0" ]; then
+			dsi_lane=2
+			dsi_clock_frequency=84000000
+			dsi_hactive=720
+			dsi_vactive=1280
+			dsi_vsync_len=30
+			dsi_vback_porch=20
+			dsi_vfront_porch=2
+			dsi_hsync_len=50
+			dsi_hback_porch=239
+			dsi_hfront_porch=33
+			dsi_vsync_active=0
+			dsi_hsync_active=0
+			dsi_de_active=0
+			dsi_pixelclk_active=0
+		elif [ "$dsi_size" == "10_1" ]; then
+			dsi_lane=2
+			dsi_clock_frequency=70000000
+			dsi_hactive=800
+			dsi_vactive=1280
+			dsi_vsync_len=4
+			dsi_vback_porch=10
+			dsi_vfront_porch=30
+			dsi_hsync_len=20
+			dsi_hback_porch=20
+			dsi_hfront_porch=40
+			dsi_vsync_active=0
+			dsi_hsync_active=0
+			dsi_de_active=0
+			dsi_pixelclk_active=0
+		elif [ "$dsi_size" == "5_0" ]; then
+			dsi_lane=2
+			dsi_clock_frequency=63000000
+			dsi_hactive=720
+			dsi_vactive=1280
+			dsi_vsync_len=4
+			dsi_vback_porch=10
+			dsi_vfront_porch=30
+			dsi_hsync_len=20
+			dsi_hback_porch=20
+			dsi_hfront_porch=40
+			dsi_vsync_active=0
+			dsi_hsync_active=0
+			dsi_de_active=0
+			dsi_pixelclk_active=0
+		fi
+	elif [ "$dsi_type" == "RPI_Compatible_DSI" ]; then
+		if [ "$dsi_size" == "2_8" ]; then
+			dsi_lane=2
+			dsi_clock_frequency=50000000
+			dsi_hactive=480
+			dsi_vactive=640
+			dsi_vsync_len=150
+			dsi_vback_porch=50
+			dsi_vfront_porch=150
+			dsi_hsync_len=150
+			dsi_hback_porch=150
+			dsi_hfront_porch=50
+			dsi_vsync_active=0
+			dsi_hsync_active=0
+			dsi_de_active=0
+			dsi_pixelclk_active=0
+		elif [ "$dsi_size" == "3_4" ]; then
+			dsi_lane=2
+			dsi_clock_frequency=50000000
+			dsi_hactive=800
+			dsi_vactive=800
+			dsi_vsync_len=16
+			dsi_vback_porch=4
+			dsi_vfront_porch=8
+			dsi_hsync_len=120
+			dsi_hback_porch=32
+			dsi_hfront_porch=6
+			dsi_vsync_active=0
+			dsi_hsync_active=0
+			dsi_de_active=0
+			dsi_pixelclk_active=0
+		elif [ "$dsi_size" == "4_0" ]; then
+			dsi_lane=2
+			dsi_clock_frequency=50000000
+			dsi_hactive=480
+			dsi_vactive=800
+			dsi_vsync_len=20
+			dsi_vback_porch=100
+			dsi_vfront_porch=20
+			dsi_hsync_len=150
+			dsi_hback_porch=150
+			dsi_hfront_porch=100
+			dsi_vsync_active=0
+			dsi_hsync_active=0
+			dsi_de_active=0
+			dsi_pixelclk_active=0
+		elif [ "$dsi_size" == "7_0/5_0" ]; then
+			dsi_lane=2
+			dsi_clock_frequency=50000000
+			dsi_hactive=1024
+			dsi_vactive=600
+			dsi_vsync_len=10
+			dsi_vback_porch=10
+			dsi_vfront_porch=10
+			dsi_hsync_len=100
+			dsi_hback_porch=100
+			dsi_hfront_porch=100
+			dsi_vsync_active=0
+			dsi_hsync_active=0
+			dsi_de_active=0
+			dsi_pixelclk_active=0
+		elif [ "$dsi_size" == "7_9" ]; then
+			dsi_lane=2
+			dsi_clock_frequency=50000000
+			dsi_hactive=400
+			dsi_vactive=1280
+			dsi_vsync_len=20
+			dsi_vback_porch=10
+			dsi_vfront_porch=20
+			dsi_hsync_len=40
+			dsi_hback_porch=40
+			dsi_hfront_porch=30
+			dsi_vsync_active=0
+			dsi_hsync_active=0
+			dsi_de_active=0
+			dsi_pixelclk_active=0
+		elif [ "$dsi_size" == "8_0/10_1" ]; then
+			dsi_lane=2
+			dsi_clock_frequency=80000000
+			dsi_hactive=1280
+			dsi_vactive=800
+			dsi_vsync_len=40
+			dsi_vback_porch=48
+			dsi_vfront_porch=40
+			dsi_hsync_len=40
+			dsi_hback_porch=146
+			dsi_hfront_porch=20
+			dsi_vsync_active=0
+			dsi_hsync_active=0
+			dsi_de_active=0
+			dsi_pixelclk_active=0
+		elif [ "$dsi_size" == "11_9" ]; then
+			dsi_lane=2
+			dsi_clock_frequency=50000000
+			dsi_hactive=320
+			dsi_vactive=1480
+			dsi_vsync_len=60
+			dsi_vback_porch=60
+			dsi_vfront_porch=60
+			dsi_hsync_len=60
+			dsi_hback_porch=60
+			dsi_hfront_porch=60
+			dsi_vsync_active=0
+			dsi_hsync_active=0
+			dsi_de_active=0
+			dsi_pixelclk_active=0
+		elif [ "$dsi_size" == "4_0_C" ]; then
+			dsi_lane=2
+			dsi_clock_frequency=50000000
+			dsi_hactive=720
+			dsi_vactive=720
+			dsi_vsync_len=16
+			dsi_vback_porch=4
+			dsi_vfront_porch=8
+			dsi_hsync_len=120
+			dsi_hback_porch=32
+			dsi_hfront_porch=200
+			dsi_vsync_active=0
+			dsi_hsync_active=0
+			dsi_de_active=0
+			dsi_pixelclk_active=0
+		elif [ "$dsi_size" == "5_0_D" ]; then
+			dsi_lane=2
+			dsi_clock_frequency=83333000
+			dsi_hactive=720
+			dsi_vactive=1280
+			dsi_vsync_len=20
+			dsi_vback_porch=20
+			dsi_vfront_porch=20
+			dsi_hsync_len=100
+			dsi_hback_porch=100
+			dsi_hfront_porch=80
+			dsi_vsync_active=0
+			dsi_hsync_active=0
+			dsi_de_active=0
+			dsi_pixelclk_active=0
+		elif [ "$dsi_size" == "6_25" ]; then
+			dsi_lane=2
+			dsi_clock_frequency=83333000
+			dsi_hactive=720
+			dsi_vactive=1560
+			dsi_vsync_len=20
+			dsi_vback_porch=20
+			dsi_vfront_porch=20
+			dsi_hsync_len=50
+			dsi_hback_porch=50
+			dsi_hfront_porch=50
+			dsi_vsync_active=0
+			dsi_hsync_active=0
+			dsi_de_active=0
+			dsi_pixelclk_active=0
+		elif [ "$dsi_size" == "8_8" ]; then
+			dsi_lane=2
+			dsi_clock_frequency=83333000
+			dsi_hactive=480
+			dsi_vactive=1920
+			dsi_vsync_len=20
+			dsi_vback_porch=20
+			dsi_vfront_porch=20
+			dsi_hsync_len=50
+			dsi_hback_porch=50
+			dsi_hfront_porch=50
+			dsi_vsync_active=0
+			dsi_hsync_active=0
+			dsi_de_active=0
+			dsi_pixelclk_active=0
+		elif [ "$dsi_size" == "7_0_H" ]; then
+			dsi_lane=2
+			dsi_clock_frequency=83333000
+			dsi_hactive=1280
+			dsi_vactive=720
+			dsi_vsync_len=64
+			dsi_vback_porch=64
+			dsi_vfront_porch=64
+			dsi_hsync_len=64
+			dsi_hback_porch=64
+			dsi_hfront_porch=64
+			dsi_vsync_active=0
+			dsi_hsync_active=0
+			dsi_de_active=0
+			dsi_pixelclk_active=0
+		fi
+	elif [ "$dsi_type" == "RPI_Official_DSI" ]; then
+		if [ "$dsi_size" == "7_0" ]; then
+			dsi_lane=1
+			dsi_clock_frequency=30000000
+			dsi_hactive=800
+			dsi_vactive=480
+			dsi_vsync_len=22
+			dsi_vback_porch=2
+			dsi_vfront_porch=7
+			dsi_hsync_len=45
+			dsi_hback_porch=2
+			dsi_hfront_porch=131
+			dsi_vsync_active=0
+			dsi_hsync_active=0
+			dsi_de_active=0
+			dsi_pixelclk_active=0
+		fi
+	else
+		luckfox_result_handle "$LF_ERR" "The dsi_type $dsi_type is not support!"
+	fi
+
+	# Update fdt overlay files
+	luckfox_update_fdt
+
+	# dsi-timing0
+	if [ "$dsi_type"  == "WS_DSI" ] && [ "$dsi_size" == "10_1" ]; then
+		fdtput -t x "$LUCKFOX_RESOURCE_FDT_DTB" /dsi@ff640000/panel@0 panel-init-sequence \
+150002e0 00150002 e1931500 02e26515 0002e3f8 15000280 01150002 e0011500 02000015 00020138 \
+15000203 10150002 04381500 020c7415 00021700 15000218 af150002 19001500 021a0015 00021baf \
+1500021c 00150002 35261500 02370915 00023804 15000239 00150002 3a011500 023c7815 00023dff \
+1500023e ff150002 3f7f1500 02400615 000241a0 15000242 81150002 431e1500 02440d15 00024528 \
+15000255 02150002 57691500 02590a15 00025a2a 1500025b 17150002 5d7f1500 025e6a15 00025f5b \
+15000260 4f150002 614a1500 02623d15 00026341 15000264 2a150002 65441500 02664315 00026744 \
+15000268 62150002 69521500 026a5915 00026b4c 1500026c 48150002 6d3a1500 026e2615 00026f00 \
+15000270 7f150002 716a1500 02725b15 0002734f 15000274 4a150002 753d1500 02764115 0002772a \
+15000278 44150002 79431500 027a4415 00027b62 1500027c 52150002 7d591500 027e4c15 00027f48 \
+15000280 3a150002 81261500 02820015 0002e002 15000200 42150002 01421500 02024015 00020340 \
+15000204 5e150002 055e1500 02065f15 0002075f 15000208 5f150002 09571500 020a5715 00020b77 \
+1500020c 77150002 0d471500 020e4715 00020f45 15000210 45150002 114b1500 02124b15 00021349 \
+15000214 49150002 155f1500 02164115 00021741 15000218 40150002 19401500 021a5e15 00021b5e \
+1500021c 5f150002 1d5f1500 021e5f15 00021f57 15000220 57150002 21771500 02227715 00022346 \
+15000224 46150002 25441500 02264415 0002274a 15000228 4a150002 29481500 022a4815 00022b5f \
+1500022c 01150002 2d011500 022e0015 00022f00 15000230 1f150002 311f1500 02321e15 0002331e \
+15000234 1f150002 35171500 02361715 00023737 15000238 37150002 39081500 023a0815 00023b0a \
+1500023c 0a150002 3d041500 023e0415 00023f06 15000240 06150002 411f1500 02420215 00024302 \
+15000244 00150002 45001500 02461f15 0002471f 15000248 1e150002 491e1500 024a1f15 00024b17 \
+1500024c 17150002 4d371500 024e3715 00024f09 15000250 09150002 510b1500 02520b15 00025305 \
+15000254 05150002 55071500 02560715 0002571f 15000258 40150002 5b301500 025c0015 00025d34 \
+1500025e 05150002 5f021500 02630015 0002646a 15000267 73150002 68071500 02690815 00026a6a \
+1500026b 08150002 6c001500 026d0015 00026e00 1500026f 88150002 75ff1500 0277dd15 0002782c \
+15000279 15150002 7a171500 027d1415 00027e82 150002e0 04150002 000e1500 0202b315 00020961 \
+1500020e 48150002 e0001500 02e60215 0002e70c 05780111 050001e0 05050129
+	elif [ "$dsi_type"  == "WS_DSI" ] && [ "$dsi_size" == "7_0" ]; then
+		fdtput -t x "$LUCKFOX_RESOURCE_FDT_DTB" /dsi@ff640000/panel@0 panel-init-sequence \
+390004ff 98810315 00020100 15000202 00150002 03731500 02040015 00020500 15000206 0a150002 \
+07001500 02080015 00020961 1500020a 00150002 0b001500 020c0115 00020d00 1500020e 00150002 \
+0f611500 02106115 00021100 15000212 00150002 13001500 02140015 00021500 15000216 00150002 \
+17001500 02180015 00021900 1500021a 00150002 1b001500 021c0015 00021d00 1500021e 40150002 \
+1f801500 02200615 00022101 15000222 00150002 23001500 02240015 00022500 15000226 00150002 \
+27001500 02283315 00022903 1500022a 00150002 2b001500 022c0015 00022d00 1500022e 00150002 \
+2f001500 02300015 00023100 15000232 00150002 33001500 02340415 00023500 15000236 00150002 \
+37001500 02383c15 00023900 1500023a 00150002 3b001500 023c0015 00023d00 1500023e 00150002 \
+3f001500 02400015 00024100 15000242 00150002 43001500 02440015 00025010 15000251 32150002 \
+52541500 02537615 00025498 15000255 ba150002 56101500 02573215 00025854 15000259 76150002 \
+5a981500 025bba15 00025cdc 1500025d fe150002 5e001500 025f0e15 0002600f 15000261 0c150002 \
+620d1500 02630615 00026407 15000265 02150002 66021500 02670215 00026802 15000269 01150002 \
+6a001500 026b0215 00026c15 1500026d 14150002 6e021500 026f0215 00027002 15000271 02150002 \
+72021500 02730215 00027402 15000275 0e150002 760f1500 02770c15 0002780d 15000279 06150002 \
+7a071500 027b0215 00027c02 1500027d 02150002 7e021500 027f0115 00028000 15000281 02150002 \
+82141500 02831515 00028402 15000285 02150002 86021500 02870215 00028802 15000289 02150002 \
+8a023900 04ff9881 04150002 6c151500 026e2a15 00026f33 1500023b 98150002 3a941500 028d1415 \
+000287ba 15000226 76150002 b2d11500 02b50615 00023801 15000239 00390004 ff988101 15000222 \
+0a150002 31001500 02537d15 0002558f 15000240 33150002 50961500 02519615 00026023 150002a0 \
+08150002 a11d1500 02a22a15 0002a310 150002a4 15150002 a5281500 02a61c15 0002a71d 150002a8 \
+7e150002 a91d1500 02aa2915 0002ab6b 150002ac 1a150002 ad181500 02ae4b15 0002af20 150002b0 \
+27150002 b1501500 02b26415 0002b339 150002c0 08150002 c11d1500 02c22a15 0002c310 150002c4 \
+15150002 c5281500 02c61c15 0002c71d 150002c8 7e150002 c91d1500 02ca2915 0002cb6b 150002cc \
+1a150002 cd181500 02ce4b15 0002cf20 150002d0 27150002 d1501500 02d26415 0002d339 390004ff \
+98810015 00023500 05780111 05140129
+	elif [ "$dsi_type"  == "WS_DSI" ] && [ "$dsi_size" == "5_0" ]; then
+		fdtput -t x "$LUCKFOX_RESOURCE_FDT_DTB" /dsi@ff640000/panel@0 panel-init-sequence \
+390004b9 ff839439 000bb148 0a6a0933 5471712e 45390007 ba610368 6bb2c039 0007b200 80640c06 \
+2f390016 b41c781c 781c7801 0c867500 3f1c781c 781c7801 0c863900 22d30000 00000000 08083210 \
+05000532 13c10001 32100800 00370307 07370505 370c4039 002dd518 18181822 23202104 05060700 \
+01020318 18181818 18181818 18181818 18181818 18181818 18181819 19191939 002dd618 18191921 \
+20232203 02010007 06050418 18181818 18181818 18181818 18181818 18181818 18181819 19181839 \
+003be007 08090d10 14161324 36484a58 6f768097 a5a8b5c6 6263686f 72787f7f 0002080d 0c0e0f10 \
+2436484a 586f7882 99a4a0b1 c05e5e64 6b6c737f 7f150002 cc083900 03c01f73 390003b6 6b6b1500 \
+02d40215 0002bd01 150002b1 00150002 bd001500 02130115 00022100 15000236 08390008 bf408150 \
+001afc01 05c80111 39000db2 0080640c 062f0000 0000c018 05500129
+	elif [ "$dsi_type"  == "RPI_Official_DSI" ] && [ "$dsi_size" == "7_0" ]; then
+		fdtput -t x "$LUCKFOX_RESOURCE_FDT_DTB" /dsi@ff640000/panel@0 panel-init-sequence \
+29000610 02030000 00290006 64010c00 00002900 0668010c 00000029 00064401 00000049 29000648 \
+01000000 00290006 14011500 00002900 06500460 00000029 00062004 52011000 29000624 0414001a \
+00290006 28042003 69002900 062c0402 00150029 00063004 e0010700 29000634 04010000 00290006 \
+64040f04 00002900 06010101 00000029 00060202 01000000
+	fi
+
+	# dsi-timing0
+	fdtput "$LUCKFOX_RESOURCE_FDT_DTB" /dsi@ff640000/panel@0 dsi,lanes 					$dsi_lane
+	fdtput "$LUCKFOX_RESOURCE_FDT_DTB" /dsi@ff640000/panel@0/display-timings/timing0 clock-frequency	$dsi_clock_frequency
+	fdtput "$LUCKFOX_RESOURCE_FDT_DTB" /dsi@ff640000/panel@0/display-timings/timing0 hactive		$dsi_hactive
+	fdtput "$LUCKFOX_RESOURCE_FDT_DTB" /dsi@ff640000/panel@0/display-timings/timing0 vactive		$dsi_vactive
+	fdtput "$LUCKFOX_RESOURCE_FDT_DTB" /dsi@ff640000/panel@0/display-timings/timing0 vsync-len		$dsi_vsync_len
+	fdtput "$LUCKFOX_RESOURCE_FDT_DTB" /dsi@ff640000/panel@0/display-timings/timing0 vback-porch		$dsi_vback_porch
+	fdtput "$LUCKFOX_RESOURCE_FDT_DTB" /dsi@ff640000/panel@0/display-timings/timing0 vfront-porch		$dsi_vfront_porch
+	fdtput "$LUCKFOX_RESOURCE_FDT_DTB" /dsi@ff640000/panel@0/display-timings/timing0 hsync-len		$dsi_hsync_len
+	fdtput "$LUCKFOX_RESOURCE_FDT_DTB" /dsi@ff640000/panel@0/display-timings/timing0 hback-porch		$dsi_hback_porch
+	fdtput "$LUCKFOX_RESOURCE_FDT_DTB" /dsi@ff640000/panel@0/display-timings/timing0 hfront-porch		$dsi_hfront_porch
+	fdtput "$LUCKFOX_RESOURCE_FDT_DTB" /dsi@ff640000/panel@0/display-timings/timing0 vsync-active		$dsi_vsync_active
+	fdtput "$LUCKFOX_RESOURCE_FDT_DTB" /dsi@ff640000/panel@0/display-timings/timing0 hsync-active 		$dsi_hsync_active
+	fdtput "$LUCKFOX_RESOURCE_FDT_DTB" /dsi@ff640000/panel@0/display-timings/timing0 de-active 		$dsi_de_active
+	fdtput "$LUCKFOX_RESOURCE_FDT_DTB" /dsi@ff640000/panel@0/display-timings/timing0 pixelclk-active  	$dsi_pixelclk_active
+
+	# GT911 to RPI_Compatible_DSI
+	# create fdt_content
+	if [ "$dsi_type"  == "RPI_Compatible_DSI" ]; then
+		luckfox_fdt_delete "touchscreen-size-x"
+		luckfox_fdt_delete "touchscreen-size-y"
+		luckfox_fdt_delete "touchscreen-inverted-x"
+		luckfox_fdt_delete "touchscreen-inverted-y"
+		luckfox_fdt_delete "touchscreen-swapped-x-y"
+		if [ "$dsi_size" == "2_8" ]; then
+			local fdt_content="
+/dts-v1/;
+/plugin/;
+
+&{/i2c@ff060000/gt911@14}{
+	touchscreen-size-x = <0x1E0>;
+	touchscreen-size-y = <0x280>;
+	touchscreen-inverted-y;
+	touchscreen-swapped-x-y;
+};
+"
+		elif [ "$dsi_size" == "3_4" ]; then
+			local fdt_content="
+/dts-v1/;
+/plugin/;
+
+&{/i2c@ff060000/gt911@14}{
+	touchscreen-size-x = <0x320>;
+	touchscreen-size-y = <0x320>;
+};
+"
+		elif [ "$dsi_size" == "4_0" ]; then
+			local fdt_content="
+/dts-v1/;
+/plugin/;
+
+&{/i2c@ff060000/gt911@14}{
+	touchscreen-size-x = <0x320>;
+	touchscreen-size-y = <0x1E0>;
+	touchscreen-inverted-x;
+	touchscreen-swapped-x-y;
+};
+"
+		elif [ "$dsi_size" == "7_0/5_0" ]; then
+			local fdt_content="
+/dts-v1/;
+/plugin/;
+
+&{/i2c@ff060000/gt911@14}{
+	touchscreen-size-x = <0x320>;
+	touchscreen-size-y = <0x1E0>;
+};
+"
+		elif [ "$dsi_size" == "7_9" ]; then
+			local fdt_content="
+/dts-v1/;
+/plugin/;
+
+&{/i2c@ff060000/gt911@14}{
+	touchscreen-size-x = <0x1000>;
+	touchscreen-size-y = <0x1000>;
+	touchscreen-inverted-x;
+	touchscreen-swapped-x-y;
+};
+"
+		elif [ "$dsi_size" == "8_0/10_1" ]; then
+			local fdt_content="
+/dts-v1/;
+/plugin/;
+
+&{/i2c@ff060000/gt911@14}{
+	touchscreen-size-x = <0x320>;
+	touchscreen-size-y = <0x500>;
+	touchscreen-inverted-x;
+	touchscreen-swapped-x-y;
+};
+"
+		elif [ "$dsi_size" == "11_9" ]; then
+			local fdt_content="
+/dts-v1/;
+/plugin/;
+
+&{/i2c@ff060000/gt911@14}{
+	touchscreen-inverted-x;
+	touchscreen-swapped-x-y;
+};
+"
+		elif [ "$dsi_size" == "4_0_C" ]; then
+			local fdt_content="
+/dts-v1/;
+/plugin/;
+
+&{/i2c@ff060000/gt911@14}{
+	touchscreen-size-x = <0x2D0>;
+	touchscreen-size-y = <0x2D0>;
+};
+"
+		elif [ "$dsi_size" == "5_0_D" ]; then
+			local fdt_content="
+/dts-v1/;
+/plugin/;
+
+&{/i2c@ff060000/gt911@14}{
+	touchscreen-inverted-x;
+	touchscreen-inverted-y;
+};
+"
+		elif [ "$dsi_size" == "6_25" ]; then
+			local fdt_content="
+/dts-v1/;
+/plugin/;
+
+&{/i2c@ff060000/gt911@14}{
+	touchscreen-inverted-x;
+	touchscreen-inverted-y;
+};
+"
+		elif [ "$dsi_size" == "7_0_H" ]; then
+			local fdt_content="
+/dts-v1/;
+/plugin/;
+
+&{/i2c@ff060000/gt911@14}{
+	touchscreen-inverted-x;
+	touchscreen-swapped-x-y;
+};
+"
+		fi
+	fi
+
+	# Overlay
+	luckfox_fdt_overlay "$fdt_content"
+
+	# Set cfg file
+	luckfox_set_pin_cfg "DSI_MODE" "$dsi_type"
+	luckfox_set_pin_cfg "DSI_SIZE" "$dsi_size"
+
+	#endregion
+}
+
+
+################################################################
+# @fu luckfox_dsi_logo_rotate_app
+#
+# @brief 1. Set rotate angle of the Logo.
+#
+# @param dsi_logo_rotate   - 1 -- 0° / 2 - 90° / 3 - 180° / 4 - 270°
+#
+# @return none
+################################################################
+function luckfox_dsi_logo_rotate_app() {
+	#region
+	local dsi_logo_rotate="$1"
+	local dsi_logo_rotate_angle dsi_logo_rotate_angle_hex
+
+	if [ "$dsi_logo_rotate" == 1 ];then
+		dsi_logo_rotate_angle=0
+	elif [ "$dsi_logo_rotate" == 2 ];then
+		dsi_logo_rotate_angle=90
+	elif [ "$dsi_logo_rotate" == 3 ];then
+		dsi_logo_rotate_angle=180
+	elif [ "$dsi_logo_rotate" == 4 ];then
+		dsi_logo_rotate_angle=270
+	else
+		dsi_logo_rotate_angle=0
+	fi
+
+	dsi_logo_rotate_angle_hex=$(printf "0x%x" $dsi_logo_rotate_angle)
+
+	# Update fdt overlay files
+	luckfox_update_fdt
+
+	local fdt_content="
+/dts-v1/;
+/plugin/;
+
+&{/display-subsystem/route/route-dsi}{
+	logo,rotate=<$dsi_logo_rotate_angle_hex>;
+};
+"
+	# Overlay
+	luckfox_fdt_overlay "$fdt_content"
+
+	# Set cfg file
+	luckfox_set_pin_cfg "DSI_LOGO_ROTATE" "$dsi_logo_rotate_angle"
+
+	#endregion
+}
+
+################################################################
+# --------------------- Advanced Options -----------------------
+################################################################
+
+################################################################
+# @fu hex_add
+#
+# @param hex1 -
+#	 hex2 -
+#
+# @return The sum of hex1 and hex2 in hexadecimal number.
+################################################################
+function hex_add() {
+	local hex1=$1
+	local hex2=$2
+
+	local dec1=$(printf "%d" 0x"$hex1")
+	local dec2=$(printf "%d" 0x"$hex2")
+	local sum_hex=$(printf "%X" $((dec1 + dec2)))
+
+	echo "$sum_hex"
+}
+
+################################################################
+# @fu luckfox_gpio_app
+#
+# @brief 1. Set the default pull-up or pull-down state and drive strength level.
+#
+# @param gpio_bank   	     -
+# 		 gpio_pull_mode      - normal / up / down
+# 		 gpio_ds_level		 -
+#
+# @return none
+################################################################
+function luckfox_gpio_app() {
+	local rmio_num="$1"
+	local gpio_pull_mode="$2"
+	local gpio_ds_level="$3"
+
+	local gpio_bank gpio_group gpio_number gpio_group
+	gpio_bank=$(rmio_get_gpio "$rmio_num" "bank")
+	gpio_group=$(rmio_get_gpio "$rmio_num" "group")
+	gpio_number=$(rmio_get_gpio "$rmio_num" "number")
+
+	local reg_addr_base reg_addr data
+
+	PULL_MODE_DATE_NORMAL=30000
+	PULL_MODE_DATE_UP=30001
+	PULL_MODE_DATE_DOWN=30002
+
+	DS_LEVEL_0=3F0001
+	DS_LEVEL_1=3F0003
+	DS_LEVEL_2=3F0007
+	DS_LEVEL_3=3F000F
+	DS_LEVEL_4=3F001F
+	DS_LEVEL_5=3F003F
+
+	# GPIO Bank
+	RK3506_GPIO0=ff950200
+	RK3506_GPIO1=ff660210
+	RK3506_GPIO2=ff4d8220
+	RK3506_GPIO3=ff4d8230
+
+	RK3506_GPIO0_DS=ff950100
+	RK3506_GPIO1_DS=ff660140
+
+	#Group
+	A_OFFSET=0
+	B_OFFSET=4
+	C_OFFSET=8
+	D_OFFSET=c
+
+	DS_A_OFFSET=0
+	DS_B_OFFSET=10
+	DS_C_OFFSET=20
+	DS_D_OFFSET=30
+
+	case $gpio_bank in
+	0)
+		reg_addr_base="$RK3506_GPIO0"
+		;;
+	1)
+		reg_addr_base="$RK3506_GPIO1"
+		;;
+	2)
+		reg_addr_base="$RK3506_GPIO2"
+		;;
+	3)
+		reg_addr_base="$RK3506_GPIO3"
+		;;
+	*)
+		luckfox_result_handle "$LF_ERR" "GPIO_BANK $gpio_bank is not support in luckfox gpio pull mode setting!"
+		exit
+		;;
+	esac
+
+	case $gpio_group in
+	A)
+		reg_addr=0x$(hex_add $reg_addr_base $A_OFFSET)
+		;;
+	B)
+		reg_addr=0x$(hex_add $reg_addr_base $B_OFFSET)
+		;;
+	C)
+		reg_addr=0x$(hex_add $reg_addr_base $C_OFFSET)
+		;;
+	D)
+		reg_addr=0x$(hex_add $reg_addr_base $D_OFFSET)
+		;;
+	*)
+		luckfox_result_handle "$LF_ERR" "GPIO_GROUP $gpio_group is not support in luckfox gpio pull mode setting!"
+		exit
+		;;
+	esac
+
+	case $gpio_pull_mode in
+	none)
+		data=0x$(hex_shift $PULL_MODE_DATE_NORMAL "$gpio_number")
+		;;
+	up)
+		data=0x$(hex_shift $PULL_MODE_DATE_UP "$gpio_number")
+		;;
+	down)
+		data=0x$(hex_shift $PULL_MODE_DATE_DOWN "$gpio_number")
+		;;
+	*)
+		luckfox_result_handle "$LF_ERR" "GPIO_MODE $gpio_pull_mode is not support in luckfox gpio_pull mode setting!"
+		exit
+		;;
+	esac
+
+	io -4 "$reg_addr" "$data"
+
+	# GPIO Drive Strength Level
+	if [ -n "$gpio_ds_level" ]; then
+		case $gpio_bank in
+		0)
+			reg_addr_base="$RK3506_GPIO0_DS"
+			;;
+		1)
+			reg_addr_base="$RK3506_GPIO1_DS"
+			;;
+		*)
+			luckfox_result_handle "$LF_ERR" "GPIO_BANK $gpio_bank is not support in luckfox_gpio drive strength setting!"
+			exit
+			;;
+		esac
+
+		case $gpio_group in
+		A)
+			reg_addr_group=$(hex_add $reg_addr_base $DS_A_OFFSET)
+			;;
+		B)
+			reg_addr_group=$(hex_add $reg_addr_base $DS_B_OFFSET)
+			;;
+		C)
+			reg_addr_group=$(hex_add $reg_addr_base $DS_C_OFFSET)
+			;;
+		D)
+			reg_addr_group=$(hex_add $reg_addr_base $DS_D_OFFSET)
+			;;
+		*)
+			luckfox_result_handle "$LF_ERR" "GPIO_GROUP $gpio_group is not support in luckfox_gpio drive strength setting!"
+			exit
+			;;
+		esac
+
+		local gpio_number_offset=$(printf "%X" $(( (gpio_number / 2) * 0x04 )))
+		reg_addr=0x$(hex_add "$reg_addr_group" "$gpio_number_offset")
+
+		local gpio_number_shift=$((gpio_number % 2))
+
+		case $gpio_ds_level in
+		0)
+			data=0x$(hex_shift $DS_LEVEL_0 "$gpio_number_shift")
+			;;
+		1)
+			data=0x$(hex_shift $DS_LEVEL_1 "$gpio_number_shift")
+			;;
+		2)
+			data=0x$(hex_shift $DS_LEVEL_2 "$gpio_number_shift")
+			;;
+		3)
+			data=0x$(hex_shift $DS_LEVEL_3 "$gpio_number_shift")
+			;;
+		4)
+			data=0x$(hex_shift $DS_LEVEL_4 "$gpio_number_shift")
+			;;
+		5)
+			data=0x$(hex_shift $DS_LEVEL_5 "$gpio_number_shift")
+			;;
+		*)
+			luckfox_result_handle "$LF_ERR" "GPIO_DRIVE_STRENGTH_LEVLE $gpio_ds_level is not support in luckfox_gpio drive strength setting!"
+			exit
+			;;
+		esac
+
+		io -4 "$reg_addr" "$data"
+	fi
+}
+
+################################################################
+# @fu luckfox_pwm_app
+#
+# @brief 1. Set the startup and shutdown of the PWM.
+#
+# @param action   	- 1 indicates enable, 0 indicates disable.
+# 		 pwm_main  	-
+#		 pwm_sub 	-
+#
+# @return none
+################################################################
+function luckfox_pwm_app() {
+	#region
+	local action="$1"
+	local pwm_main="$2"
+	local pwm_sub="$3"
+	local pwm_pin="$4"
+
+	local pwm_pre_pin
+	local pwm_pre_mode pwm_pre_status
+	local pwm_device_name pwm_pinctrl_phandle
+	local pwm_mode
+
+	pwm_pre_status=$(luckfox_get_pin_cfg "PMW${pwm_main}_CH${pwm_sub}_STATUS")
+
+	# Set status
+	if [ "$action" == 1 ]; then
+		if [ "$pwm_pre_status" == 1 ]; then
+			luckfox_result_handle "$LF_ERR" "PWM${pwm_main}_CH${pwm_sub} is enabled!"
+		fi
+
+		# Check input parameters and set default value
+		if [ -z "$pwm_pin" ]; then
+			pwm_pin=$(luckfox_get_pin_cfg "PWM${pwm_main}_CH${pwm_sub}_RM_IO")
+			if [ -z "$pwm_pin" ]; then
+				luckfox_result_handle "$LF_ERR" "Required parameter PWM${pwm_main}_CH${pwm_sub}_RM_IO can't found!"
+			fi
+		fi
+
+		luckfox_check_pin_diagram "RM_IO${pwm_pin}"
+		local pwm_action=okay
+	else
+		if [ "$pwm_pre_status" == 0 ]; then
+			return
+		fi
+
+		local pwm_action=disabled
+	fi
+
+	if [ $pwm_main == 0 ]; then
+		pwm_device_name=$(luckfox_get_device_name "pwm${pwm_main}_4ch_${pwm_sub}")
+	elif [ $pwm_main == 1 ]; then
+		pwm_device_name=$(luckfox_get_device_name "pwm${pwm_main}_8ch_${pwm_sub}")
+	fi
+
+	# get pinctrl phandle
+	if [ "$action" == 1 ]; then
+        pwm_pinctrl_phandle=$(luckfox_get_pinctrl_addr "rm-io${pwm_pin}-pwm${pwm_main}-ch${pwm_sub}")
+		local dtbo_content="
+/dts-v1/;
+/plugin/;
+
+&{$pwm_device_name}{
+	status=\"$pwm_action\";
+	pinctrl-names = \"active\";
+	pinctrl-0 = <$pwm_pinctrl_phandle>;
+};
+"
+    else
+		local dtbo_content="
+/dts-v1/;
+/plugin/;
+
+&{$pwm_device_name}{
+	status=\"$pwm_action\";
+};
+"
+    fi
+
+	# Get pwm pin mode
+	if [ "$pwm_main" == 0 ];  then
+		pwm_mode=$((45 + pwm_sub))
+	elif [ "$pwm_main " == 1 ]; then
+		pwm_mode=$((49 + pwm_sub))
+	fi
+
+	# dtb overlay
+	luckfox_dtbo_overlay "pwm${pwm_main}m${pwm_sub}" "$dtbo_content"
+
+	# Get pre pin
+	pwm_pre_pin=$(luckfox_get_pin_cfg "PWM${pwm_main}_M${pwm_sub}_RM_IO")
+
+	# Get pre pin mode
+	pwm_pre_mode=$(luckfox_get_pin_mode "$pwm_pre_pin")
+
+	# Update cfg file
+	if [ "$action" == 1 ]; then
+		# Set pin mode
+		luckfox_set_pin_mode "$pwm_pin" "$pwm_mode"
+
+		# Set cfg file
+		luckfox_set_pin_cfg "PWM${pwm_main}_M${pwm_sub}_STATUS" "$action"
+		luckfox_set_pin_cfg "PWM${pwm_main}_M${pwm_sub}_RM_IO" "$pwm_pin"
+
+		# Set mark
+		luckfox_set_pin_mark "RM_IO${pwm_pin}" "$action"
+	elif [ "$action" == 0 ]; then
+		# Set pin mode
+		if [ "$pwm_pre_mode" == 7 ]; then
+			luckfox_set_pin_mode "$pwm_pin" 0
+		fi
+
+		# Set cfg file
+		luckfox_set_pin_cfg "PWM${pwm_main}_M${pwm_sub}_STATUS" "$action"
+
+		# Set mark
+		luckfox_set_pin_mark "RM_IO${pwm_pre_pin}" "$action"
+	fi
+
+	#endregion
+}
+
+################################################################
+# @fu luckfox_uart_app
+#
+# @brief 1. Set the startup and shutdown of the UART.
+#
+# @param action     - 1 indicates enable, 0 indicates disable.
+# 	 uart_main  -
+#	 uart_tx_pin-
+#	 uart_rx_pin-
+#
+# @return none
+################################################################
+function luckfox_uart_app() {
+	#region
+	local action="$1"
+	local uart_main="$2"
+	local uart_tx_pin="$3"
+	local uart_rx_pin="$4"
+
+	local uart_tx_pre_pin uart_rx_pre_pin
+	local uart_tx_pre_mode uart_rx_pre_mode uart_pre_status
+	local uart_device_name
+	local uart_tx_mode uart_rx_mode
+
+	if [[ -e "/dev/ttyS${uart_main}" ]];then
+		uart_pre_status=1
+	else
+		uart_pre_status=0
+	fi
+
+	# Set status
+	if [ "$action" == 1 ]; then
+		if [ "$uart_pre_status" == 1 ]; then
+			luckfox_result_handle "$LF_ERR" "UART${uart_main} is enabled!"
+		fi
+
+		# Check input parameters and set default value
+		if [ -z "$uart_tx_pin" ]; then
+			uart_tx_pin=$(luckfox_get_pin_cfg "UART${uart_main}_TX_RM_IO")
+			if [ -z "$uart_tx_pin" ]; then
+				luckfox_result_handle "$LF_ERR" "Required parameter UART${uart_main}_TX_RM_IO can't found!"
+			fi
+		fi
+
+		if [ -z "$uart_rx_pin" ]; then
+			uart_rx_pin=$(luckfox_get_pin_cfg "UART${uart_main}_RX_RM_IO")
+			if [ -z "$uart_rx_pin" ]; then
+				luckfox_result_handle "$LF_ERR" "Required parameter UART${uart_main}_RX_RM_IO can't found!"
+			fi
+		fi
+
+		luckfox_check_pin_diagram "RM_IO${uart_tx_pin}" "RM_IO${uart_rx_pin}"
+
+		local uart_action=okay
+	else
+		if [ "$uart_pre_status" == 0 ]; then
+			return
+		fi
+
+		local uart_action=disabled
+	fi
+
+	# Get device addr
+	uart_device_name=$(luckfox_get_device_name "serial${uart_main}")
+
+	local dtbo_content="
+/dts-v1/;
+/plugin/;
+
+&{$uart_device_name}{
+    status=\"$uart_action\";
+};
+"
+	# dtb overlay
+	luckfox_dtbo_overlay "uart${uart_main}" "$dtbo_content"
+
+	# Get uart pin mode
+	if [ "$uart_main" == 1  ]; then
+		uart_tx_mode=16
+		uart_rx_mode=17
+	elif [ "$uart_main" == 2 ]; then
+		uart_tx_mode=18
+		uart_rx_mode=19
+	elif [ "$uart_main" == 3 ]; then
+		uart_tx_mode=20
+		uart_rx_mode=21
+	elif [ "$uart_main" == 4 ]; then
+		uart_tx_mode=24
+		uart_rx_mode=25
+	fi
+
+	# Get pre pin
+	uart_tx_pre_pin=$(luckfox_get_pin_cfg "UART${uart_main}_TX_RM_IO")
+	uart_rx_pre_pin=$(luckfox_get_pin_cfg "UART${uart_main}_RX_RM_IO")
+
+	# Get pre pin mode
+	uart_tx_pre_mode=$(luckfox_get_pin_mode "$uart_tx_pre_pin")
+	uart_rx_pre_mode=$(luckfox_get_pin_mode "$uart_rx_pre_pin")
+
+	# Update cfg file
+	if [ "$action" == 1 ]; then
+		# Set pin mode
+		luckfox_set_pin_mode "$uart_tx_pin" "$uart_tx_mode"
+		luckfox_set_pin_mode "$uart_rx_pin" "$uart_rx_mode"
+
+		# Set cfg file
+		luckfox_set_pin_cfg "UART${uart_main}_STATUS" "$action"
+		luckfox_set_pin_cfg "UART${uart_main}_RX_RM_IO" "$uart_tx_pin"
+		luckfox_set_pin_cfg "UART${uart_main}_TX_RM_IO" "$uart_rx_pin"
+
+		# Set mark
+		luckfox_set_pin_mark "RM_IO${uart_tx_pin}" "$action"
+		luckfox_set_pin_mark "RM_IO${uart_rx_pin}" "$action"
+
+	elif [ "$action" == 0 ]; then
+		# Set pin mode
+		if [ "$uart_tx_pre_mode" == 7 ]; then
+			luckfox_set_pin_mode "$uart_tx_pre_pin" 0
+		fi
+
+		if [ "$uart_rx_pre_mode" == 7 ]; then
+			luckfox_set_pin_mode "$uart_rx_pre_pin" 0
+		fi
+
+		# Set cfg file
+		luckfox_set_pin_cfg "UART${uart_main}_STATUS" "$action"
+
+		# Set mark
+		luckfox_set_pin_mark "RM_IO${uart_tx_pre_pin}" "$action"
+		luckfox_set_pin_mark "RM_IO${uart_rx_pre_pin}" "$action"
+
+		if [ -e "/dev/ttyS${uart_main}" ]; then
+			rm /dev/ttyS"${uart_main}"
+		fi
+	fi
+
+	#endregion
+}
+
+################################################################
+# @fu luckfox_i2c_app
+#
+# @brief 1. Set the startup and shutdown of the I2C.
+#
+# @param action	    - 1 indicates enable, 0 indicates disable.
+# 	 i2c_main   -
+#	 i2c_sda_pin-
+#	 i2c_scl_pin-
+#	 i2c_speed  -
+#
+# @return none
+################################################################
+function luckfox_i2c_app() {
+	#region
+	local action="$1"
+	local i2c_main="$2"
+	local i2c_sda_pin="$3"
+	local i2c_scl_pin="$4"
+	local i2c_speed="$5"
+
+	local i2c_sda_pre_pin i2c_scl_pre_pin
+	local i2c_sda_pre_mode i2c_scl_pre_mode i2c_pre_status
+	local i2c_device_name
+	local i2c_sda_mode i2c_scl_mode
+
+	if [ -z "$i2c_speed" ]; then
+		i2c_speed=5000000
+	fi
+
+	if [ -e "/dev/i2c-${i2c_main}" ];then
+		i2c_pre_status=1
+	else
+		i2c_pre_status=0
+	fi
+
+	# Set status
+	if [ "$action" == 1 ]; then
+		if [ "$i2c_pre_status" == 1 ]; then
+			luckfox_result_handle "$LF_ERR" "I2C${i2c_main} is enabled!"
+		fi
+
+		# Check input parameters and set default value
+		if [ -z "$i2c_sda_pin" ]; then
+			i2c_sda_pin=$(luckfox_get_pin_cfg "I2C${i2c_main}_SDA_RM_IO")
+			if [ -z "$i2c_sda_pin" ]; then
+				luckfox_result_handle "$LF_ERR" "Required parameter I2C${i2c_main}_SDA_RM_IO can't found!"
+			fi
+		fi
+
+		if [ -z "$i2c_scl_pin" ]; then
+			i2c_scl_pin=$(luckfox_get_pin_cfg "I2C${i2c_main}_SCL_RM_IO")
+			if [ -z "$i2c_scl_pin" ]; then
+				luckfox_result_handle "$LF_ERR" "Required parameter I2C${i2c_main}_SCL_RM_IO can't found!"
+			fi
+		fi
+
+		luckfox_check_pin_diagram "RM_IO${i2c_sda_pin}" "RM_IO${i2c_scl_pin}"
+
+		local i2c_action=okay
+	else
+		if [ "$i2c_pre_status" == 0 ]; then
+			return
+		fi
+
+		local i2c_action=disabled
+	fi
+
+	# Get device addr
+	i2c_device_name=$(luckfox_get_device_name "i2c${i2c_main}")
+
+	local dtbo_content="
+/dts-v1/;
+/plugin/;
+
+&{$i2c_device_name}{
+        status=\"$i2c_action\";
+        clock-frequency = <$i2c_speed>;
+};
+"
+	# dtb overlay
+	luckfox_dtbo_overlay "i2c${i2c_main}m${i2c_sub}" "$dtbo_content"
+
+	# Get i2c pin mode
+	if [ "$i2c_main" == 0  ]; then
+		i2c_sda_mode=31
+		i2c_scl_mode=30
+	elif [ "$i2c_main" == 1 ]; then
+		i2c_sda_mode=33
+		i2c_scl_mode=32
+	elif [ "$i2c_main" == 2 ]; then
+		i2c_sda_mode=35
+		i2c_scl_mode=34
+	fi
+
+	# Get pre pin
+	i2c_sda_pre_pin=$(luckfox_get_pin_cfg "I2C${i2c_main}_SDA_RM_IO")
+	i2c_scl_pre_pin=$(luckfox_get_pin_cfg "I2C${i2c_main}_SCL_RM_IO")
+
+	# Get pre pin mode
+	i2c_sda_pre_mode=$(luckfox_get_pin_mode "$i2c_sda_pre_pin")
+	i2c_scl_pre_mode=$(luckfox_get_pin_mode "$i2c_scl_pre_pin")
+
+	# Update cfg file
+	if [ "$action" == 1 ]; then
+		# Set pin mode
+		luckfox_set_pin_mode "$i2c_sda_pin" "$i2c_sda_mode"
+		luckfox_set_pin_mode "$i2c_scl_pin" "$i2c_scl_mode"
+
+		# Set pin pull up
+		luckfox_gpio_app "$i2c_sda_pin" up
+		luckfox_gpio_app "$i2c_scl_pin" up
+
+		# Set cfg file
+		luckfox_set_pin_cfg "I2C${i2c_main}_STATUS" "$action"
+		luckfox_set_pin_cfg "I2C${i2c_main}_SPEED" "$i2c_speed"
+		luckfox_set_pin_cfg "I2C${i2c_main}_SDA_RM_IO" "$i2c_sda_pin"
+		luckfox_set_pin_cfg "I2C${i2c_main}_SCL_RM_IO" "$i2c_scl_pin"
+
+		# Set mark
+		luckfox_set_pin_mark "RM_IO${i2c_sda_pin}" "$action"
+		luckfox_set_pin_mark "RM_IO${i2c_scl_pin}" "$action"
+
+	elif [ "$action" == 0 ]; then
+		# Set pin mode
+		if [ "$i2c_sda_pre_mode" == 7 ]; then
+			luckfox_set_pin_mode "$i2c_sda_pre_pin" 0
+			luckfox_gpio_app "$i2c_sda_pre_pin" none
+		fi
+
+		if [ "$i2c_scl_pre_mode" == 7 ]; then
+			luckfox_set_pin_mode "$i2c_scl_pre_pin" 0
+			luckfox_gpio_app "$i2c_scl_pre_pin" none
+		fi
+
+		# Set cfg file
+		luckfox_set_pin_cfg "I2C${i2c_main}_STATUS" "$action"
+
+		# Set mark
+		luckfox_set_pin_mark "RM_IO${i2c_sda_pre_pin}" "$action"
+		luckfox_set_pin_mark "RM_IO${i2c_scl_pre_pin}" "$action"
+	fi
+
+	#endregion
+}
+
+
+################################################################
+# @fu luckfox_spi_app
+#
+# @brief 1. Set the startup and shutdown of the SPI.
+#
+# @param action      - 1 indicates enable, 0 indicates disable.
+# 	 spi_main    -
+#	 spi_sub     -
+#	 cs_action   - 1 indicates enable SPI-CS
+#	 miso_action - 1 indicates enable SPI_MISO
+#	 spi_speed   -
+#
+# @return none
+################################################################
+function luckfox_spi_app() {
+	#region
+	local action="$1"
+	local spi_main="$2"
+	local spi_sclk_pin="$3"
+	local spi_mosi_pin="$4"
+	local spi_miso_pin="$5"
+	local spi_cs_pin="$6"
+	local spi_speed="$7"
+
+	local spi_sclk_pre_pin spi_mosi_pre_pin spi_miso_pre_pin spi_cs_pre_pin
+	local spi_sclk_pre_mode spi_mosi_pre_mode spi_miso_pre_mode spi_cs_pre_mode spi_pre_status
+	local spi_device_name
+	local spi_miso_mode spi_mosi_mode spi_sclk_mode spi_cs_mode
+
+	if [ -z "$spi_speed" ]; then
+		spi_speed=10000000
+	fi
+
+	if [[ -e "/dev/spidev${spi_main}.${spi_main}" ]];then
+		spi_pre_status=1
+	else
+		spi_pre_status=0
+	fi
+
+	# Set status
+	if [ "$action" == 1 ]; then
+		if [ "$spi_pre_status" == 1 ]; then
+			LF_ERR "SPI${spi_main} is enabled!"
+		fi
+
+		# Check input parameters and set default value
+		if [ -z "$spi_sclk_pin" ]; then
+			spi_sclk_pin=$(luckfox_get_pin_cfg "SPI${spi_main}_SCLK_RM_IO")
+			if [ -z "$spi_sclk_pin" ]; then
+				luckfox_result_handle  "$LF_ERR" "Required parameter SPI${spi_main}_SCLK_RM_IO can't found!"
+			fi
+		fi
+
+		if [ -z "$spi_mosi_pin" ]; then
+			spi_mosi_pin=$(luckfox_get_pin_cfg "SPI${spi_main}_MOSI_RM_IO")
+			if [ -z "$spi_mosi_pin" ]; then
+				luckfox_result_handle "$LF_ERR" "Required parameter SPI${spi_main}_MOSI_RM_IO can't found!"
+			fi
+		fi
+
+		luckfox_check_pin_diagram "RM_IO${spi_mosi_pin}" "RM_IO${spi_sclk_pin}"	"RM_IO${spi_miso_pin}" "RM_IO${spi_cs_pin}"
+
+		local spi_action=okay
+	else
+		if [ "$spi_pre_status" == 0 ]; then
+			return
+		fi
+
+		local spi_action=disabled
+	fi
+
+	# Get device addr
+	spi_device_name=$(luckfox_get_device_name "spi${spi_main}")
+
+	# Build dtbo_content to overlay
+	local dtbo_content="
+/dts-v1/;
+/plugin/;
+
+&{$spi_device_name}{
+        status=\"$spi_action\";
+		pinctrl-0 = <>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		spidev@$spi_main {
+			compatible = \"rockchip,spidev\";
+			spi-max-frequency = <$spi_speed>;
+			reg = <$spi_main>;
+		};
+};
+"
+	# dtb overlay
+	luckfox_dtbo_overlay "spi${spi_main}" "$dtbo_content"
+
+	# Get spi pin mode
+	if [ "$spi_main" == 0  ]; then
+		spi_sclk_mode=82
+		spi_mosi_mode=83
+		spi_miso_mode=84
+		spi_cs_mode=85
+	elif [ "$spi_main" == 1 ]; then
+		spi_sclk_mode=87
+		spi_mosi_mode=88
+		spi_miso_mode=89
+		spi_cs_mode=90
+	fi
+
+	# Get pre pin
+	spi_sclk_pre_pin=$(luckfox_get_pin_cfg "SPI${spi_main}_SCLK_RM_IO")
+	spi_mosi_pre_pin=$(luckfox_get_pin_cfg "SPI${spi_main}_MOSI_RM_IO")
+	spi_miso_pre_pin=$(luckfox_get_pin_cfg "SPI${spi_main}_MISO_RM_IO")
+	spi_cs_pre_pin=$(luckfox_get_pin_cfg "SPI${spi_main}_CS_RM_IO")
+
+	# Get pre pin mode
+	spi_sclk_pre_mode=$(luckfox_get_pin_mode "$spi_sclk_pre_pin")
+	spi_mosi_pre_mode=$(luckfox_get_pin_mode "$spi_mosi_pre_pin")
+	spi_miso_pre_mode=$(luckfox_get_pin_mode "$spi_miso_pre_pin")
+	spi_cs_pre_mode=$(luckfox_get_pin_mode "$spi_cs_pre_pin")
+
+	# Update cfg file
+	if [ "$action" == 1 ]; then
+		# Set pin mode
+		luckfox_set_pin_mode "$spi_sclk_pin" "$spi_sclk_mode"
+		luckfox_set_pin_mode "$spi_mosi_pin" "$spi_mosi_mode"
+		luckfox_set_pin_mode "$spi_miso_pin" "$spi_miso_mode"
+		luckfox_set_pin_mode "$spi_cs_pin" "$spi_cs_mode"
+
+		# Set pin drive strength level
+		luckfox_gpio_app "$spi_sclk_pin" none 3
+		luckfox_gpio_app "$spi_mosi_pin" none 3
+		luckfox_gpio_app "$spi_miso_pin" none 3
+		luckfox_gpio_app "$spi_cs_pin"   none 3
+
+		# Set cfg file
+		luckfox_set_pin_cfg "SPI${spi_main}_STATUS" "$action"
+		luckfox_set_pin_cfg "SPI${spi_main}_SPEED" "$spi_speed"
+		luckfox_set_pin_cfg "SPI${spi_main}_SCLK_RM_IO" "$spi_sclk_pin"
+		luckfox_set_pin_cfg "SPI${spi_main}_MOSI_RM_IO" "$spi_mosi_pin"
+		luckfox_set_pin_cfg "SPI${spi_main}_MISO_RM_IO" "$spi_miso_pin"
+		luckfox_set_pin_cfg "SPI${spi_main}_CS_RM_IO" "$spi_cs_pin"
+
+		# Set mark
+		luckfox_set_pin_mark "RM_IO${spi_sclk_pin}" "$action"
+		luckfox_set_pin_mark "RM_IO${spi_mosi_pin}" "$action"
+		luckfox_set_pin_mark "RM_IO${spi_miso_pin}" "$action"
+		luckfox_set_pin_mark "RM_IO${spi_cs_pin}" "$action"
+
+	elif [ "$action" == 0 ]; then
+		# Set pin mode
+		if [ "$spi_sclk_pre_mode" == 7 ]; then
+			luckfox_set_pin_mode "$spi_sclk_pre_pin" 0
+			luckfox_gpio_app "$spi_sclk_pre_pin" none 2
+		fi
+
+		if [ "$spi_mosi_pre_mode" == 7 ]; then
+			luckfox_set_pin_mode "$spi_mosi_pre_pin" 0
+			luckfox_gpio_app "$spi_mosi_pre_pin" none 2
+		fi
+
+		if [ "$spi_miso_pre_mode" == 7 ]; then
+			luckfox_set_pin_mode "$spi_miso_pre_pin" 0
+			luckfox_gpio_app "$spi_miso_pre_pin" none 2
+		fi
+
+		if [ "$spi_cs_pre_mode" == 7 ]; then
+			luckfox_set_pin_mode "$spi_cs_pre_pin" 0
+			luckfox_gpio_app "$spi_cs_pre_pin" none 2
+		fi
+
+		# Set cfg file
+		luckfox_set_pin_cfg "SPI${spi_main}_STATUS" "$action"
+
+		# Set mark
+		luckfox_set_pin_mark "RM_IO${spi_sclk_pre_pin}" "$action"
+		luckfox_set_pin_mark "RM_IO${spi_mosi_pre_pin}" "$action"
+		luckfox_set_pin_mark "RM_IO${spi_miso_pre_pin}" "$action"
+		luckfox_set_pin_mark "RM_IO${spi_cs_pre_pin}" "$action"
+	fi
+
+	#endregion
+}
+
+################################################################
+# @fu luckfox_can_app
+#
+# @brief 1. Set the startup and shutdown of the CAN.
+#
+# @param action	    - 1 indicates enable, 0 indicates disable.
+# 	 can_main   -
+#	 can_tx_pin -
+#	 can_rx_pin -
+#	 can_speed  -
+#
+# @return none
+################################################################
+function luckfox_can_app() {
+	#region
+	local action="$1"
+	local can_main="$2"
+	local can_tx_pin="$3"
+	local can_rx_pin="$4"
+	local can_speed="$5"
+
+	local can_tx_pre_pin can_rx_pre_pin
+	local can_tx_pre_mode can_rx_pre_mode can_pre_status
+	local can_device_name
+	local can_tx_mode can_rx_mode
+
+	if [ -z "$can_speed" ]; then
+		can_speed=300000000
+	fi
+
+	if ifconfig -a | grep -q "can${can_main}"; then
+		can_pre_status=1
+	else
+		can_pre_status=0
+	fi
+
+	# Set status
+	if [ "$action" == 1 ]; then
+		if [ "$can_pre_status" == 1 ]; then
+			luckfox_result_handle "$LF_ERR" "can${can_main} is enabled!"
+		fi
+
+		# Check input parameters and set default value
+		if [ -z "$can_tx_pin" ]; then
+			can_tx_pin=$(luckfox_get_pin_cfg "can${can_main}_tx_RM_IO")
+			if [ -z "$can_tx_pin" ]; then
+				luckfox_result_handle "$LF_ERR" "Required parameter can${can_main}_tx_RM_IO can't found!"
+			fi
+		fi
+
+		if [ -z "$can_rx_pin" ]; then
+			can_rx_pin=$(luckfox_get_pin_cfg "can${can_main}_rx_RM_IO")
+			if [ -z "$can_rx_pin" ]; then
+				luckfox_result_handle "$LF_ERR" "Required parameter can${can_main}_rx_RM_IO can't found!"
+			fi
+		fi
+
+		luckfox_check_pin_diagram "RM_IO${can_tx_pin}" "RM_IO${can_rx_pin}"
+
+		local can_action=okay
+	else
+		if [ "$can_pre_status" == 0 ]; then
+			return
+		fi
+
+		local can_action=disabled
+	fi
+
+	# Get device addr
+	can_device_name=$(luckfox_get_device_name "can${can_main}")
+
+	local dtbo_content="
+/dts-v1/;
+/plugin/;
+
+&{$can_device_name}{
+        status=\"$can_action\";
+        assigned-clock-rates = <$can_speed>;
+};
+"
+	# dtb overlay
+	luckfox_dtbo_overlay "can${can_main}m${can_sub}" "$dtbo_content"
+
+	# Get can pin mode
+	if [ "$can_main" == 0  ]; then
+		can_tx_mode=43
+		can_rx_mode=44
+	elif [ "$can_main" == 1 ]; then
+		can_tx_mode=41
+		can_rx_mode=42
+	fi
+
+	# Get pre pin
+	can_tx_pre_pin=$(luckfox_get_pin_cfg "CAN${can_main}_TX_RM_IO")
+	can_rx_pre_pin=$(luckfox_get_pin_cfg "CAN${can_main}_RX_RM_IO")
+
+	# Get pre pin mode
+	can_tx_pre_mode=$(luckfox_get_pin_mode "$can_tx_pre_pin")
+	can_rx_pre_mode=$(luckfox_get_pin_mode "$can_rx_pre_pin")
+
+	# Update cfg file
+	if [ "$action" == 1 ]; then
+		# Set pin mode
+		luckfox_set_pin_mode "$can_tx_pin" "$can_tx_mode"
+		luckfox_set_pin_mode "$can_rx_pin" "$can_rx_mode"
+
+		# Set pin pull up
+		luckfox_gpio_app "$can_tx_pin" up
+		luckfox_gpio_app "$can_rx_pin" up
+
+		# Set cfg file
+		luckfox_set_pin_cfg "CAN${can_main}_STATUS" "$action"
+		luckfox_set_pin_cfg "CAN${can_main}_SPEED" "$can_speed"
+		luckfox_set_pin_cfg "CAN${can_main}_TX_RM_IO" "$can_tx_pin"
+		luckfox_set_pin_cfg "CAN${can_main}_RX_RM_IO" "$can_rx_pin"
+
+		# Set mark
+		luckfox_set_pin_mark "RM_IO${can_tx_pin}" "$action"
+		luckfox_set_pin_mark "RM_IO${can_rx_pin}" "$action"
+
+	elif [ "$action" == 0 ]; then
+		# Set pin mode
+		if [ "$can_tx_pre_mode" == 7 ]; then
+			luckfox_set_pin_mode "$can_tx_pre_pin" 0
+			luckfox_gpio_app "$can_tx_pre_pin" none
+		fi
+
+		if [ "$can_rx_pre_mode" == 7 ]; then
+			luckfox_set_pin_mode "$can_rx_pre_pin" 0
+			luckfox_gpio_app "$can_rx_pre_pin" none
+		fi
+
+		# Set cfg file
+		luckfox_set_pin_cfg "CAN${can_main}_STATUS" "$action"
+
+		# Set mark
+		luckfox_set_pin_mark "RM_IO${can_tx_pre_pin}" "$action"
+		luckfox_set_pin_mark "RM_IO${can_rx_pre_pin}" "$action"
+	fi
+
+	#endregion
+}
+
+################################################################
+# @fu luckfox_usb_app
+#
+# @brief 1. Set the USB mode
+#
+# @param usb_mode -
+#
+# @return none
+################################################################
+function luckfox_usb_app() {
+	#region
+	local usb_mode="$1"
+
+	# update fdt
+	luckfox_update_fdt
+
+	# fdt overlay content
+	local fdt_content="
+/dts-v1/;
+/plugin/;
+
+&{/usbdrd/usb@ffb00000}{
+    dr_mode =\"${usb_mode}\";
+};
+"
+	# fdt overlay
+	luckfox_fdt_overlay "$fdt_content"
+
+	# update cfg
+	luckfox_set_pin_cfg "USB_MODE" "$usb_mode"
+
+	#endregion
+}
+
+################################################################
+# ------------------------- 4G Module --------------------------
+################################################################
+
+################################################################
+# @fu luckfox_4g_reset_back
+#
+# @brief 1. The device restarts and changes the USB PID.
+#		 2. Run the background initialization program based on the Dial-up mode.
+#
+# @param cmd  - The command to switch the operating mode of a USB network adapter.
+#		 mode - Dial-up Mode of the USB 4G Network Card
+#
+# @return none
+################################################################
+function luckfox_4g_reset_back() {
+	local cmd="$1"
+	local mode="$2"
+
+	if [ ! -e "/dev/ttyUSB2" ]; then
+		luckfox_result_handle $LF_NONE "/dev/ttyUSB2"
+	fi
+
+	# Close the related background processes.
+	ifconfig wwan0 down >/dev/null 2>&1
+	killall simcom-cm >/dev/null 2>&1
+	killall pppd >/dev/null 2>&1
+	killall udhcpc >/dev/null 2>&1
+
+	echo "$cmd" >/dev/ttyUSB2
+
+	# wwan
+	if [ "$mode" == "wwan" ]; then
+		while true; do
+			if lsusb | grep -q "9001"; then
+				break
+			fi
+			sleep 5
+		done
+
+		while true; do
+			if ifconfig -a | grep -q "wwan0"; then
+				ifconfig wwan0 up
+				break
+			fi
+			sleep 5
+		done
+
+		sleep 5
+		simcom-cm >/tmp/.wwan_log 2>&1 &
+		udhcpc -i wwan0 >/dev/null 2>&1 &
+	# ppp
+	elif [ "$mode" == "ppp" ]; then
+		while true; do
+			if lsusb | grep -q "9001"; then
+				break
+			fi
+			sleep 5
+		done
+
+		while true; do
+			if ifconfig -a | grep -q "wwan0"; then
+				ifconfig wwan0 up
+				break
+			fi
+			sleep 5
+		done
+
+		sleep 10
+		if ! pgrep -f "simcom-pppd" >/dev/null; then
+			cd /etc/ppp/peers && pppd call simcom-pppd >/tmp/.wwan_log 2>&1 &
+		fi
+	#rndis
+	elif [ "$mode" == "ndis" ]; then
+		while true; do
+			if lsusb | grep -q "9011"; then
+				break
+			fi
+			sleep 5
+		done
+
+		while true; do
+			if ifconfig -a | grep -q "usb0"; then
+				ifconfig usb0 up
+				break
+			fi
+			sleep 5
+		done
+
+		udhcpc -i usb0 >/dev/null 2>&1 &
+	fi
+
+}
+
+################################################################
+# @fu luckfox_4g_app
+#
+# @brief 1. Set the startup and shutdown of the 4G Module.
+#		 2. Set the Dial-up Mode of the 4G Module.
+#
+# @param action - 1 indicates enable, 0 indicates disable.
+#		 mode   - Dial-up Mode of the USB 4G Network Card
+#		 apn    - Types of SIM Cards in PPP mode
+#		 delay  - Delay seconds before before running command
+#
+# @return none
+################################################################
+function luckfox_4g_app() {
+	#region
+	local action="$1"
+	local mode="$2"
+	local apn="$3"
+	local delay="$4"
+
+	if [ ! -e "/dev/ttyUSB2" ]; then
+		luckfox_result_handle $LF_NONE "/dev/ttyUSB2"
+	fi
+
+	# Delay
+	if [ -z "$delay" ]; then
+		sleep 0
+	else
+		sleep "$delay"
+	fi
+
+	if [ "$action" == 1 ]; then
+		# WWAN
+		if [ "$mode" == "wwan" ]; then
+			if lsusb | grep -q "9001"; then
+				killall pppd >/dev/null 2>&1
+
+				ifconfig wwan0 up
+				simcom-cm >/tmp/.wwan_log 2>&1 &
+				udhcpc -i wwan0 >/dev/null 2>&1 &
+			else
+				luckfox_4g_reset_back "AT+CUSBPIDSWITCH=9001,1,1" "$mode" &
+			fi
+
+		# PPP
+		elif [ "$mode" == "ppp" ]; then
+			if [ -f "/etc/ppp/peers/simcom-connect-chat" ]; then
+				rm /etc/ppp/peers/simcom-connect-chat
+			fi
+			cat <<EOL >"/etc/ppp/peers/simcom-connect-chat"
+ABORT "BUSY"
+ABORT "NO CARRIER"
+ABORT "NO DIALTONE"
+ABORT "ERROR"
+ABORT "NO ANSWER"
+TIMEOUT 30
+"" AT
+OK ATE0
+OK ATI;+CSUB;+CSQ;+CPIN?;+COPS?;+CGREG?;&D2
+OK AT+CGDCONT=1,"IP","$apn",,0,0
+OK ATD*99#
+CONNECT
+EOL
+			if lsusb | grep -q "9001"; then
+				killall simcom-cm >/dev/null 2>&1
+				ifconfig wwan0 down >/dev/null 2>&1
+
+				cd /etc/ppp/peers && pppd call simcom-pppd >/tmp/.pppd_log 2>&1 &
+			else
+				luckfox_4g_reset_back "AT+CUSBPIDSWITCH=9001,1,1" "$mode" &
+			fi
+
+		# NDIS
+		elif [ "$mode" == "ndis" ]; then
+			if lsusb | grep -q "9011"; then
+				ifconfig usb0 up
+				udhcpc -i usb0 >/dev/null 2>&1 &
+			else
+				luckfox_4g_reset_back "AT+CUSBPIDSWITCH=9011,1,1" "$mode" &
+			fi
+		fi
+
+		luckfox_set_pin_cfg "MODULE_4G_ENABLE" "$action"
+		luckfox_set_pin_cfg "MODULE_4G_MODE" "$mode"
+		luckfox_set_pin_cfg "MODULE_4G_APN" "$apn"
+
+		luckfox_set_pin_parameter "MODULE_4G_ENABLE" "$action"
+		luckfox_set_pin_parameter "MODULE_4G_MODE" "$mode"
+		luckfox_set_pin_parameter "MODULE_4G_APN" "$apn"
+
+		luckfox_result_handle $LF_OK
+	else
+		killall luckfox_4g_reset_back >/dev/null 2>&1
+		# wwan
+		ifconfig wwan0 down
+		killall simcom-cm >/dev/null 2>&1
+		# pppd
+		killall pppd >/dev/null 2>&1
+
+		#udhcpc
+		killall udhcpcp >/dev/null 2>&1
+
+		luckfox_set_pin_cfg "MODULE_4G_ENABLE" "$action"
+		luckfox_set_pin_parameter "MODULE_4G_ENABLE" "$action"
+
+		luckfox_result_handle $LF_OK
+	fi
+	#endregion
+}
+
+################################################################
+# ------------------------- GUI Handler ------------------------
+################################################################
+
+################################################################
+# @fu luckfox_result_handle
+#
+# @brief 1. Display a message in the GUI.
+#
+# @param status - Status of messages
+#		 log    - Prepare the message to be printed
+#
+# @return none
+################################################################
+function luckfox_result_handle() {
+	local status="$1"
+	local log="$2"
+
+	if [ "$status" == $LF_OK ]; then
+		return
+	elif [ "$status" == $LF_ERR ]; then
+		if [ -n "$log" ]; then
+			if [ "$LF_GUI_ENABLE" == 1 ]; then
+				dialog --msgbox "$log" 10 30
+			else
+				echo "[luckfox-config] error:${log}"
+			fi
+		else
+			if [ "$LF_GUI_ENABLE" == 1 ]; then
+				dialog --msgbox "error" 10 30
+			else
+				echo "[luckfox-config] error"
+			fi
+		fi
+		exit
+	elif [ "$status" == $LF_NONE ]; then
+		if [ -n "$log" ]; then
+			if [ "$LF_GUI_ENABLE" == 1 ]; then
+				dialog --msgbox "Could not find $log" 10 30
+			else
+				echo "[luckfox-config] error:Could not find ${log}"
+			fi
+		fi
+		exit
+	fi
+}
+
+################################################################
+# @fu luckfox_result_handle
+#
+# @brief 1. Display a message in the GUI.
+#
+# @param status - Status of messages
+#		 log    - Prepare the message to be printed
+#
+# @return none
+################################################################
+function luckfox_pico_show_pin_diagram() {
+	if [ -f $LUCKFOX_PIN_DIAGRAM_FILE ]; then
+		dialog --title "Luckfox Pin Diagram" --no-collapse --textbox $LUCKFOX_PIN_DIAGRAM_FILE 100 100
+	else
+		luckfox_result_handle "$LF_NONE" "$LUCKFOX_PIN_DIAGRAM_FILE"
+	fi
+}
+
+################################################################
+# -------------------------- Main GUI --------------------------
+################################################################
+function luckfox_show_menu() {
+	# Only support Luckfox Lyra /Luckfox Lyra Plus
+	if [ "$LUCKFOX_CHIP_MODEL" == "Luckfox Lyra" ] || [ "$LUCKFOX_CHIP_MODEL" == "Luckfox Lyra Plus" ] || \
+	[ "$LUCKFOX_CHIP_MODEL" == "Luckfox Lyra Ultra" ] || [ "$LUCKFOX_CHIP_MODEL" == "Luckfox Lyra Ultra W" ] || \
+	[ "$LUCKFOX_CHIP_MODEL" == "Luckfox Lyra Zero" ] || [ "$LUCKFOX_CHIP_MODEL" == "Luckfox Lyra Zero W" ] ; then
+		while true; do
+			option=$(dialog --title "$LUCKFOX_CHIP_MODEL Config" \
+				--menu "Choose an option" 80 50 6 \
+				1 "Advanced Options" \
+				2 "MIPI DSI" \
+				3 "About Luckfox" \
+				2>&1 >/dev/tty)
+
+			case $option in
+			1) luckfox_advanced_options ;;
+			2) luckfox_mipi_dsi ;;
+			3) luckfox_about ;;
+			*) luckfox_exit ;;
+			esac
+		done
+	fi
+}
+
+function luckfox_mipi_dsi() {
+	while true; do
+		option=$(dialog --title "MIPI DSI Config" \
+			--menu "Choose an option" 80 50 6 \
+			1 "MIPI DSI MODE" \
+			2 "LOGO Rotate" \
+			2>&1 >/dev/tty)
+
+		case $option in
+		1) luckfox_mipi_dsi_mode ;;
+		2) luckfox_mipi_dsi_logo_rotate ;;
+		*) luckfox_show_menu ;;
+		esac
+	done
+}
+
+function luckfox_advanced_options() {
+	while true; do
+		option=$(dialog --title "Advanced Options" \
+			--menu "Choose an option" 80 50 6 \
+			1 "PWM"\
+			2 "UART" \
+			3 "I2C" \
+			4 "SPI" \
+			5 "CAN" \
+			2>&1 >/dev/tty)
+
+		case $option in
+		1) luckfox_PWM ;;
+		2) luckfox_UART ;;
+		3) luckfox_I2C ;;
+		4) luckfox_SPI ;;
+		5) luckfox_CAN ;;
+		*) luckfox_show_menu ;;
+		esac
+	done
+}
+
+function luckfox_about() {
+	luckfox_pico_show_pin_diagram
+}
+
+function luckfox_exit() {
+	luckfox_fdt_clear
+
+	# echo Setting change
+	clear
+	exit
+}
+
+
+################################################################
+# ------------------- MIPI DSI GUI ---------------------
+################################################################
+
+function luckfox_mipi_dsi_mode() {
+	local dsi_mode dsi_size dsi_type dsi_num
+
+	dsi_mode=$(dialog --title "MIPI DSI Mode Config" \
+		--menu "Choose an option" 80 50 6 \
+		1 "WS DSI" \
+		2 "RPI Compatible DSI" \
+		3 "RPI Official DSI" \
+		2>&1 >/dev/tty)
+	if [ -z "$dsi_mode" ]; then
+		luckfox_mipi_dsi
+	fi
+
+	if [ "$dsi_mode" == 1 ]; then
+		# WS_DSI
+		dsi_num=$(dialog --title "WS DSI Config" \
+			--menu "Choose an option" 80 50 4 \
+			0 "7-DSI-TOUCH-A"\
+			1 "10-DSI-TOUCH-A"\
+			2 "5-DSI-TOUCH-A"\
+			 2>&1 >/dev/tty)
+		if [ -z "$dsi_num" ]; then
+			luckfox_mipi_dsi
+		fi
+
+		dsi_type="WS_DSI"
+
+		if [ "$dsi_num" == 0 ]; then
+			dsi_size="7_0"
+		elif [ "$dsi_num" == 1 ];then
+			dsi_size="10_1"
+		elif [ "$dsi_num" == 2 ];then
+			dsi_size="5_0"
+		fi
+	elif [ "$dsi_mode" == 2 ];then
+		# RPI Compatible DSI
+		dsi_num=$(dialog --title "RPI Compatible DSI Config" \
+			--menu "Choose an option" 80 50 12 \
+			0 "2.8inch-dsi-lcd"\
+			1 "3.4inch-dsi-lcd-c"\
+			2 "4inch-dsi-lcd"\
+			3 "7inch-dsi-lcd-c / 5inch-dsi-lcd-c"\
+			4 "7.9inch-dsi-lcd"\
+			5 "8inch-dsi-lcd-c / 10.1inch-dsi-lcd-c"\
+			6 "11.9inch-dsi-lcd"\
+			7 "4inch-dsi-lcd-c"\
+			8 "5inch-dsi-lcd-d"\
+			9 "6inch25-dsi-lcd"\
+			10 "8.8inch-dsi-lcd"\
+			11 "7inch-dsi-lcd-h"\
+			 2>&1 >/dev/tty)
+		if [ -z "$dsi_num" ]; then
+			luckfox_mipi_dsi
+		fi
+
+		if [ "$dsi_num" == 0 ]; then
+			dsi_size="2_8"
+		elif [ "$dsi_num" == 1 ];then
+			dsi_size="3_4"
+		elif [ "$dsi_num" == 2 ];then
+			dsi_size="4_0"
+		elif [ "$dsi_num" == 3 ];then
+			dsi_size="7_0/5_0"
+		elif [ "$dsi_num" == 4 ];then
+			dsi_size="7_9"
+		elif [ "$dsi_num" == 5 ];then
+			dsi_size="8_0/10_1"
+		elif [ "$dsi_num" == 6 ];then
+			dsi_size="11_9"
+		elif [ "$dsi_num" == 7 ];then
+			dsi_size="4_0_C"
+		elif [ "$dsi_num" == 8 ];then
+			dsi_size="5_0_D"
+		elif [ "$dsi_num" == 9 ];then
+			dsi_size="6_25"
+		elif [ "$dsi_num" == 10 ];then
+			dsi_size="8_8"
+		elif [ "$dsi_num" == 11 ];then
+			dsi_size="7_0_H"
+		fi
+
+		dsi_type="RPI_Compatible_DSI"
+	elif [ "$dsi_mode" == 3 ];then
+		# RPI Official DSI
+		dsi_num=$(dialog --title "RPI Official Config" \
+			--menu "Choose an option" 80 50 4 \
+			0 "Raspberry Pi Touch Display 1"\
+			 2>&1 >/dev/tty)
+		if [ -z "$dsi_num" ]; then
+			luckfox_mipi_dsi
+		fi
+
+		if [ "$dsi_num" == 0 ]; then
+			dsi_size="7_0"
+		fi
+
+		dsi_type="RPI_Official_DSI"
+	fi
+
+	luckfox_dsi_app $dsi_type $dsi_size
+	dialog --msgbox "MIPI DSI Mode Effective after restart" 10 30
+	luckfox_mipi_dsi
+}
+
+function luckfox_mipi_dsi_logo_rotate() {
+	local dsi_logo_rotate
+	dsi_logo_rotate=$(dialog --title "Logo Rotate Config" \
+		--menu "Choose an option" 80 50 6 \
+		1 "0°" \
+		2 "90°" \
+		3 "180°" \
+		4 "270°" \
+		2>&1 >/dev/tty)
+	if [ -z "$dsi_logo_rotate" ]; then
+		luckfox_mipi_dsi
+	fi
+
+	luckfox_dsi_logo_rotate_app "$dsi_logo_rotate"
+	dialog --msgbox "Logo Rotate Effective after restart" 10 30
+	luckfox_mipi_dsi
+}
+
+################################################################
+# ------------------- Advanced Options GUI ---------------------
+################################################################
+function luckfox_PWM() {
+	local pwm_enable pwm_main pwm_chn pwm_pin
+
+	pwm_main=$(dialog --title "PWM Config" \
+		--menu "Choose an option" 10 30 4 \
+		0 "PWM0"\
+		1 "PWM1"\
+		 2>&1 >/dev/tty)
+	if [ -z "$pwm_main" ]; then
+		luckfox_advanced_options
+	fi
+
+	if [ $pwm_main == 0 ]; then
+		pwm_chn=$(dialog --title "PWM0 Channel Config" \
+			--menu "Choose an option" 10 30 4 \
+			0 "PWM0_Channel0"\
+			1 "PWM0_Channel1"\
+			2 "PWM0_Channel2"\
+			3 "PWM0_Channel3"\
+			 2>&1 >/dev/tty)
+		if [ -z "$pwm_main" ]; then
+			luckfox_advanced_options
+		fi
+	elif [ $pwm_main == 1 ];then
+		pwm_chn=$(dialog --title "PWM1 Channel Config" \
+			--menu "Choose an option" 10 30 4 \
+			0 "PWM1_Channel0"\
+			1 "PWM1_Channel1"\
+			2 "PWM1_Channel2"\
+			3 "PWM1_Channel3"\
+			4 "PWM1_Channel4"\
+			5 "PWM1_Channel5"\
+			6 "PWM1_Channel6"\
+			7 "PWM1_Channel7"\
+			 2>&1 >/dev/tty)
+		if [ -z "$pwm_main" ]; then
+			luckfox_advanced_options
+		fi
+	fi
+
+	pwm_enable=$(dialog --menu "PWM${pwm_main}_CH${pwm_chn} Config" 10 40 2 \
+		0 "disable" \
+		1 "enable" \
+		2>&1 >/dev/tty)
+	if [ -z "$pwm_enable" ]; then
+		luckfox_advanced_options
+	elif [ "$pwm_enable" == 0 ]; then
+		luckfox_pwm_app "$pwm_enable" "$pwm_main" "$pwm_chn"
+	elif [ "$pwm_enable" == 1 ]; then
+		pwm_pin=$(dialog --inputbox "PWM${pwm_main}_CH${pwm_chn}_PIN RM_IO:" 10 30 2>&1 >/dev/tty)
+		if [ -z "$pwm_pin" ] || [[ ! "$pwm_pin" =~ ^[0-9]+$ ]] || (( pwm_pin < 0 || pwm_pin > 32 )); then
+			luckfox_advanced_options
+		fi
+
+		luckfox_pwm_app "$pwm_enable" "$pwm_main" "$pwm_chn" "$pwm_pin"
+	fi
+	luckfox_advanced_options
+}
+
+function luckfox_UART() {
+	local uart_enable uart_main uart_tx_pin uart_rx_pin
+
+	uart_main=$(dialog --title "UART Config" \
+		--menu "Choose an option" 10 30 4 \
+		1 "UART1"\
+		2 "UART2"\
+		3 "UART3"\
+		4 "UART4"\
+		 2>&1 >/dev/tty)
+
+	if [ -z "$uart_main" ]; then
+		luckfox_advanced_options
+	fi
+
+	uart_enable=$(dialog --menu "UART${uart_main} Config" 10 40 2 \
+		0 "disable" \
+		1 "enable" \
+		2>&1 >/dev/tty)
+	if [ -z "$uart_enable" ]; then
+		luckfox_advanced_options
+	elif [ "$uart_enable" == 0 ]; then
+		luckfox_uart_app "$uart_enable" "$uart_main"
+	elif [ "$uart_enable" == 1 ]; then
+		uart_tx_pin=$(dialog --inputbox "UART${uart_main}_TX_PIN RM_IO:" 10 30 2>&1 >/dev/tty)
+		if [ -z "$uart_tx_pin" ] || [[ ! "$uart_tx_pin" =~ ^[0-9]+$ ]] || (( uart_tx_pin < 0 || uart_tx_pin > 32 )); then
+			dialog --msgbox "Invalid inputs" 10 30
+			luckfox_advanced_options
+		fi
+
+		uart_rx_pin=$(dialog --inputbox "UART${uart_main}_RX_PIN RM_IO:" 10 30 2>&1 >/dev/tty)
+		if [ -z "$uart_rx_pin" ] || [[ ! "$uart_rx_pin" =~ ^[0-9]+$ ]] || (( uart_rx_pin < 0 || uart_rx_pin > 32 )); then
+			dialog --msgbox "Invalid inputs" 10 30
+			luckfox_advanced_options
+		fi
+
+		luckfox_uart_app "$uart_enable" "$uart_main" "$uart_tx_pin" "$uart_rx_pin"
+	fi
+
+	luckfox_advanced_options
+}
+
+function luckfox_I2C() {
+	local i2c_enable i2c_main i2c_sda_pin i2c_scl_pin i2c_speed
+
+	i2c_main=$(dialog --title "I2C Config" \
+		--menu "Choose an option" 10 30 4 \
+		0 "I2C0"\
+		1 "I2C1"\
+		2 "I2C2"\
+		 2>&1 >/dev/tty)
+
+	if [ -z "$i2c_main" ]; then
+		luckfox_advanced_options
+	fi
+
+	i2c_enable=$(dialog --menu "I2C${i2c_main} Config" 10 40 2 \
+		0 "disable" \
+		1 "enable" \
+		2>&1 >/dev/tty)
+	if [ -z "$i2c_enable" ]; then
+		luckfox_advanced_options
+	elif [ "$i2c_enable" == 0 ]; then
+		luckfox_i2c_app "$i2c_enable" "$i2c_main"
+	elif [ "$i2c_enable" == 1 ]; then
+		i2c_sda_pin=$(dialog --inputbox "I2C${i2c_main}_SDA_PIN RM_IO:" 10 30 2>&1 >/dev/tty)
+		if [ -z "$i2c_sda_pin" ] || [[ ! "$i2c_sda_pin" =~ ^[0-9]+$ ]] || (( i2c_sda_pin < 0 || i2c_sda_pin > 32 )); then
+			dialog --msgbox "Invalid inputs" 10 30
+			luckfox_advanced_options
+		fi
+
+		i2c_scl_pin=$(dialog --inputbox "I2C${i2c_main}_SCL_PIN RM_IO:" 10 30 2>&1 >/dev/tty)
+		if [ -z "$i2c_scl_pin" ] || [[ ! "$i2c_scl_pin" =~ ^[0-9]+$ ]] || (( i2c_scl_pin < 0 || i2c_scl_pin > 32 )); then
+			dialog --msgbox "Invalid inputs" 10 30
+			luckfox_advanced_options
+		fi
+
+		i2c_speed=$(dialog --inputbox "I2C${i2c_main} MAX SPEED (Hz):" 10 30 2>&1 >/dev/tty)
+		if [ ! -z "$i2c_speed" ] && [[ ! "$i2c_speed" =~ ^[0-9]+$ ]]; then
+			dialog --msgbox "Invalid inputs" 10 30
+			luckfox_advanced_options
+		fi
+
+		luckfox_i2c_app "$i2c_enable" "$i2c_main" "$i2c_sda_pin" "$i2c_scl_pin" "$i2c_speed"
+	fi
+
+	luckfox_advanced_options
+}
+
+function luckfox_SPI() {
+	local spi_enable spi_main spi_mosi_pin spi_miso_pin spi_cs_pin spi_speed
+
+	spi_main=$(dialog --title "SPI Config" \
+		--menu "Choose an option" 10 30 4 \
+		0 "SPI0"\
+		1 "SPI1"\
+		 2>&1 >/dev/tty)
+
+	if [ -z "$spi_main" ]; then
+		luckfox_advanced_options
+	fi
+
+	spi_enable=$(dialog --menu "SPI${spi_main} Config" 10 40 2 \
+		0 "disable" \
+		1 "enable" \
+		2>&1 >/dev/tty)
+	if [ -z "$spi_enable" ]; then
+		luckfox_advanced_options
+	elif [ "$spi_enable" == 0 ]; then
+		luckfox_spi_app "$spi_enable" "$spi_main"
+	elif [ "$spi_enable" == 1 ]; then
+		spi_sclk_pin=$(dialog --inputbox "SPI${spi_main}_SCLK_PIN RM_IO:" 10 50 2>&1 >/dev/tty)
+		if [ -z "$spi_sclk_pin" ] || [[ ! "$spi_sclk_pin" =~ ^[0-9]+$ ]] || (( spi_sclk_pin < 0 || spi_sclk_pin > 32 )); then
+			dialog --msgbox "Invalid inputs" 10 30
+			luckfox_advanced_options
+		fi
+
+		spi_mosi_pin=$(dialog --inputbox "SPI${spi_main}_MOSI_PIN RM_IO:" 10 50 2>&1 >/dev/tty)
+		if [ -z "$spi_mosi_pin" ] || [[ ! "$spi_mosi_pin" =~ ^[0-9]+$ ]] || (( spi_mosi_pin < 0 || spi_mosi_pin > 32 )); then
+			dialog --msgbox "Invalid inputs" 10 30
+			luckfox_advanced_options
+		fi
+
+		spi_miso_pin=$(dialog --inputbox "SPI${spi_main}_MISO_PIN RM_IO(Input '*' to disable):" 10 50 2>&1 >/dev/tty)
+		if [ "$spi_miso_pin" != "*" ]; then
+			if [ -z "$spi_miso_pin" ] || [[ ! "$spi_miso_pin" =~ ^[0-9]+$ ]] || (( spi_miso_pin < 0 || spi_miso_pin > 32 )); then
+				dialog --msgbox "Invalid inputs" 10 30
+				luckfox_advanced_options
+			fi
+		fi
+
+		spi_cs_pin=$(dialog --inputbox "SPI${spi_main}_CS_PIN RM_IO(Input '*' to disable):" 10 50 2>&1 >/dev/tty)
+		if [ "$spi_cs_pin" != "*" ]; then
+			if [ -z "$spi_cs_pin" ] || [[ ! "$spi_cs_pin" =~ ^[0-9]+$ ]] || (( spi_cs_pin < 0 || spi_cs_pin > 32 )); then
+				dialog --msgbox "Invalid inputs" 10 30
+				luckfox_advanced_options
+			fi
+		fi
+
+		spi_speed=$(dialog --inputbox "SPI${spi_main} MAX SPEED (Hz):" 10 50 2>&1 >/dev/tty)
+		if [ ! -z "$spi_speed" ] && [[ ! "$spi_speed" =~ ^[0-9]+$ ]]; then
+			dialog --msgbox "Invalid inputs" 10 30
+			luckfox_advanced_options
+		fi
+
+		luckfox_spi_app "$spi_enable" "$spi_main" "$spi_sclk_pin" "$spi_mosi_pin" "$spi_miso_pin" "$spi_cs_pin" "$spi_speed"
+	fi
+
+	luckfox_advanced_options
+}
+
+function luckfox_CAN() {
+	local can_enable can_main can_tx_pin can_rx_pin can_speed
+
+	can_main=$(dialog --title "CAN Config" \
+		--menu "Choose an option" 10 30 4 \
+		0 "CAN0"\
+		1 "CAN1"\
+		 2>&1 >/dev/tty)
+
+	if [ -z "$can_main" ]; then
+		luckfox_advanced_options
+	fi
+
+	can_enable=$(dialog --menu "CAN${can_main} Config" 10 40 2 \
+		0 "disable" \
+		1 "enable" \
+		2>&1 >/dev/tty)
+	if [ -z "$can_enable" ]; then
+		luckfox_advanced_options
+	elif [ "$can_enable" == 0 ]; then
+		luckfox_can_app "$can_enable" "$can_main"
+	elif [ "$can_enable" == 1 ]; then
+		can_tx_pin=$(dialog --inputbox "CAN${can_main}_TX_PIN RM_IO:" 10 30 2>&1 >/dev/tty)
+		if [ -z "$can_tx_pin" ] || [[ ! "$can_tx_pin" =~ ^[0-9]+$ ]] || (( can_tx_pin < 0 || can_tx_pin > 32 )); then
+			dialog --msgbox "Invalid inputs" 10 30
+			luckfox_advanced_options
+		fi
+
+		can_rx_pin=$(dialog --inputbox "CAN${can_main}_RX_PIN RM_IO:" 10 30 2>&1 >/dev/tty)
+		if [ -z "$can_rx_pin" ] || [[ ! "$can_rx_pin" =~ ^[0-9]+$ ]] || (( can_rx_pin < 0 || can_rx_pin > 32 )); then
+			dialog --msgbox "Invalid inputs" 10 30
+			luckfox_advanced_options
+		fi
+
+		can_speed=$(dialog --inputbox "CAN${can_main} CLOCK RATES (Hz):" 10 30 2>&1 >/dev/tty)
+		if [ ! -z "$can_speed" ] && [[ ! "$can_speed" =~ ^[0-9]+$ ]]; then
+			dialog --msgbox "Invalid inputs" 10 30
+			luckfox_advanced_options
+		fi
+
+		luckfox_can_app "$can_enable" "$can_main" "$can_tx_pin" "$can_rx_pin" "$can_speed"
+	fi
+
+	luckfox_advanced_options
+}
+
+################################################################
+# ---------------------- 4G Module GUI -------------------------
+################################################################
+function luckfox_4G() {
+	local module_4g_enable
+	local module_4g_mode
+	local mode apn
+
+	module_4g_enable=$(dialog --menu "4G Module Config" 10 40 2 \
+		0 "disable" \
+		1 "enable" \
+		2>&1 >/dev/tty)
+	if [ -z "$module_4g_enable" ]; then
+		luckfox_show_menu
+	fi
+
+	if [ "$module_4g_enable" == 1 ]; then
+		module_4g_mode=$(dialog --title "4G Module Mode Config" \
+			--menu "Choose an option" 80 50 6 \
+			1 "WWAN" \
+			2 "PPP" \
+			3 "NDIS" \
+			2>&1 >/dev/tty)
+
+		if [ -z "$module_4g_mode" ]; then
+			luckfox_show_menu
+		fi
+
+		case $module_4g_mode in
+		1) mode="wwan" ;;
+		2) mode="ppp" ;;
+		3) mode="ndis" ;;
+		esac
+
+		if [ "$mode" = "ppp" ]; then
+			card_type=$(dialog --title "4G Module PPP Mode Card Type Config" \
+				--menu "Select Card Type" 80 50 6 \
+				1 "CTCC(ctnet)" \
+				2 "CMCC(cmnet)" \
+				3 "CUCC(3gwap)" \
+				2>&1 >/dev/tty)
+
+			case $card_type in
+			1) apn="ctnet" ;;
+			2) apn="cmnet" ;;
+			3) apn="3gwap" ;;
+			esac
+		fi
+	fi
+
+	luckfox_4g_app "$module_4g_enable" "$mode" "$apn"
+}
+
+################################################################
+# @fu hex_shift
+#
+# @param hex 	      -
+#	 shift_amount -
+#
+# @return  The hexadecimal number after shifting hex by shift_amount.
+################################################################
+function hex_shift() {
+	local hex=$1
+	local shift_amount=$2
+
+	local dec=$(printf "%d" 0x$hex)
+	local shift=$((shift_amount * 2))
+	local shifted=$((dec << shift))
+
+	printf "%X\n" $shifted
+}
+
+
+################################################################
+# --------------------------- Run ------------------------------
+################################################################
+if [ "$1" == "load" ]; then
+	LF_GUI_ENABLE=0
+	if [ -f $LUCKFOX_PIN_DIAGRAM_FILE ]; then
+		rm $LUCKFOX_PIN_DIAGRAM_FILE
+	fi
+	luckfox_config_init
+	luckfox_load_cfg
+	echo "Complete configuration loading"
+elif [ "$1" == "show" ]; then
+	luckfox_config_init
+	cat $LUCKFOX_PIN_DIAGRAM_FILE
+elif [ "$1" == "update" ]; then
+	luckfox_update_fdt
+elif [ -z "$1" ]; then
+	LF_GUI_ENABLE=1
+	luckfox_config_init
+	luckfox_show_menu
+fi

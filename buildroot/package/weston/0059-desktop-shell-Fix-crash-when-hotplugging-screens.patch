@@ -1,0 +1,148 @@
+From 3c6b629ef5bfb20fb65e293bf4fce42138f724db Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Mon, 3 Oct 2022 21:03:04 +0800
+Subject: [PATCH 59/97] desktop-shell: Fix crash when hotplugging screens
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ desktop-shell/input-panel.c |  3 +++
+ desktop-shell/shell.c       | 22 ++++++++++++++++++----
+ libweston/backend-drm/drm.c |  7 +++++++
+ libweston/compositor.c      |  6 ++++++
+ 4 files changed, 34 insertions(+), 4 deletions(-)
+
+diff --git a/desktop-shell/input-panel.c b/desktop-shell/input-panel.c
+index 9b5d3b20a..c4f9c277c 100644
+--- a/desktop-shell/input-panel.c
++++ b/desktop-shell/input-panel.c
+@@ -65,6 +65,9 @@ calc_input_panel_position(struct input_panel_surface *ip_surface, struct weston_
+ 	struct desktop_shell *shell = ip_surface->shell;
+ 	struct weston_coord_global pos;
+ 
++	if (!ip_surface->output)
++		return -1;
++
+ 	if (ip_surface->panel) {
+ 		struct weston_view *view = get_default_view(shell->text_input.surface);
+ 		if (view == NULL)
+diff --git a/desktop-shell/shell.c b/desktop-shell/shell.c
+index 576d2c4ff..eda84aa88 100644
+--- a/desktop-shell/shell.c
++++ b/desktop-shell/shell.c
+@@ -2218,6 +2218,7 @@ desktop_surface_removed(struct weston_desktop_surface *desktop_surface,
+ 	    shsurf->shell->win_close_animation_type == ANIMATION_FADE) {
+ 
+ 		if (shsurf->shell->compositor->state == WESTON_COMPOSITOR_ACTIVE &&
++		    shsurf->view->output &&
+ 		    shsurf->view->output->power_state == WESTON_OUTPUT_POWER_NORMAL) {
+ 			struct weston_coord_global pos;
+ 
+@@ -4235,6 +4236,8 @@ check_desktop_shell_crash_too_early(struct desktop_shell *shell)
+ 	if (clock_gettime(CLOCK_MONOTONIC, &now) < 0)
+ 		return false;
+ 
++	/* HACK: The shell might be crashed too early when hotplugging */
++#if 0
+ 	/*
+ 	 * If the shell helper client dies before the session has been
+ 	 * up for roughly 30 seconds, better just make Weston shut down,
+@@ -4250,6 +4253,7 @@ check_desktop_shell_crash_too_early(struct desktop_shell *shell)
+ 
+ 		return true;
+ 	}
++#endif
+ 
+ 	return false;
+ }
+@@ -4673,10 +4677,14 @@ shell_output_destroy(struct shell_output *shell_output)
+ 
+ 	shell_for_each_layer(shell, shell_output_changed_move_layer, NULL);
+ 
+-	if (shell_output->panel_surface)
++	if (shell_output->panel_surface) {
+ 		wl_list_remove(&shell_output->panel_surface_listener.link);
+-	if (shell_output->background_surface)
++		shell_output->panel_surface->committed = NULL;
++	}
++	if (shell_output->background_surface) {
+ 		wl_list_remove(&shell_output->background_surface_listener.link);
++		shell_output->background_surface->committed = NULL;
++	}
+ 	wl_list_remove(&shell_output->destroy_listener.link);
+ 	wl_list_remove(&shell_output->link);
+ 	free(shell_output);
+@@ -4858,7 +4866,7 @@ setup_output_destroy_handler(struct weston_compositor *ec,
+ static void
+ desktop_shell_destroy_layer(struct weston_layer *layer)
+ {
+-	struct weston_view *view;
++	struct weston_view *view, *tmp;
+ 	bool removed;
+ 
+ 	do {
+@@ -4883,9 +4891,15 @@ desktop_shell_destroy_layer(struct weston_layer *layer)
+ 		 * we restart the loop as long as we keep removing views from
+ 		 * the list.
+ 		 */
+-		wl_list_for_each(view, &layer->view_list.link, layer_link.link) {
++		wl_list_for_each_safe(view, tmp, &layer->view_list.link,
++				      layer_link.link) {
+ 			struct shell_surface *shsurf =
+ 				get_shell_surface(view->surface);
++
++			wl_list_remove(&view->layer_link.link);
++			wl_list_init(&view->layer_link.link);
++			view->layer_link.layer = NULL;
++
+ 			if (shsurf) {
+ 				desktop_shell_destroy_surface(shsurf);
+ 				removed = true;
+diff --git a/libweston/backend-drm/drm.c b/libweston/backend-drm/drm.c
+index 08da1ff15..21af6e74b 100644
+--- a/libweston/backend-drm/drm.c
++++ b/libweston/backend-drm/drm.c
+@@ -2861,10 +2861,17 @@ drm_output_destroy(struct weston_output *base)
+ {
+ 	struct drm_output *output = to_drm_output(base);
+ 	struct drm_device *device = output->device;
++	struct drm_head *head, *tmp;
+ 
+ 	assert(output);
+ 	assert(!output->is_virtual);
+ 
++	wl_list_for_each_safe(head, tmp, &output->disable_head,
++			      disable_head_link) {
++		wl_list_remove(&head->disable_head_link);
++		wl_list_init(&head->disable_head_link);
++	}
++
+ 	if (output->page_flip_pending || output->atomic_complete_pending) {
+ 		if (!base->compositor->shutting_down) {
+ 			/* We are not shutting down, so we can wait for flip
+diff --git a/libweston/compositor.c b/libweston/compositor.c
+index 1b22f8f85..1532ec1be 100644
+--- a/libweston/compositor.c
++++ b/libweston/compositor.c
+@@ -7862,6 +7862,7 @@ static void
+ weston_compositor_remove_output(struct weston_output *output)
+ {
+ 	struct weston_compositor *compositor = output->compositor;
++	struct weston_animation *animation, *atmp;
+ 	struct weston_paint_node *pnode, *pntmp;
+ 	struct weston_view *view;
+ 	struct weston_head *head;
+@@ -7876,6 +7877,11 @@ weston_compositor_remove_output(struct weston_output *output)
+ 		output->idle_repaint_source = NULL;
+ 	}
+ 
++	wl_list_for_each_safe(animation, atmp, &output->animation_list, link) {
++		wl_list_remove(&animation->link);
++		wl_list_init(&animation->link);
++	}
++
+ 	wl_list_for_each_safe(pnode, pntmp,
+ 			      &output->paint_node_list, output_link) {
+ 		weston_paint_node_destroy(pnode);
+-- 
+2.20.1
+

@@ -1,0 +1,81 @@
+From acc1553a5b7a8230d50dfc4010a962f4971d3cf8 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 26 Jun 2024 15:59:22 +0800
+Subject: [PATCH 88/95] HACK: input: Support wrapping pointer around outputs
+
+Set "WESTON_WRAP_POINTER" to enable it.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/input.c | 43 +++++++++++++++++++++++++++++++++++++++----
+ 1 file changed, 39 insertions(+), 4 deletions(-)
+
+diff --git a/libweston/input.c b/libweston/input.c
+index bf9a86a..49a9c72 100644
+--- a/libweston/input.c
++++ b/libweston/input.c
+@@ -2153,7 +2153,8 @@ WL_EXPORT struct weston_coord_global
+ weston_pointer_clamp(struct weston_pointer *pointer, struct weston_coord_global pos)
+ {
+ 	struct weston_compositor *ec = pointer->seat->compositor;
+-	struct weston_output *output, *prev = NULL, *fallback = NULL;
++	struct weston_output *output, *prev = NULL;
++	struct weston_output *first = NULL, *last = NULL;
+ 	int valid = 0;
+ 
+ 	wl_list_for_each(output, &ec->output_list, link) {
+@@ -2167,14 +2168,48 @@ weston_pointer_clamp(struct weston_pointer *pointer, struct weston_coord_global
+ 			valid = 1;
+ 		if (weston_output_contains_coord(output, pointer->pos))
+ 			prev = output;
+-		if (!fallback)
+-			fallback = output;
++		if (!first)
++			first = output;
++		last = output;
++	}
++
++	/* HACK: Wrap pointer positions */
++	if (!valid && prev && first && last &&
++	    getenv("WESTON_WRAP_POINTER")) {
++		int top, bottom, left, right;
++
++		if (ec->output_flow == WESTON_OUTPUT_FLOW_HORIZONTAL) {
++			if (pos.c.x > last->pos.c.x + last->width)
++				prev = first;
++			else if (pos.c.x < first->pos.c.x)
++				prev = last;
++		} else if (ec->output_flow == WESTON_OUTPUT_FLOW_VERTICAL) {
++			if (pos.c.y > last->pos.c.y + last->height)
++				prev = first;
++			else if (pos.c.y < first->pos.c.y)
++				prev = last;
++		}
++
++		/* Wrap around the target output */
++		top = prev->pos.c.y;
++		bottom = top + prev->height;
++		left = prev->pos.c.x;
++		right = left + prev->width;
++
++		if (pos.c.x < left)
++			pos.c.x = right;
++		if (pos.c.x > right)
++			pos.c.x = left;
++		if (pos.c.y < top)
++			pos.c.y = bottom;
++		if (pos.c.y > bottom)
++			pos.c.y = top;
+ 	}
+ 
+ 	if (!prev)
+ 		prev = pointer->seat->output;
+ 	if (!prev)
+-		prev = fallback;
++		prev = first;
+ 
+ 	if (prev && !valid)
+ 		pos = weston_pointer_clamp_for_output(pointer, prev, pos);
+-- 
+2.20.1
+

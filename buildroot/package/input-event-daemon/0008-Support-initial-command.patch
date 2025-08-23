@@ -1,0 +1,58 @@
+From 9482ddc73792d7eb7d651076a6c61ba181a9fa84 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 14 Jun 2024 11:47:46 +0800
+Subject: [PATCH 8/8] Support initial command
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ input-event-daemon.c | 13 +++++++++++++
+ input-event-daemon.h |  2 ++
+ 2 files changed, 15 insertions(+)
+
+diff --git a/input-event-daemon.c b/input-event-daemon.c
+index 9ba6dfd..9e02cf8 100644
+--- a/input-event-daemon.c
++++ b/input-event-daemon.c
+@@ -455,6 +455,11 @@ void config_parse_file(const char *configfile) {
+                 } else {
+                     error = "Listener limit exceeded!";
+                 }
++            } else if(strcasecmp(key, "init") == 0) {
++                if (conf.initial_exec)
++                    free((void *)conf.initial_exec);
++
++                conf.initial_exec = strdup(value);
+             } else {
+                 error = "Unkown option!";
+             }
+@@ -768,6 +773,14 @@ void daemon_start_listener() {
+     else
+         interval = conf.min_timeout;
+ 
++    if (conf.initial_exec) {
++        if(conf.verbose)
++            fprintf(stderr, PROGRAM": Initial exec     : \"%s\"\n\n",
++                    conf.initial_exec);
++
++        daemon_exec(conf.initial_exec, 1);
++    }
++
+     timeout = 0;
+     while(1) {
+         if (conf.dynamic)
+diff --git a/input-event-daemon.h b/input-event-daemon.h
+index 7d3eacf..efbc42b 100644
+--- a/input-event-daemon.h
++++ b/input-event-daemon.h
+@@ -29,6 +29,8 @@ struct {
+ 
+     const char      *listen[MAX_LISTENER];
+     int             listen_fd[MAX_LISTENER];
++
++    const char      *initial_exec;
+ } conf;
+ 
+ /**
+-- 
+2.20.1
+

@@ -1,0 +1,50 @@
+From d1c772a237b73c670ef607e086beb65a04ea0b8b Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 10 Jul 2024 17:26:12 +0800
+Subject: [PATCH 91/95] screenshot: Fix hang when output is forced off
+
+Tested on RK3588 EVB with:
+1/ weston -B drm,vnc --debug&
+2/ weston-screenshooter
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ clients/screenshot.c       | 5 ++++-
+ libweston/output-capture.c | 5 +++++
+ 2 files changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/clients/screenshot.c b/clients/screenshot.c
+index a160406..2f022ce 100644
+--- a/clients/screenshot.c
++++ b/clients/screenshot.c
+@@ -209,7 +209,10 @@ capture_source_handle_failed(void *data,
+ 	struct screenshooter_output *output = data;
+ 
+ 	output->app->waitcount--;
+-	output->app->failed = true;
++	// output->app->failed = true;
++
++	wl_list_remove(&output->link);
++	wl_list_init(&output->link);
+ 
+ 	if (msg)
+ 		fprintf(stderr, "Output capture error: %s\n", msg);
+diff --git a/libweston/output-capture.c b/libweston/output-capture.c
+index 3265f06..f9e7ce2 100644
+--- a/libweston/output-capture.c
++++ b/libweston/output-capture.c
+@@ -521,6 +521,11 @@ weston_capture_source_v1_capture(struct wl_client *client,
+ 		return;
+ 	}
+ 
++	if (csrc->output->power_state == WESTON_OUTPUT_POWER_FORCED_OFF) {
++		weston_capture_source_v1_send_failed(csrc->resource, "source unavailable");
++		return;
++	}
++
+ 	/* Is the pixel source not available? */
+ 	csi = capture_info_get_csi(csrc->output->capture_info,
+ 				   csrc->pixel_source);
+-- 
+2.20.1
+

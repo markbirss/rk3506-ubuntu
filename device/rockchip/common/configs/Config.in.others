@@ -1,0 +1,30 @@
+#
+
+menu "Others configurations"
+
+config RK_OVERLAY
+	bool "overlays for rootfs, recovery, etc."
+	depends on RK_KERNEL
+	default y
+
+config RK_NETWORK_CHECK
+	bool "check network"
+	depends on RK_ROOTFS
+	default y
+
+choice
+	prompt "patches saving"
+	default RK_SAVE_TRACKED
+
+config RK_SAVE_COMMITTED
+	bool "save committed changes only"
+
+config RK_SAVE_TRACKED
+	bool "save changes of tracked files"
+
+config RK_SAVE_ALL
+	bool "save all changes"
+
+endchoice # patches saving
+
+endmenu # Others

@@ -1,0 +1,13 @@
+#! /bin/sh
+
+case $1 in
+    start)
+        sh /oem/RkLunch.sh
+        ;;
+    stop)
+        sh /oem/RkLunch-stop.sh
+        ;;
+    *)
+        echo "Usage: $0 {start|stop}"
+        ;;
+esac

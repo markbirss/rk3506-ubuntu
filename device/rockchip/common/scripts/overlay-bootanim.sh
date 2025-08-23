@@ -1,0 +1,1 @@
+../overlays/rootfs/bootanim/install.sh

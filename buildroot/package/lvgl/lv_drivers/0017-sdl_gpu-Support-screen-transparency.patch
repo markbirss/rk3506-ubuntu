@@ -1,0 +1,52 @@
+From 84b0e90806385cca60c524d7e8c61bbfbdf28992 Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Tue, 30 Jul 2024 17:44:49 +0800
+Subject: [PATCH] sdl_gpu: Support screen transparency
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ sdl/sdl_gpu.c | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/sdl/sdl_gpu.c b/sdl/sdl_gpu.c
+index cccb621a..f304a612 100644
+--- a/sdl/sdl_gpu.c
++++ b/sdl/sdl_gpu.c
+@@ -287,6 +287,9 @@ static void window_create(monitor_t * m)
+ #if USE_SDL_OPENGL
+     SDL_GLContext previousContext;
+ #endif
++#if LV_COLOR_SCREEN_TRANSP && defined(SDL_HINT_VIDEO_EGL_ALLOW_TRANSPARENCY)
++    SDL_SetHint(SDL_HINT_VIDEO_EGL_ALLOW_TRANSPARENCY, "1");
++#endif
+ //    SDL_SetHint( SDL_HINT_RENDER_SCALE_QUALITY, "1");
+     SDL_Rect rect;
+ 
+@@ -304,7 +307,7 @@ static void window_create(monitor_t * m)
+         m->d_hor_res = m->hor_res;
+         m->d_ver_res = m->ver_res;
+     }
+-
++    SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 1);
+     m->window = SDL_CreateWindow("TFT Simulator",
+                               SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+                               m->hor_res * SDL_ZOOM, m->ver_res * SDL_ZOOM,
+@@ -339,13 +342,10 @@ static void window_update(lv_disp_drv_t *disp_drv, void * buf)
+     SDL_Rect dst;
+ 
+     SDL_SetRenderTarget(renderer, NULL);
+-    SDL_RenderClear(renderer);
+ #if LV_COLOR_SCREEN_TRANSP
+-    SDL_SetRenderDrawColor(renderer, 0xff, 0, 0, 0xff);
+-    SDL_Rect r;
+-    r.x = 0; r.y = 0; r.w = m->hor_res; r.h = m->ver_res;
+-    SDL_RenderDrawRect(renderer, &r);
++    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+ #endif
++    SDL_RenderClear(renderer);
+ 
+     dst.x = (m->hor_res - m->d_hor_res) / 2;
+     dst.y = (m->ver_res - m->d_ver_res) / 2;
+-- 
+2.25.1
+

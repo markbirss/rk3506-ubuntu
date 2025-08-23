@@ -1,0 +1,4 @@
+#include "base/base.config"
+#include "base/recovery.config"
+#include "chips/rk3328_aarch64.config"
+BR2_PACKAGE_RECOVERY_NO_UI=y

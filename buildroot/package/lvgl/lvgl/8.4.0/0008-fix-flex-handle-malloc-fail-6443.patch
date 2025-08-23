@@ -1,0 +1,30 @@
+From 0820b23b1832aa201fa86c795d6eb6b94e8109d0 Mon Sep 17 00:00:00 2001
+From: aharms795 <adam.harms@teledyne.com>
+Date: Thu, 4 Jul 2024 17:10:53 -0400
+Subject: [PATCH 08/35] fix(flex): handle malloc fail (#6443)
+
+---
+ src/extra/layouts/flex/lv_flex.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/src/extra/layouts/flex/lv_flex.c b/src/extra/layouts/flex/lv_flex.c
+index 2f1a9260a..f76e4eaa3 100644
+--- a/src/extra/layouts/flex/lv_flex.c
++++ b/src/extra/layouts/flex/lv_flex.c
+@@ -288,8 +288,12 @@ static void flex_update(lv_obj_t * cont, void * user_data)
+         }
+         children_repos(cont, &f, track_first_item, next_track_first_item, abs_x, abs_y, max_main_size, item_gap, &t);
+         track_first_item = next_track_first_item;
+-        lv_mem_buf_release(t.grow_dsc);
++
++        if(t.grow_dsc) {
++            lv_mem_buf_release(t.grow_dsc);
++        }
+         t.grow_dsc = NULL;
++
+         if(rtl && !f.row) {
+             *cross_pos -= gap + track_gap;
+         }
+-- 
+2.25.1
+

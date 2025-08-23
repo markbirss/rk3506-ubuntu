@@ -1,0 +1,30 @@
+mainmenu "RT-Thread Configuration"
+
+config BSP_DIR
+    string
+    option env="BSP_ROOT"
+    default "."
+
+config RTT_DIR
+    string
+    option env="RTT_ROOT"
+    default "../../.."
+
+config PKGS_DIR
+    string
+    option env="PKGS_ROOT"
+    default "packages"
+
+config SOC_RK3568
+    bool
+
+config BOARD_RK3568_RISCV_EVB
+    bool
+    select ARCH_RISCV
+    select SOC_RK3568
+    default y
+
+source "$RTT_DIR/Kconfig"
+source "$BSP_DIR/board/Kconfig"
+source "$BSP_DIR/drivers/Kconfig"
+source "$BSP_DIR/../common/tests/Kconfig"

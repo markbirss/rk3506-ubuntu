@@ -1,0 +1,28 @@
+import rtconfig
+Import('RTT_ROOT')
+from building import *
+
+# get current directory
+cwd = GetCurrentDir()
+project = 'Koala'
+
+# The set of source files associated with this SConscript file.
+src = Glob('Libraries/CMSIS/Device/' + project + '/Source/Templates/*.c')
+src += Glob('Libraries/hal/src/*.c')
+src += Glob('Libraries/hal/src/*/*.c')
+src += Glob('Libraries/bsp/' + project + '/*.c')
+
+#add for startup script
+src += Glob('Libraries/CMSIS/Device/' + project + '/Source/Templates/GCC/*.S')
+
+#add include path
+path = [cwd + '/Libraries/hal/inc',
+    cwd + '/Libraries/bsp/' + project,
+    cwd + '/Libraries/CMSIS/Device',
+    cwd + '/Libraries/CMSIS/Device/' + project + '/Include',
+    cwd + '/Libraries/CMSIS/Core/Include']
+
+CPPDEFINES = ['USE_STDPERIPH_DRIVER']
+group = DefineGroup(project + '_StdPeriph', src, depend = [''], CPPPATH = path, CPPDEFINES = CPPDEFINES)
+
+Return('group')

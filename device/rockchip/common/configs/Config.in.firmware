@@ -1,0 +1,59 @@
+#
+
+menu "Firmware (partition table, misc image, etc.)"
+
+config RK_PARAMETER
+	string "parameter (Rockchip style partition table file)"
+	default "parameter-ab.txt" if RK_AB_UPDATE
+	default "parameter.txt"
+	help
+	  Name of parameter file under <RK_CHIP_DIR>/.
+
+menuconfig RK_MISC
+	bool "Pack misc image (for recovery, security, A/B, etc.)"
+	depends on RK_KERNEL
+	default y if RK_RECOVERY || RK_SECURITY_CHECK_SYSTEM_VERITY
+
+if RK_MISC
+
+choice
+	prompt "misc image"
+
+config RK_MISC_BLANK
+	bool "blank"
+	help
+	  Use blank misc.
+
+config RK_MISC_RECOVERY
+	bool "for recovery"
+	help
+	  Use misc for recovery.
+
+config RK_MISC_CUSTOM
+	bool "custom"
+	help
+	  Use custom misc image under <RK_CHIP_DIR>/.
+
+endchoice # misc image
+
+config RK_MISC_RECOVERY_ARG
+	string "recovery argument"
+	depends on RK_MISC_RECOVERY
+	default "--wipe_all"
+	help
+	  Arg of recovery program.
+
+config RK_MISC_IMG
+	string "custom misc image"
+	depends on RK_MISC_CUSTOM
+	default "misc.img"
+	help
+	  Name of misc image under <RK_CHIP_DIR>/.
+
+endif # Misc
+endmenuconfig # Misc
+
+config RK_USE_FIT_IMG
+	bool "use FIT (Flattened Image Tree) image"
+
+endmenu # Firmware

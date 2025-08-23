@@ -1,0 +1,4 @@
+config BR2_PACKAGE_ROCKIT_UVC
+    bool "rockit uvc"
+    depends on BR2_PACKAGE_ROCKIT
+    depends on BR2_PACKAGE_ROCKCHIP_UVC_APP

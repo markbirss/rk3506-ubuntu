@@ -1,0 +1,29 @@
+From 017f87fc0bc737c26d06f55ed146e86e61752b99 Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Mon, 6 May 2024 11:53:07 +0800
+Subject: [PATCH 05/12] feat(sdl): get screen size automatically
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ src/drivers/sdl/lv_sdl_window.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/src/drivers/sdl/lv_sdl_window.c b/src/drivers/sdl/lv_sdl_window.c
+index b430066..193b00a 100644
+--- a/src/drivers/sdl/lv_sdl_window.c
++++ b/src/drivers/sdl/lv_sdl_window.c
+@@ -103,6 +103,11 @@ lv_display_t * lv_sdl_window_create(int32_t hor_res, int32_t ver_res)
+     LV_ASSERT_MALLOC(dsc);
+     if(dsc == NULL) return NULL;
+ 
++    SDL_Rect rect;
++    SDL_GetDisplayBounds(0, &rect);
++    if (!hor_res) hor_res = rect.w;
++    if (!ver_res) ver_res = rect.h;
++
+     lv_display_t * disp = lv_display_create(hor_res, ver_res);
+     if(disp == NULL) {
+         lv_free(dsc);
+-- 
+2.25.1
+

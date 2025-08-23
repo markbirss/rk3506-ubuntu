@@ -1,0 +1,1 @@
+./firmware_merger -P 3399spi_linux.ini ./

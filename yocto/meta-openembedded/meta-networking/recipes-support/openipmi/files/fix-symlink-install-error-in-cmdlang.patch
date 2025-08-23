@@ -1,0 +1,28 @@
+From 0ccfefe624e25f937b27b2caf3671e80c2c29391 Mon Sep 17 00:00:00 2001
+From: Aws Ismail <aws.ismail@windriver.com>
+Date: Thu, 7 Jun 2012 16:00:13 -0400
+Subject: [PATCH] Fix symlink install error in cmdlang
+
+This patch fixes the error during the install stage when
+creating a symbolic link for opeipmish in openipmi/cmdlang
+
+Upstream-Status: Pending
+
+Signed-off-by: Aws Ismail <aws.ismail@windriver.com>
+
+---
+ cmdlang/Makefile.am | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/cmdlang/Makefile.am b/cmdlang/Makefile.am
+index 7235446..4a81ae3 100644
+--- a/cmdlang/Makefile.am
++++ b/cmdlang/Makefile.am
+@@ -41,6 +41,7 @@ openipmish_CFLAGS = -Wall -Wsign-compare -I$(top_builddir)/include \
+ # compatability.
+ install-exec-hook:
+ 	rm -f $(DESTDIR)$(bindir)/ipmish
++	mkdir -p $(DESTDIR)$(bindir)/
+ 	$(LN_S) openipmish $(DESTDIR)$(bindir)/ipmish
+ 
+ uninstall-local:

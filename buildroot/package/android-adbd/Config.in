@@ -1,0 +1,32 @@
+config BR2_PACKAGE_ANDROID_ADBD
+	bool "android-adbd"
+	depends on !BR2_PACKAGE_ANDROID_TOOLS_ADBD
+	select BR2_PACKAGE_OPENSSL
+	help
+	  Daemon for Android Debug Bridge.
+
+if BR2_PACKAGE_ANDROID_ADBD
+
+config BR2_PACKAGE_ANDROID_ADBD_STATIC
+	bool "Enable static"
+	default y if BR2_STATIC_LIBS
+
+config BR2_PACKAGE_ANDROID_ADBD_TCP_PORT
+	int "adbd TCP port"
+	default 0
+
+config BR2_PACKAGE_ANDROID_ADBD_SECURE
+	bool "adbd secure"
+
+if BR2_PACKAGE_ANDROID_ADBD_SECURE
+
+config BR2_PACKAGE_ANDROID_ADBD_PASSWORD
+	string "adbd password"
+
+config BR2_PACKAGE_ANDROID_ADBD_KEYS
+	string "Android public keys"
+	default "~/.android/adbkey.pub" if BR2_PACKAGE_ANDROID_ADBD_PASSWORD = ""
+
+endif
+
+endif

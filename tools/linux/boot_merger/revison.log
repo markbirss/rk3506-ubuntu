@@ -1,0 +1,34 @@
+v1.35 2024/02/26 01:
+1.add function to close crc on transfer 471 and 472
+
+v1.34 2023/10/07 01:
+1.fix create idb bug cause by align unit change
+
+v1.34 2023/09/15 01:
+1.modify align unit from 1k into 1sector
+
+v1.33 2023/07/20 01:
+1.add IDB_2K_INTERLEAVE to interleave idblock by ini
+
+v1.32 2023/04/25 01:
+1.fix using system call bug on linux
+
+v1.31 2023/03/20 01:
+1.support 2k interleave with idb command
+2.fix create loader by ini lost return code
+
+v1.3 2022/07/29 01:
+1.support sm3 hash on new idblock
+
+v1.2 2022/02/28 01:
+1.add create_idb flag in config file
+2.support to create idblock binary after packing loader
+
+2022/01/25 01:
+1.support chip name start with RV
+
+2021/12/29 01:
+1.add "idb" command to create idblock binary from loader or files
+
+
+

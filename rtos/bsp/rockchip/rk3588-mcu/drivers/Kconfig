@@ -1,0 +1,82 @@
+source "$BSP_DIR/../common/drivers/Kconfig"
+
+menu "RT-Thread rockchip rk3588_mcu drivers"
+
+config RT_USING_CRU
+    bool "Enable CRU"
+    default n
+
+menu "Enable UART"
+    config RT_USING_UART
+        bool "Enable UART"
+        default n
+
+    if RT_USING_UART
+    config RT_USING_UART0
+        bool "Enable UART0"
+        default n
+    config RT_USING_UART2
+        bool "Enable UART2"
+        default n
+    config RT_USING_UART5
+        bool "Enable UART5"
+        default n
+    endif
+endmenu
+
+if RT_USING_SPI
+menu "Enable SPI"
+    config RT_USING_SPI0
+        bool "Enable SPI0"
+        default n
+
+    config RT_USING_SPI1
+        bool "Enable SPI1"
+        default n
+
+    config RT_USING_SPI2
+        bool "Enable SPI2"
+        default n
+
+    config RT_USING_SPI3
+        bool "Enable SPI3"
+        default n
+
+    config RT_USING_SPI4
+        bool "Enable SPI4"
+        default n
+endmenu
+endif
+
+if RT_USING_PWM
+menu "Enable PWM"
+    config RT_USING_PWM0
+        bool "Enable PWM0"
+        default n
+
+    config RT_USING_PWM1
+        bool "Enable PWM1"
+        default n
+
+    config RT_USING_PWM2
+        bool "Enable PWM2"
+        default n
+
+    config RT_USING_PWM3
+        bool "Enable PWM3"
+        default n
+endmenu
+endif
+
+config RT_USING_SARADC
+    bool "Enable Saradc"
+    depends on RT_USING_ADC
+    default n
+
+config RT_USING_I2C6
+    bool "Enable I2C6"
+    depends on RT_USING_I2C
+    default n
+
+endmenu
+

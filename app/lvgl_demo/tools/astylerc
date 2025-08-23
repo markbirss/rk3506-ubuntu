@@ -1,0 +1,21 @@
+# Brace Style Options
+--style=allman
+
+# Tab Options
+--indent=spaces=4
+
+# Padding Options
+--pad-oper
+--pad-header
+--unpad-paren
+--align-pointer=name
+
+# Formatting Options
+--convert-tabs
+--max-code-length=100
+
+# Other Options
+--suffix=none
+--formatted
+--lineend=linux
+

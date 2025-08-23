@@ -1,0 +1,29 @@
+From 209241f97972af4440e775e3be09a61e3f3e39bb Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Sat, 3 Sep 2022 13:27:57 +0800
+Subject: [PATCH] Fix compile error with old kernel
+
+See:
+https://patchwork.ozlabs.org/project/qemu-devel/patch/20200213142147.17604-1-borntraeger@de.ibm.com
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ include/qemu/bitops.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/include/qemu/bitops.h b/include/qemu/bitops.h
+index 03213ce95..d9e31483d 100644
+--- a/include/qemu/bitops.h
++++ b/include/qemu/bitops.h
+@@ -17,7 +17,7 @@
+ #include "atomic.h"
+ 
+ #define BITS_PER_BYTE           CHAR_BIT
+-#define BITS_PER_LONG           (sizeof (unsigned long) * BITS_PER_BYTE)
++#define BITS_PER_LONG           (__SIZEOF_LONG__ * BITS_PER_BYTE)
+ 
+ #define BIT(nr)                 (1UL << (nr))
+ #define BIT_ULL(nr)             (1ULL << (nr))
+-- 
+2.20.1
+

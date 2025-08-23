@@ -1,0 +1,100 @@
+menuconfig RT_USING_ROCKIT
+    bool "rockit"
+    select RT_USING_POSIX_FS
+    select RT_USING_POSIX_DEVIO
+    select RT_USING_POSIX_POLL
+    select RT_USING_POSIX_SELECT
+    select RT_USING_POSIX_DELAY
+    select RT_USING_POSIX_CLOCK
+    select RT_USING_POSIX_PIPE
+    select RT_USING_POSIX_MESSAGE_SEMAPHORE
+    select RT_USING_RTC
+    select RT_USING_SOFT_RTC
+    select RT_USING_POSIX_STDIO
+    select RT_USING_PTHREADS
+    select RT_USING_DFS
+    select RT_USING_UNCACHE_HEAP
+    default n
+    help
+        rockit: light-weight multimedia api
+
+if RT_USING_ROCKIT
+    config RT_USING_ROCKIT_VI
+        bool "vi"
+        default n
+        help
+            rockit video input module
+
+    config RT_USING_ROCKIT_VPSS
+        bool "vpss"
+        default n
+        help
+            rockit video process module
+
+    config RT_USING_ROCKIT_VENC
+        bool "venc"
+        default n
+        help
+            rockit video encoder module
+
+    config RT_USING_ROCKIT_VDEC
+        bool "vdec"
+        default y
+        help
+            rockit video decoder module
+
+    config RT_USING_ROCKIT_VO
+        bool "vo"
+        default y
+        help
+            rockit video output module
+
+    config RT_USING_ROCKIT_TDE
+        bool "tde"
+        default y
+        help
+            rockit video Two Dimensional Engine module
+
+    config RT_USING_ROCKIT_VGS
+        bool "vgs"
+        default n
+        help
+            rockit video Graphics sub system module
+
+    config RT_USING_ROCKIT_AVS
+        bool "avs"
+        default n
+        help
+            rockit Any View Stitching system module
+
+    config RT_USING_ROCKIT_RGN
+        bool "rgn"
+        default y
+        help
+            rockit region manange module
+
+    config RT_USING_ROCKIT_AI
+        bool "ai"
+        default y
+        help
+            rockit Audio input module
+
+    config RT_USING_ROCKIT_AO
+        bool "ao"
+        default y
+        help
+            rockit Audio output module
+
+    config RT_USING_ROCKIT_ADEC
+        bool "adec"
+        default y
+        help
+            rockit Audio decoder module
+
+    config RT_USING_ROCKIT_AENC
+        bool "aenc"
+        default y
+        help
+            rockit Audio encoder module
+
+endif

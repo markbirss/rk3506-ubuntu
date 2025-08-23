@@ -1,0 +1,35 @@
+From 02f94e39a18bc1df875fd11ba765e591446adff4 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Thu, 26 Sep 2024 18:00:58 +0800
+Subject: [PATCH 1/2] graphics: Force using dlsym() instead of glGetString()
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ src/Graphics/OpenGLContext/GLFunctions.cpp | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/src/Graphics/OpenGLContext/GLFunctions.cpp b/src/Graphics/OpenGLContext/GLFunctions.cpp
+index 88b83e8..7ad3f16 100644
+--- a/src/Graphics/OpenGLContext/GLFunctions.cpp
++++ b/src/Graphics/OpenGLContext/GLFunctions.cpp
+@@ -15,7 +15,7 @@
+ #elif defined(EGL)
+ 
+ #define glGetProcAddress eglGetProcAddress
+-#define GL_GET_PROC_ADR(proc_type, proc_name) ptr##proc_name = (proc_type) glGetProcAddress("gl"#proc_name)
++#define GL_GET_PROC_ADR(proc_type, proc_name) ptr##proc_name = (proc_type) dlsym(gles2so, "gl"#proc_name);
+ #define GL_GET_PROC_ADR_EGL(proc_type, proc_name) ptr##proc_name = (proc_type) glGetProcAddress("egl"#proc_name)
+ 
+ #elif defined(OS_LINUX)
+@@ -211,6 +211,8 @@ void initGLFunctions()
+ 	void *gles2so = dlopen("/usr/lib/arm-linux-gnueabihf/libGLESv2.so", RTLD_NOW);
+ #elif defined(VERO4K)
+        void *gles2so = dlopen("/opt/vero3/lib/libGLESv2.so", RTLD_NOW);
++#else
++       void *gles2so = dlopen("/usr/lib/libGLESv2.so", RTLD_NOW);
+ #endif
+ 
+ #if defined(EGL) || defined(OS_IOS)
+-- 
+2.20.1
+

@@ -1,0 +1,34 @@
+From 85b79c977a436b60652228fd39b9eb6ef1479050 Mon Sep 17 00:00:00 2001
+From: Lorenzo Arena <arena.lor@gmail.com>
+Date: Thu, 8 Aug 2024 10:48:21 +0200
+Subject: [PATCH 09/35] fix(display): delete previous screen instead of current
+ (#6495)
+
+---
+ src/core/lv_disp.c | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/src/core/lv_disp.c b/src/core/lv_disp.c
+index 8f64002a7..3b5e69376 100644
+--- a/src/core/lv_disp.c
++++ b/src/core/lv_disp.c
+@@ -230,14 +230,12 @@ void lv_scr_load_anim(lv_obj_t * new_scr, lv_scr_load_anim_t anim_type, uint32_t
+ 
+     /*If an other screen load animation is in progress
+      *make target screen loaded immediately. */
+-    if(d->scr_to_load) {
++    if(d->scr_to_load && act_scr != d->scr_to_load) {
+         lv_anim_del(d->scr_to_load, NULL);
+         lv_obj_set_pos(d->scr_to_load, 0, 0);
+         lv_obj_remove_local_style_prop(d->scr_to_load, LV_STYLE_OPA, 0);
+ 
+-        if(d->del_prev) {
+-            lv_obj_del(act_scr);
+-        }
++        d->prev_scr = d->act_scr;
+         act_scr = d->scr_to_load;
+ 
+         scr_load_internal(d->scr_to_load);
+-- 
+2.25.1
+

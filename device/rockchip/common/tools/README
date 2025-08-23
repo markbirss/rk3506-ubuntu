@@ -1,0 +1,8 @@
+Prebuilt tools (static linked)
+==============================
+
+x86_64: Tools for amd64 host(PC)
+
+aarch64: Tools for arm64 target devices
+
+armhf: Tools for arm32 and arm64 target devices

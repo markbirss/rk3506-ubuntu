@@ -1,0 +1,28 @@
+config BR2_PACKAGE_IVA
+	bool "rockiva algorithm"
+	help
+	  rockiva library
+
+if BR2_PACKAGE_IVA
+
+choice
+	default BR2_PACKAGE_IVA_RK3588
+	prompt "target platform(32bit/64bit)"
+
+config BR2_PACKAGE_IVA_RK3576
+	bool "rockiva rk3576"
+	help
+	  Use rockiva for rk3576.
+
+config BR2_PACKAGE_IVA_RK3588
+	bool "rockiva rk3588"
+	help
+	  Use rockiva for rk3588.
+
+config BR2_PACKAGE_IVA_RV1106
+	bool "rockiva rv1106"
+	help
+	  Use rockiva for rv1106.
+endchoice
+
+endif

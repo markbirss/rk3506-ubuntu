@@ -1,0 +1,8 @@
+Prebuilt tools (static linked)
+==============================
+
+qemu-*-static: Qemu tools extracted from qemu-user-static_8.0.3+dfsg-4_amd64.deb
+
+ldconfig:
+Based on Yocto's ldconfig-native_2.12.1, static linked with:
+gcc ldconfig.c -std=gnu99 chroot_canon.c xmalloc.c xstrdup.c cache.c readlib.c -I. -o ldconfig -static

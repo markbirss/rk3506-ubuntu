@@ -1,0 +1,82 @@
+import rtconfig
+Import('RTT_ROOT')
+Import('PROJECT')
+from building import *
+
+# get current directory
+cwd = GetCurrentDir()
+hal_lib = cwd + '/hal/lib'
+
+if PROJECT == 'CA':
+
+    Import('SOC')
+
+    # The set of source files associated with this SConscript file.
+    if SOC != 'RK3588':
+        src = Glob(hal_lib + '/CMSIS/Device/' + SOC + '/Source/Templates/*.c')
+        src += Glob(hal_lib + '/hal/src/*.c')
+    else:
+        src = Glob(hal_lib + '/hal/src/*.c')
+    src += Glob(hal_lib + '/hal/src/*/*.c')
+    src += Glob(hal_lib + '/bsp/' + SOC + '/*.c')
+
+    #add include path
+    path = [hal_lib + '/hal/inc',
+        hal_lib + '/bsp/' + SOC,
+        hal_lib + '/CMSIS/Device/' + SOC + '/Include']
+
+else:
+
+    # The set of source files associated with this SConscript file.
+    src = Glob(hal_lib + '/CMSIS/Device/' + PROJECT + '/Source/Templates/*.c')
+    src += Glob(hal_lib + '/hal/src/*.c')
+    src += Glob(hal_lib + '/hal/src/*/*.c')
+    src += Glob(hal_lib + '/bsp/' + PROJECT + '/*.c')
+
+    #add for startup script
+    if rtconfig.CROSS_TOOL == 'gcc':
+        src += Glob(hal_lib + '/CMSIS/Device/' + PROJECT + '/Source/Templates/GCC/*.S')
+    elif rtconfig.CROSS_TOOL == 'keil':
+        src += Glob(hal_lib + '/CMSIS/Device/' + PROJECT + '/Source/Templates/ARM/*.s')
+    elif rtconfig.CROSS_TOOL == 'iar':
+        src += Glob(hal_lib + '/CMSIS/Device/' + PROJECT + '/Source/Templates/IAR/*.s')
+
+    #add include path
+    path = [hal_lib + '/hal/inc',
+        hal_lib + '/bsp/' + PROJECT,
+        hal_lib + '/CMSIS/Device',
+        hal_lib + '/CMSIS/Device/' + PROJECT + '/Include']
+
+if rtconfig.ARCH == 'arm':
+    if PROJECT == 'CA':
+        path.append(hal_lib + '/CMSIS/Core_A/Include')
+    else:
+        path.append(hal_lib + '/CMSIS/Core/Include')
+elif rtconfig.ARCH == 'aarch64':
+    path.append(hal_lib + '/CMSIS/Core_A_64/Include')
+elif rtconfig.ARCH == 'risc-v':
+    path.append(hal_lib + '/CMSIS/RISCV/Include')
+    try:
+        if rtconfig.VENDOR == 't-head':
+            path.append(hal_lib + '/CMSIS/RISCV/Include/t-head')
+            path.append(hal_lib + '/CMSIS/RISCV/Include/t-head/asm')
+            path.append(hal_lib + '/CMSIS/RISCV/Include/t-head/csi2/include')
+            src += Glob(hal_lib + '/CMSIS/Device/' + PROJECT + '/Source/Templates/sys/*.c')
+        elif rtconfig.VENDOR == 'nuclei':
+            path.append(hal_lib + '/CMSIS/RISCV/Include/nuclei/core')
+            src += Glob(hal_lib + '/CMSIS/Device/' + PROJECT + '/Source/Templates/sys/*.c')
+        elif rtconfig.VENDOR == 'syntacore':
+            path.append(hal_lib + '/CMSIS/RISCV/Include/syntacore')
+        else:
+            print('unknown defined for rtconfig.VENDOR=' + rtconfig.VENDOR)
+    except AttributeError:
+        print('there is no rtconfig.VENDOR defined, so use syntacore by default!')
+        path.append(hal_lib + '/CMSIS/RISCV/Include/syntacore')
+else:
+    print('you must defined ARCH!!!')
+
+CPPDEFINES = ['HAS_ROCKCHIP_HAL']
+
+group = DefineGroup(PROJECT + '_StdPeriph', src, depend = [''], CPPPATH = path, CPPDEFINES = CPPDEFINES)
+
+Return('group')

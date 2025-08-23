@@ -1,0 +1,15 @@
+Import('RTT_ROOT')
+Import('rtconfig')
+from building import *
+
+cwd = GetCurrentDir()
+src = Glob('*.c')
+CPPPATH = [cwd]
+
+if GetDepend(['BT_ENABLED']) is not True:
+    src = []
+    CPPPATH = []
+
+group = DefineGroup('BT_AP6212', src, depend = ['RT_USING_BOARD_RK1808_EVB'], CPPPATH = CPPPATH)
+
+Return('group')

@@ -1,0 +1,33 @@
+From 50d7798f46bf9911263080b8fa731c6b56b38747 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 8 Nov 2023 17:46:30 +0800
+Subject: [PATCH 6/8] adb: daemon: Fix build issue with old g++
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The old g++ (< 11) would report error:
+error: too many initializers for ‘usb_os_desc_header’
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ adb/daemon/usb.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/adb/daemon/usb.cpp b/adb/daemon/usb.cpp
+index 0f92282..97c3714 100644
+--- a/adb/daemon/usb.cpp
++++ b/adb/daemon/usb.cpp
+@@ -210,7 +210,8 @@ static struct usb_os_desc_header os_desc_header = {
+     .bcdVersion = cpu_to_le32(1),
+     .wIndex = cpu_to_le32(4),
+     .bCount = cpu_to_le32(1),
+-    .Reserved = cpu_to_le32(0),
++    // HACK: Workaround "too many initializers" error in g++ older than 11
++    // .Reserved = cpu_to_le32(0),
+ };
+ 
+ #define STR_INTERFACE_ "ADB Interface"
+-- 
+2.20.1
+

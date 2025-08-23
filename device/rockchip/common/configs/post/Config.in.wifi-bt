@@ -1,0 +1,43 @@
+#
+
+menuconfig RK_WIFIBT
+	bool "Wi-Fi/BT (Kernel modules, firmwares and scripts)"
+	default y
+
+if RK_WIFIBT
+
+config RK_WIFIBT_MODULES
+	string
+	default "ALL_AP" if RK_WIFIBT_RTK_AP
+	default "ALL_CY" if RK_WIFIBT_RTK_CYW
+	default RK_WIFIBT_CHIP if RK_WIFIBT_ON_BOARD
+
+config RK_WIFIBT_CHIP
+	string "onboard module"
+	help
+	  Onboard Wi-Fi/BT module.
+
+choice
+	prompt "supported modules"
+	default RK_WIFIBT_ON_BOARD if RK_WIFIBT_CHIP != ""
+	default RK_WIFIBT_RTK_AP
+
+config RK_WIFIBT_RTK_AP
+	bool "Realtek and Broadcom(AP6XXX)"
+	help
+	  All Realtek and Broadcom(AP6XXX) modules.
+
+config RK_WIFIBT_RTK_CYW
+	bool "Realtek and Infineon(CYWXXX)"
+	help
+	  All Realtek and Infineon(CYWXXX) modules.
+
+config RK_WIFIBT_ON_BOARD
+	bool "onboard module"
+	help
+	  Onboard module only.
+
+endchoice # modules
+
+endif # Wi-Fi/BT
+endmenuconfig # Wi-Fi/BT

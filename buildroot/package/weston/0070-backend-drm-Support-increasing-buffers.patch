@@ -1,0 +1,599 @@
+From 816816bc0c0fc17d8b9625c48ef1925dc90ca912 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 23 Aug 2023 18:18:58 +0800
+Subject: [PATCH 70/95] backend-drm: Support increasing buffers
+
+Default is 2 buffers, set env "WESTON_DRM_MIN_BUFFERS" to increase it.
+
+This can help to reduce tearing when dumping low-level DRM buffers.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/backend-drm/drm-gbm.c      | 159 ++++++++++++++++++++-------
+ libweston/backend-drm/drm-internal.h |  16 ++-
+ libweston/backend-drm/drm.c          |  29 +++--
+ libweston/renderer-gl/gl-renderer.c  |  82 ++++++++++++--
+ libweston/renderer-gl/gl-renderer.h  |   3 +
+ 5 files changed, 228 insertions(+), 61 deletions(-)
+
+diff --git a/libweston/backend-drm/drm-gbm.c b/libweston/backend-drm/drm-gbm.c
+index 055ef0b..27c76d7 100644
+--- a/libweston/backend-drm/drm-gbm.c
++++ b/libweston/backend-drm/drm-gbm.c
+@@ -122,8 +122,11 @@ static void drm_output_fini_cursor_egl(struct drm_output *output)
+ 	unsigned int i;
+ 
+ 	for (i = 0; i < ARRAY_LENGTH(output->gbm_cursor_fb); i++) {
++		if (!output->gbm_cursor_fb[i])
++			continue;
++
+ 		/* This cursor does not have a GBM device */
+-		if (output->gbm_cursor_fb[i] && !output->gbm_cursor_fb[i]->bo)
++		if (!output->gbm_cursor_fb[i]->bo)
+ 			output->gbm_cursor_fb[i]->type = BUFFER_PIXMAN_DUMB;
+ 		drm_fb_unref(output->gbm_cursor_fb[i]);
+ 		output->gbm_cursor_fb[i] = NULL;
+@@ -179,25 +182,16 @@ err:
+ 	return -1;
+ }
+ 
+-static void
+-create_gbm_surface(struct gbm_device *gbm, struct drm_output *output)
++static struct gbm_surface *
++create_gbm_surface(struct gbm_device *gbm, struct drm_output *output,
++		   struct weston_drm_format *fmt)
+ {
+ 	struct weston_mode *mode = output->base.current_mode;
+-	struct drm_plane *plane = output->scanout_plane;
+ 	struct drm_device *device = output->device;
+-	struct weston_drm_format *fmt;
++	struct gbm_surface *gbm_surface = NULL;
+ 	const uint64_t *modifiers;
+ 	unsigned int num_modifiers;
+ 
+-	fmt = weston_drm_format_array_find_format(&plane->formats,
+-						  output->format->format);
+-	if (!fmt) {
+-		weston_log("format %s not supported by output %s\n",
+-			   output->format->drm_format_name,
+-			   output->base.name);
+-		return;
+-	}
+-
+ 	/* HACK: Prefer valid modifilers */
+ 	if (device->fb_modifiers) {
+ #define MAX_MODIFIERS 128
+@@ -211,13 +205,44 @@ create_gbm_surface(struct gbm_device *gbm, struct drm_output *output)
+ 		modifiers = _modifiers;
+ 		num_modifiers = j;
+ 
+-		output->gbm_surface =
++		gbm_surface =
+ 			gbm_surface_create_with_modifiers(gbm,
+ 							  mode->width, mode->height,
+ 							  output->format->format,
+ 							  modifiers, num_modifiers);
+ 	}
+ 
++	/* We may allocate with no modifiers in the following situations:
++	 *
++	 * 1. the KMS driver does not support modifiers;
++	 * 2. if allocating with modifiers failed, what can happen when the KMS
++	 *    display device supports modifiers but the GBM driver does not,
++	 *    e.g. the old i915 Mesa driver.
++	 */
++	if (!gbm_surface)
++		gbm_surface = gbm_surface_create(gbm, mode->width, mode->height,
++						 output->format->format,
++						 output->gbm_bo_flags);
++
++	return gbm_surface;
++}
++
++static bool
++create_gbm_surfaces(struct gbm_device *gbm, struct drm_output *output)
++{
++	struct drm_plane *plane = output->scanout_plane;
++	struct weston_drm_format *fmt;
++	unsigned int i;
++
++	fmt = weston_drm_format_array_find_format(&plane->formats,
++						  output->format->format);
++	if (!fmt) {
++		weston_log("format %s not supported by output %s\n",
++			   output->format->drm_format_name,
++			   output->base.name);
++		return false;
++	}
++
+ 	/*
+ 	 * If we cannot use modifiers to allocate the GBM surface and the GBM
+ 	 * device differs from the KMS display device (because we are rendering
+@@ -227,18 +252,22 @@ create_gbm_surface(struct gbm_device *gbm, struct drm_output *output)
+ 	if (gbm_device_get_fd(gbm) != output->device->drm.fd)
+ 		output->gbm_bo_flags |= GBM_BO_USE_LINEAR;
+ 
+-	/* We may allocate with no modifiers in the following situations:
+-	 *
+-	 * 1. the KMS driver does not support modifiers;
+-	 * 2. if allocating with modifiers failed, what can happen when the KMS
+-	 *    display device supports modifiers but the GBM driver does not,
+-	 *    e.g. the old i915 Mesa driver.
+-	 */
+-	if (!output->gbm_surface)
+-		output->gbm_surface = gbm_surface_create(gbm,
+-							 mode->width, mode->height,
+-							 output->format->format,
+-							 output->gbm_bo_flags);
++	for (i = 0; i < output->num_surfaces; i++) {
++		output->gbm_surfaces[i] = create_gbm_surface(gbm, output, fmt);
++		if (!output->gbm_surfaces[i]) {
++			weston_log("failed to create gbm surface\n");
++			goto err;
++		}
++	}
++
++	return true;
++err:
++	for (i = 0; i < output->num_surfaces; i++) {
++		if (output->gbm_surfaces[i])
++			gbm_surface_destroy(output->gbm_surfaces[i]);
++		output->gbm_surfaces[i] = NULL;
++	}
++	return false;
+ }
+ 
+ /* Init output state that depends on gl or gbm */
+@@ -247,6 +276,7 @@ drm_output_init_egl(struct drm_output *output, struct drm_backend *b)
+ {
+ 	const struct weston_renderer *renderer = b->compositor->renderer;
+ 	const struct weston_mode *mode = output->base.current_mode;
++	const struct gl_renderer_interface *gl = renderer->gl;
+ 	const struct pixel_format_info *format[2] = {
+ 		output->format,
+ 		fallback_format_for(output->format),
+@@ -260,24 +290,52 @@ drm_output_init_egl(struct drm_output *output, struct drm_backend *b)
+ 		.area.height = mode->height,
+ 		.fb_size.width = mode->width,
+ 		.fb_size.height = mode->height,
++		.window_for_legacy = NULL,
++		.window_for_platform = NULL,
+ 	};
++	unsigned int i;
+ 
+ 	assert(output->gbm_surface == NULL);
+-	create_gbm_surface(b->gbm, output);
+-	if (!output->gbm_surface) {
+-		weston_log("failed to create gbm surface\n");
++
++	output->next_image = 0;
++
++	if (!create_gbm_surfaces(b->gbm, output))
+ 		return -1;
+-	}
++
++	output->gbm_surface = output->gbm_surfaces[output->next_image];
+ 
+ 	if (options.formats[1])
+ 		options.formats_count = 2;
+-	options.window_for_legacy = (EGLNativeWindowType) output->gbm_surface;
+-	options.window_for_platform = output->gbm_surface;
+-	if (renderer->gl->output_window_create(&output->base, &options) < 0) {
+-		weston_log("failed to create gl renderer output state\n");
+-		gbm_surface_destroy(output->gbm_surface);
+-		output->gbm_surface = NULL;
+-		return -1;
++
++	if (output->num_surfaces > 1) {
++		if (gl->output_window_create(&output->base, &options) < 0) {
++			weston_log("failed to create gl renderer output state\n");
++			drm_output_fini_egl(output);
++			return -1;
++		}
++
++		for (i = 0; i < output->num_surfaces; i++) {
++			options.window_for_legacy =
++				(EGLNativeWindowType) output->gbm_surfaces[i];
++			options.window_for_platform = output->gbm_surfaces[i];
++
++			output->renderbuffer[i] =
++				gl->create_buffer(&output->base, &options);
++			if (!output->renderbuffer[i]) {
++				weston_log("failed to create window surface\n");
++				drm_output_fini_egl(output);
++				return -1;
++			}
++		}
++	} else {
++		options.window_for_legacy =
++			(EGLNativeWindowType) output->gbm_surface;
++		options.window_for_platform = output->gbm_surface;
++		if (gl->output_window_create(&output->base, &options) < 0) {
++			weston_log("failed to create gl renderer output state\n");
++			drm_output_fini_egl(output);
++			return -1;
++		}
+ 	}
+ 
+ 	drm_output_init_cursor_egl(output, b);
+@@ -290,6 +348,7 @@ drm_output_fini_egl(struct drm_output *output)
+ {
+ 	struct drm_backend *b = output->backend;
+ 	const struct weston_renderer *renderer = b->compositor->renderer;
++	unsigned int i;
+ 
+ 	/* Destroying the GBM surface will destroy all our GBM buffers,
+ 	 * regardless of refcount. Ensure we destroy them here. */
+@@ -300,8 +359,18 @@ drm_output_fini_egl(struct drm_output *output)
+ 	}
+ 
+ 	renderer->gl->output_destroy(&output->base);
+-	gbm_surface_destroy(output->gbm_surface);
++	for (i = 0; i < output->num_surfaces; i++) {
++		if (output->renderbuffer[i])
++			weston_renderbuffer_unref(output->renderbuffer[i]);
++		output->renderbuffer[i] = NULL;
++	}
++	for (i = 0; i < output->num_surfaces; i++) {
++		if (output->gbm_surfaces[i])
++			gbm_surface_destroy(output->gbm_surfaces[i]);
++		output->gbm_surfaces[i] = NULL;
++	}
+ 	output->gbm_surface = NULL;
++
+ 	drm_output_fini_cursor_egl(output);
+ }
+ 
+@@ -310,11 +379,19 @@ drm_output_render_gl(struct drm_output_state *state, pixman_region32_t *damage)
+ {
+ 	struct drm_output *output = state->output;
+ 	struct drm_device *device = output->device;
++	struct weston_renderbuffer *renderbuffer = NULL;
+ 	struct gbm_bo *bo;
+ 	struct drm_fb *ret;
+ 
++	output->gbm_surface = output->gbm_surfaces[output->next_image];
++
++	if (output->num_surfaces > 1)
++		renderbuffer = output->renderbuffer[output->next_image];
++
++	output->next_image = (output->next_image + 1) % output->num_surfaces;
++
+ 	output->base.compositor->renderer->repaint_output(&output->base,
+-							  damage, NULL);
++							  damage, renderbuffer);
+ 
+ 	bo = gbm_surface_lock_front_buffer(output->gbm_surface);
+ 	if (!bo) {
+@@ -326,7 +403,7 @@ drm_output_render_gl(struct drm_output_state *state, pixman_region32_t *damage)
+ 	/* Output transparent/opaque image according to the format required by
+ 	 * the client. */
+ 	ret = drm_fb_get_from_bo(bo, device, !output->format->opaque_substitute,
+-	                         BUFFER_GBM_SURFACE);
++				 BUFFER_GBM_SURFACE);
+ 	if (!ret) {
+ 		weston_log("failed to get drm_fb for bo\n");
+ 		gbm_surface_release_buffer(output->gbm_surface, bo);
+diff --git a/libweston/backend-drm/drm-internal.h b/libweston/backend-drm/drm-internal.h
+index 8151d10..93a3ff6 100644
+--- a/libweston/backend-drm/drm-internal.h
++++ b/libweston/backend-drm/drm-internal.h
+@@ -122,6 +122,8 @@
+ #define WESTON_DRM_CONFIG_FILE	"/tmp/.weston_drm.conf"
+ #define DRM_CONFIG_UPDATE_MS	100
+ 
++#define DRM_MAX_BUFFERS		16
++
+ /**
+  * Represents the values of an enum-type KMS property
+  */
+@@ -592,7 +594,6 @@ struct drm_output {
+ 	struct wl_listener cursor_view_destroy_listener;
+ 	int current_cursor;
+ 
+-	struct gbm_surface *gbm_surface;
+ 	const struct pixel_format_info *format;
+ 	uint32_t gbm_bo_flags;
+ 
+@@ -617,12 +618,17 @@ struct drm_output {
+ 	/* only set when a writeback screenshot is ongoing */
+ 	struct drm_writeback_state *wb_state;
+ 
+-	struct drm_fb *dumb[2];
+-	struct weston_renderbuffer *renderbuffer[2];
+-	int current_image;
++	struct gbm_surface *gbm_surfaces[DRM_MAX_BUFFERS];
++	struct gbm_surface *gbm_surface;
++	unsigned int num_surfaces;
++
++	struct drm_fb *dumb[DRM_MAX_BUFFERS];
++	struct weston_renderbuffer *renderbuffer[DRM_MAX_BUFFERS];
++	int next_image;
++	unsigned int num_images;
+ 
+ 	/* Wrap fb for scale/rotate usage */
+-	struct drm_fb *wrap[2];
++	struct drm_fb *wrap[DRM_MAX_BUFFERS];
+ 	int next_wrap;
+ 
+ 	struct vaapi_recorder *recorder;
+diff --git a/libweston/backend-drm/drm.c b/libweston/backend-drm/drm.c
+index 1fc8840..b9bc2f9 100644
+--- a/libweston/backend-drm/drm.c
++++ b/libweston/backend-drm/drm.c
+@@ -568,13 +568,14 @@ drm_output_render_pixman(struct drm_output_state *state,
+ {
+ 	struct drm_output *output = state->output;
+ 	struct weston_compositor *ec = output->base.compositor;
+-
+-	output->current_image ^= 1;
++	struct drm_fb *fb;
+ 
+ 	ec->renderer->repaint_output(&output->base, damage,
+-				     output->renderbuffer[output->current_image]);
++				     output->renderbuffer[output->next_image]);
++	fb = drm_fb_ref(output->dumb[output->next_image]);
+ 
+-	return drm_fb_ref(output->dumb[output->current_image]);
++	output->next_image = (output->next_image + 1) % output->num_images;
++	return fb;
+ }
+ 
+ static struct drm_fb *
+@@ -634,7 +635,7 @@ drm_output_get_wrap_fb(struct drm_backend *b, struct drm_output *output,
+ 
+ 	output->wrap[output->next_wrap] = fb;
+ out:
+-	output->next_wrap ^= 1;
++	output->next_wrap = (output->next_wrap + 1) % output->num_images;
+ 	return drm_fb_ref(fb);
+ }
+ 
+@@ -2053,7 +2054,7 @@ drm_output_init_pixman(struct drm_output *output, struct drm_backend *b)
+ 		goto err;
+ 
+ 	/* FIXME error checking */
+-	for (i = 0; i < ARRAY_LENGTH(output->dumb); i++) {
++	for (i = 0; i < output->num_images; i++) {
+ 		output->dumb[i] = drm_fb_create_dumb(device, w, h,
+ 						     options.format->format);
+ 		if (!output->dumb[i])
+@@ -2111,8 +2112,11 @@ drm_output_fini_pixman(struct drm_output *output)
+ 	}
+ 
+ 	for (i = 0; i < ARRAY_LENGTH(output->dumb); i++) {
+-		weston_renderbuffer_unref(output->renderbuffer[i]);
+-		drm_fb_unref(output->dumb[i]);
++		if (output->dumb[i])
++			drm_fb_unref(output->dumb[i]);
++		if (output->renderbuffer[i])
++			weston_renderbuffer_unref(output->renderbuffer[i]);
++
+ 		output->dumb[i] = NULL;
+ 		output->renderbuffer[i] = NULL;
+ 	}
+@@ -3292,6 +3296,7 @@ drm_output_create(struct weston_backend *backend, const char *name)
+ 	struct drm_backend *b = container_of(backend, struct drm_backend, base);
+ 	struct drm_device *device;
+ 	struct drm_output *output;
++	const char *env;
+ 
+ 	device = drm_device_find_by_output(b->compositor, name);
+ 	if (!device)
+@@ -3311,6 +3316,14 @@ drm_output_create(struct weston_backend *backend, const char *name)
+ 	output->gbm_bo_flags = GBM_BO_USE_SCANOUT | GBM_BO_USE_RENDERING;
+ #endif
+ 
++	env = getenv("WESTON_DRM_MIN_BUFFERS");
++	if (env)
++		output->num_images = atoi(env);
++
++	output->num_images = MIN(MAX(output->num_images, 2), DRM_MAX_BUFFERS);
++	output->num_surfaces = (output->num_images + 1) / 2;
++	weston_log("%s using at least %d buffers\n", name, output->num_images);
++
+ 	weston_output_init(&output->base, b->compositor, name);
+ 
+ 	output->base.enable = drm_output_enable;
+diff --git a/libweston/renderer-gl/gl-renderer.c b/libweston/renderer-gl/gl-renderer.c
+index 539fa29..1216557 100644
+--- a/libweston/renderer-gl/gl-renderer.c
++++ b/libweston/renderer-gl/gl-renderer.c
+@@ -109,6 +109,9 @@ struct gl_renderbuffer {
+ 	uint32_t *pixels;
+ 	struct wl_list link;
+ 	int age;
++
++	EGLDisplay egl_display;
++	EGLSurface egl_surface;
+ };
+ 
+ struct gl_output_state {
+@@ -118,6 +121,8 @@ struct gl_output_state {
+ 	float y_flip;
+ 
+ 	EGLSurface egl_surface;
++	EGLSurface default_egl_surface;
++
+ 	struct gl_border_image borders[4];
+ 	enum gl_border_status border_status;
+ 
+@@ -629,6 +634,10 @@ gl_renderer_renderbuffer_destroy(struct weston_renderbuffer *renderbuffer)
+ {
+ 	struct gl_renderbuffer *rb = to_gl_renderbuffer(renderbuffer);
+ 
++	if (rb->egl_surface != EGL_NO_SURFACE)
++		weston_platform_destroy_egl_surface(rb->egl_display,
++						    rb->egl_surface);
++
+ 	glDeleteFramebuffers(1, &rb->fbo);
+ 	glDeleteRenderbuffers(1, &rb->rb);
+ 	pixman_region32_fini(&rb->base.damage);
+@@ -2035,7 +2044,8 @@ output_get_buffer_age(struct weston_output *output)
+ 	EGLint buffer_age = 0;
+ 	EGLBoolean ret;
+ 
+-	if (gr->has_egl_buffer_age && go->egl_surface != EGL_NO_SURFACE) {
++	if (gr->has_egl_buffer_age && go->egl_surface != EGL_NO_SURFACE &&
++	    go->egl_surface == go->default_egl_surface) {
+ 		ret = eglQuerySurface(gr->egl_display, go->egl_surface,
+ 				      EGL_BUFFER_AGE_EXT, &buffer_age);
+ 		if (ret == EGL_FALSE) {
+@@ -2278,6 +2288,16 @@ gl_renderer_repaint_output(struct weston_output *output,
+ 	       output->color_outcome->from_blend_to_output == NULL ||
+ 	       shadow_exists(go));
+ 
++	go->egl_surface = go->default_egl_surface;
++	if (renderbuffer) {
++		rb = to_gl_renderbuffer(renderbuffer);
++		if (rb->egl_surface != EGL_NO_SURFACE) {
++			/* HACK: Renderbuffer only for passing egl_surface */
++			go->egl_surface = rb->egl_surface;
++			renderbuffer = NULL;
++		}
++	}
++
+ 	if (use_output(output) < 0)
+ 		return;
+ 
+@@ -3978,7 +3998,8 @@ static int
+ gl_renderer_output_create(struct weston_output *output,
+ 			  EGLSurface surface,
+ 			  const struct weston_size *fb_size,
+-			  const struct weston_geometry *area)
++			  const struct weston_geometry *area,
++			  const bool y_flip)
+ {
+ 	struct gl_output_state *go;
+ 	struct gl_renderer *gr = get_renderer(output->compositor);
+@@ -3990,8 +4011,9 @@ gl_renderer_output_create(struct weston_output *output,
+ 	if (go == NULL)
+ 		return -1;
+ 
++	go->default_egl_surface = surface;
+ 	go->egl_surface = surface;
+-	go->y_flip = surface == EGL_NO_SURFACE ? 1.0f : -1.0f;
++	go->y_flip = y_flip ? -1.0f : 1.0f;
+ 
+ 	if (gr->has_disjoint_timer_query)
+ 		gr->gen_queries(1, &go->render_query);
+@@ -4029,6 +4051,42 @@ gl_renderer_output_create(struct weston_output *output,
+ 	return 0;
+ }
+ 
++static struct weston_renderbuffer *
++gl_renderer_create_buffer(struct weston_output *output,
++			  const struct gl_renderer_output_options *options)
++{
++	struct weston_compositor *ec = output->compositor;
++	struct gl_output_state *go = get_output_state(output);
++	struct gl_renderer *gr = get_renderer(ec);
++	struct gl_renderbuffer *renderbuffer;
++	EGLSurface egl_surface =
++		gl_renderer_create_window_surface(gr,
++						  options->window_for_legacy,
++						  options->window_for_platform,
++						  options->formats,
++						  options->formats_count);
++	if (egl_surface == EGL_NO_SURFACE) {
++		weston_log("failed to create egl surface\n");
++		return NULL;
++	}
++
++	renderbuffer = xzalloc(sizeof(*renderbuffer));
++
++	renderbuffer->egl_surface = egl_surface;
++	renderbuffer->egl_display = gr->egl_display;
++
++	pixman_region32_init(&renderbuffer->base.damage);
++	/*
++	 * One reference is kept on the renderbuffer_list,
++	 * the other is returned to the calling backend.
++	 */
++	renderbuffer->base.refcount = 2;
++	renderbuffer->base.destroy = gl_renderer_renderbuffer_destroy;
++	wl_list_insert(&go->renderbuffer_list, &renderbuffer->link);
++
++	return &renderbuffer->base;
++}
++
+ static int
+ gl_renderer_output_window_create(struct weston_output *output,
+ 				 const struct gl_renderer_output_options *options)
+@@ -4038,6 +4096,9 @@ gl_renderer_output_window_create(struct weston_output *output,
+ 	EGLSurface egl_surface = EGL_NO_SURFACE;
+ 	int ret;
+ 
++	if (!options->window_for_legacy && !options->window_for_platform)
++		goto create_output;
++
+ 	egl_surface = gl_renderer_create_window_surface(gr,
+ 							options->window_for_legacy,
+ 							options->window_for_platform,
+@@ -4048,9 +4109,10 @@ gl_renderer_output_window_create(struct weston_output *output,
+ 		return -1;
+ 	}
+ 
++create_output:
+ 	ret = gl_renderer_output_create(output, egl_surface,
+-					&options->fb_size, &options->area);
+-	if (ret < 0)
++					&options->fb_size, &options->area, true);
++	if (ret < 0 && egl_surface != EGL_NO_SURFACE)
+ 		weston_platform_destroy_egl_surface(gr->egl_display, egl_surface);
+ 
+ 	return ret;
+@@ -4061,7 +4123,7 @@ gl_renderer_output_fbo_create(struct weston_output *output,
+ 			      const struct gl_renderer_fbo_options *options)
+ {
+ 	return gl_renderer_output_create(output, EGL_NO_SURFACE,
+-					&options->fb_size, &options->area);
++					&options->fb_size, &options->area, false);
+ }
+ 
+ static void
+@@ -4242,13 +4304,18 @@ gl_renderer_output_destroy(struct weston_output *output)
+ 	struct gl_output_state *go = get_output_state(output);
+ 	struct timeline_render_point *trp, *tmp;
+ 
++	if (!go)
++		return;
++
+ 	if (shadow_exists(go))
+ 		gl_fbo_texture_fini(&go->shadow);
+ 
+ 	eglMakeCurrent(gr->egl_display, EGL_NO_SURFACE, EGL_NO_SURFACE,
+ 		       gr->egl_context);
+ 
+-	weston_platform_destroy_egl_surface(gr->egl_display, go->egl_surface);
++	if (go->default_egl_surface != EGL_NO_SURFACE)
++		weston_platform_destroy_egl_surface(gr->egl_display,
++						    go->default_egl_surface);
+ 
+ 	if (!wl_list_empty(&go->timeline_render_point_list))
+ 		weston_log("warning: discarding pending timeline render"
+@@ -4848,6 +4915,7 @@ gl_renderer_setup(struct weston_compositor *ec)
+ 
+ WL_EXPORT struct gl_renderer_interface gl_renderer_interface = {
+ 	.display_create = gl_renderer_display_create,
++	.create_buffer = gl_renderer_create_buffer,
+ 	.output_window_create = gl_renderer_output_window_create,
+ 	.output_fbo_create = gl_renderer_output_fbo_create,
+ 	.output_destroy = gl_renderer_output_destroy,
+diff --git a/libweston/renderer-gl/gl-renderer.h b/libweston/renderer-gl/gl-renderer.h
+index 6fc7f6f..7e7d1bc 100644
+--- a/libweston/renderer-gl/gl-renderer.h
++++ b/libweston/renderer-gl/gl-renderer.h
+@@ -135,6 +135,9 @@ struct gl_renderer_interface {
+ 	int (*display_create)(struct weston_compositor *ec,
+ 			      const struct gl_renderer_display_options *options);
+ 
++	struct weston_renderbuffer *(*create_buffer)(struct weston_output *output,
++						     const struct gl_renderer_output_options *options);
++
+ 	/**
+ 	 * Attach GL-renderer to the output with a native window
+ 	 *
+-- 
+2.20.1
+

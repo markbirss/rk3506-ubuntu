@@ -1,0 +1,247 @@
+From 0490310f213ad9ac35443eb2a3de73b0639d3357 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Mon, 21 Aug 2023 11:40:52 +0800
+Subject: [PATCH 10/95] libweston: Add launcher-direct back
+
+Based on weston 10.0.0 without VT support.
+
+Tested on RK3588 EVB with:
+1/ killall seatd
+2/ weston&
+3/ weston&
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/launcher-direct.c | 180 ++++++++++++++++++++++++++++++++++++
+ libweston/launcher-impl.h   |   1 +
+ libweston/launcher-util.c   |   1 +
+ libweston/meson.build       |   2 +
+ 4 files changed, 184 insertions(+)
+ create mode 100644 libweston/launcher-direct.c
+
+diff --git a/libweston/launcher-direct.c b/libweston/launcher-direct.c
+new file mode 100644
+index 0000000..736fb5c
+--- /dev/null
++++ b/libweston/launcher-direct.c
+@@ -0,0 +1,180 @@
++/*
++ * Copyright © 2012 Benjamin Franzke
++ * Copyright © 2013 Intel Corporation
++ *
++ * Permission is hereby granted, free of charge, to any person obtaining
++ * a copy of this software and associated documentation files (the
++ * "Software"), to deal in the Software without restriction, including
++ * without limitation the rights to use, copy, modify, merge, publish,
++ * distribute, sublicense, and/or sell copies of the Software, and to
++ * permit persons to whom the Software is furnished to do so, subject to
++ * the following conditions:
++ *
++ * The above copyright notice and this permission notice (including the
++ * next paragraph) shall be included in all copies or substantial
++ * portions of the Software.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
++ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
++ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
++ * NONINFRINGEMENT.  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
++ * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
++ * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
++ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
++ * SOFTWARE.
++ */
++
++#include "config.h"
++
++#include <libweston/libweston.h>
++
++#include <errno.h>
++#include <fcntl.h>
++#include <unistd.h>
++#include <string.h>
++#include <sys/stat.h>
++#include <linux/major.h>
++
++#include "launcher-impl.h"
++
++#define DRM_MAJOR 226
++
++/* major()/minor() */
++#ifdef MAJOR_IN_MKDEV
++#include <sys/mkdev.h>
++#endif
++#ifdef MAJOR_IN_SYSMACROS
++#include <sys/sysmacros.h>
++#endif
++
++#ifdef BUILD_DRM_COMPOSITOR
++
++#include <xf86drm.h>
++
++static inline int
++is_drm_master(int drm_fd)
++{
++	drm_magic_t magic;
++
++	return drmGetMagic(drm_fd, &magic) == 0 &&
++		drmAuthMagic(drm_fd, magic) == 0;
++}
++
++#else
++
++static inline int
++drmDropMaster(int drm_fd)
++{
++	return 0;
++}
++
++static inline int
++drmSetMaster(int drm_fd)
++{
++	return 0;
++}
++
++static inline int
++is_drm_master(int drm_fd)
++{
++	return 0;
++}
++
++#endif
++
++struct launcher_direct {
++	struct weston_launcher base;
++	struct weston_compositor *compositor;
++	int drm_fd;
++};
++
++static int
++launcher_direct_open(struct weston_launcher *launcher_base, const char *path, int flags)
++{
++	struct launcher_direct *launcher = wl_container_of(launcher_base, launcher, base);
++	struct stat s;
++	int fd;
++
++	fd = open(path, flags | O_CLOEXEC);
++	if (fd == -1) {
++		weston_log("couldn't open: %s! error=%s\n", path, strerror(errno));
++		return -1;
++	}
++
++	if (geteuid() != 0) {
++		weston_log("WARNING! Succeeded opening %s as non-root user."
++			   " This implies your device can be spied on.\n",
++			   path);
++	}
++
++	if (fstat(fd, &s) == -1) {
++		weston_log("couldn't fstat: %s! error=%s\n", path, strerror(errno));
++		close(fd);
++		return -1;
++	}
++
++	if (major(s.st_rdev) == DRM_MAJOR) {
++		launcher->drm_fd = fd;
++		if (!is_drm_master(fd)) {
++			weston_log("drm fd not master\n");
++			close(fd);
++			return -1;
++		}
++	}
++
++	return fd;
++}
++
++static void
++launcher_direct_close(struct weston_launcher *launcher_base, int fd)
++{
++	close(fd);
++}
++
++static int
++launcher_direct_activate_vt(struct weston_launcher *launcher_base, int vt)
++{
++	return 0;
++}
++
++static int
++launcher_direct_connect(struct weston_launcher **out, struct weston_compositor *compositor,
++			const char *seat_id, bool sync_drm)
++{
++	struct launcher_direct *launcher;
++
++	launcher = zalloc(sizeof(*launcher));
++	if (launcher == NULL) {
++		weston_log("failed to alloc for launcher\n");
++		return -ENOMEM;
++	}
++
++	launcher->base.iface = &launcher_direct_iface;
++	launcher->compositor = compositor;
++
++	* (struct launcher_direct **) out = launcher;
++	return 0;
++}
++
++static void
++launcher_direct_destroy(struct weston_launcher *launcher_base)
++{
++	struct launcher_direct *launcher = wl_container_of(launcher_base, launcher, base);
++	free(launcher);
++}
++
++static int
++launcher_direct_get_vt(struct weston_launcher *base)
++{
++	return -ENOSYS;
++}
++
++const struct launcher_interface launcher_direct_iface = {
++	.name = "direct",
++	.connect = launcher_direct_connect,
++	.destroy = launcher_direct_destroy,
++	.open = launcher_direct_open,
++	.close = launcher_direct_close,
++	.activate_vt = launcher_direct_activate_vt,
++	.get_vt = launcher_direct_get_vt,
++};
+diff --git a/libweston/launcher-impl.h b/libweston/launcher-impl.h
+index 0eedf87..593317f 100644
+--- a/libweston/launcher-impl.h
++++ b/libweston/launcher-impl.h
+@@ -46,3 +46,4 @@ struct weston_launcher {
+ };
+ 
+ extern const struct launcher_interface launcher_libseat_iface;
++extern const struct launcher_interface launcher_direct_iface;
+diff --git a/libweston/launcher-util.c b/libweston/launcher-util.c
+index c833537..64ce420 100644
+--- a/libweston/launcher-util.c
++++ b/libweston/launcher-util.c
+@@ -38,6 +38,7 @@
+ 
+ static const struct launcher_interface *ifaces[] = {
+ 	&launcher_libseat_iface,
++	&launcher_direct_iface,
+ 	NULL,
+ };
+ 
+diff --git a/libweston/meson.build b/libweston/meson.build
+index d1f126f..75dab88 100644
+--- a/libweston/meson.build
++++ b/libweston/meson.build
+@@ -165,9 +165,11 @@ if get_option('backend-drm')
+ 	dep_libseat = dependency('libseat', version: '>= 0.4')
+ 	srcs_session_helper = [
+ 		'launcher-libseat.c',
++		'launcher-direct.c',
+ 		'launcher-util.c',
+ 	]
+ 	deps_session_helper = [
++		dep_libdrm,
+ 		dep_libseat,
+ 		dep_libweston_private_h,
+ 	]
+-- 
+2.20.1
+

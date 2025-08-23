@@ -1,0 +1,36 @@
+#include "base/base.config"
+#include "bus/can.config"
+#include "bus/pci.config"
+#include "chips/rk3576_aarch64.config"
+#include "font/chinese.config"
+#include "fs/exfat.config"
+#include "fs/ntfs.config"
+#include "fs/vfat.config"
+#include "base/base.config"
+#include "gpu/gpu.config"
+#include "weston.config"
+#include "network/network.config"
+#include "tools/benchmark.config"
+#include "tools/common.config"
+#include "tools/test.config"
+#include "network/chromium.config"
+BR2_GDB_VERSION_12=y
+BR2_PACKAGE_ALSA_PLUGINS=y
+BR2_PACKAGE_ALSA_UCM_CONF=y
+BR2_PACKAGE_ALSA_UTILS=y
+BR2_PACKAGE_ALSA_UTILS_ALSACONF=y
+BR2_PACKAGE_ALSA_UTILS_AMIXER=y
+BR2_PACKAGE_ALSA_UTILS_APLAY=y
+BR2_PACKAGE_BRIDGE_UTILS=y
+BR2_PACKAGE_ETHTOOL=y
+BR2_PACKAGE_GDB=y
+BR2_PACKAGE_GDB_DEBUGGER=y
+BR2_PACKAGE_HOST_GDB=y
+BR2_PACKAGE_HOST_LINUX_HEADERS_CUSTOM_6_1=y
+BR2_PACKAGE_IPERF3=y
+BR2_PACKAGE_LIBV4L=y
+BR2_PACKAGE_LIBV4L_UTILS=y
+BR2_PACKAGE_WESTON_DEFAULT_PIXMAN=y
+BR2_PACKAGE_WESTON_WAYLAND=y
+BR2_ROOTFS_OVERLAY+="board/rockchip/rk3576/fs-overlay-cluster/"
+BR2_SYSTEM_BIN_SH_BUSYBOX=y

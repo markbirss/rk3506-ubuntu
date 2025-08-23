@@ -1,0 +1,5 @@
+config BR2_PACKAGE_AVS
+	bool "rockchip avs algorithm"
+	default n
+	help
+	  rockchip avs(any view stitching algorithm) library

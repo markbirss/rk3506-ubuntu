@@ -1,0 +1,7 @@
+config BR2_PACKAGE_ROCKCHIP_ERPC
+	bool "rockchip-erpc"
+	help
+	  eRPC (Embedded RPC) is an open source
+	  Remote Procedure Call (RPC) system for multichip embedded systems
+	  and heterogeneous multicore SoCs.
+	  Rockchip support this for Rockchip's chips.

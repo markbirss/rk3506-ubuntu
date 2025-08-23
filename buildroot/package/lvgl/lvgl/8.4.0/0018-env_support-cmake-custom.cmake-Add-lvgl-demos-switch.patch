@@ -1,0 +1,40 @@
+From 0154888edbec73c2139464eef1907a1b7c82714a Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Tue, 27 Sep 2022 16:37:09 +0800
+Subject: [PATCH 18/35] env_support: cmake: custom.cmake: Add lvgl demos switch
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ env_support/cmake/custom.cmake | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/env_support/cmake/custom.cmake b/env_support/cmake/custom.cmake
+index d851f7f7a..aee3d2562 100644
+--- a/env_support/cmake/custom.cmake
++++ b/env_support/cmake/custom.cmake
+@@ -30,6 +30,22 @@ add_library(lvgl::lvgl ALIAS lvgl)
+ #add_library(lvgl_demos STATIC ${DEMO_SOURCES})
+ #add_library(lvgl::demos ALIAS lvgl_demos)
+ 
++if (LV_USE_DEMO_WIDGETS)
++    add_definitions(-DLV_USE_DEMO_WIDGETS)
++endif()
++if (LV_USE_DEMO_KEYPAD_AND_ENCODER)
++    add_definitions(-DLV_USE_DEMO_KEYPAD_AND_ENCODER)
++endif()
++if (LV_USE_DEMO_BENCHMARK)
++    add_definitions(-DLV_USE_DEMO_BENCHMARK)
++endif()
++if (LV_USE_DEMO_STRESS)
++    add_definitions(-DLV_USE_DEMO_STRESS)
++endif()
++if (LV_USE_DEMO_MUSIC)
++    add_definitions(-DLV_USE_DEMO_MUSIC)
++endif()
++
+ target_compile_definitions(
+   lvgl PUBLIC $<$<BOOL:${LV_LVGL_H_INCLUDE_SIMPLE}>:LV_LVGL_H_INCLUDE_SIMPLE>
+               $<$<BOOL:${LV_CONF_INCLUDE_SIMPLE}>:LV_CONF_INCLUDE_SIMPLE>)
+-- 
+2.25.1
+

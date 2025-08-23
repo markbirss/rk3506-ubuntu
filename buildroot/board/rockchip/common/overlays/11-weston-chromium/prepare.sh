@@ -1,0 +1,4 @@
+#!/bin/bash -e
+
+[ "$BR2_PACKAGE_WESTON" ]
+[ "$BR2_PACKAGE_CHROMIUM_WAYLAND" ]

@@ -1,0 +1,9 @@
+menu "RT-Thread bsp test case"
+
+config RT_USING_PRIVATE_TEST
+    bool "Enable BSP Private TEST"
+    default n
+
+source "$BSP_DIR/../common/tests/Kconfig"
+
+endmenu

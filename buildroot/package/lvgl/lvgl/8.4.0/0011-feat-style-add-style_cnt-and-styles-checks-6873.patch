@@ -1,0 +1,58 @@
+From db2ed561fc76e99fd97da62afb3121e72a1ac328 Mon Sep 17 00:00:00 2001
+From: glory-man <77978519+glory-man@users.noreply.github.com>
+Date: Thu, 26 Sep 2024 11:53:46 +0300
+Subject: [PATCH 11/35] feat(style): add style_cnt and styles checks (#6873)
+
+---
+ src/core/lv_obj_style.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/src/core/lv_obj_style.c b/src/core/lv_obj_style.c
+index f1495a6d5..294d5809e 100644
+--- a/src/core/lv_obj_style.c
++++ b/src/core/lv_obj_style.c
+@@ -75,8 +75,13 @@ void _lv_obj_style_init(void)
+ 
+ void lv_obj_add_style(lv_obj_t * obj, lv_style_t * style, lv_style_selector_t selector)
+ {
++    LV_ASSERT(obj->style_cnt < 63);
++
+     trans_del(obj, selector, LV_STYLE_PROP_ANY, NULL);
+ 
++    /*Try removing the style first to be sure it won't be added twice*/
++    lv_obj_remove_style(obj, style, selector);
++
+     uint32_t i;
+     /*Go after the transition and local styles*/
+     for(i = 0; i < obj->style_cnt; i++) {
+@@ -89,7 +94,9 @@ void lv_obj_add_style(lv_obj_t * obj, lv_style_t * style, lv_style_selector_t se
+ 
+     /*Allocate space for the new style and shift the rest of the style to the end*/
+     obj->style_cnt++;
++    LV_ASSERT(obj->style_cnt != 0);
+     obj->styles = lv_mem_realloc(obj->styles, obj->style_cnt * sizeof(_lv_obj_style_t));
++    LV_ASSERT_MALLOC(obj->styles);
+ 
+     uint32_t j;
+     for(j = obj->style_cnt - 1; j > i ; j--) {
+@@ -548,6 +555,7 @@ static lv_style_t * get_local_style(lv_obj_t * obj, lv_style_selector_t selector
+     }
+ 
+     obj->style_cnt++;
++    LV_ASSERT(obj->style_cnt != 0);
+     obj->styles = lv_mem_realloc(obj->styles, obj->style_cnt * sizeof(_lv_obj_style_t));
+     LV_ASSERT_MALLOC(obj->styles);
+ 
+@@ -584,7 +592,9 @@ static _lv_obj_style_t * get_trans_style(lv_obj_t * obj,  lv_style_selector_t se
+     if(i != obj->style_cnt) return &obj->styles[i];
+ 
+     obj->style_cnt++;
++    LV_ASSERT(obj->style_cnt != 0);
+     obj->styles = lv_mem_realloc(obj->styles, obj->style_cnt * sizeof(_lv_obj_style_t));
++    LV_ASSERT_MALLOC(obj->styles);
+ 
+     for(i = obj->style_cnt - 1; i > 0 ; i--) {
+         obj->styles[i] = obj->styles[i - 1];
+-- 
+2.25.1
+

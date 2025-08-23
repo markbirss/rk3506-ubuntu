@@ -1,0 +1,29 @@
+From d0603841b9980e7af0551a076beb67928e1316c6 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 11 Sep 2024 08:33:05 +0800
+Subject: [PATCH] Disable damage refine by default
+
+Set env "NEATVNC_DAMAGE_REFINE"=1 to enable it.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ src/display.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/display.c b/src/display.c
+index ec59959..fcc21c1 100644
+--- a/src/display.c
++++ b/src/display.c
+@@ -120,7 +120,8 @@ void nvnc_display_feed_buffer(struct nvnc_display* self, struct nvnc_fb* fb,
+ 	struct pixman_region16 refined_damage;
+ 	pixman_region_init(&refined_damage);
+ 
+-	if (server->n_damage_clients != 0) {
++	if (getenv("NEATVNC_DAMAGE_REFINE") &&
++	    server->n_damage_clients != 0) {
+ 		damage_refinery_resize(&self->damage_refinery, fb->width,
+ 				fb->height);
+ 
+-- 
+2.20.1
+

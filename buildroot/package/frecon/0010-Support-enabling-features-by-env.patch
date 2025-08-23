@@ -1,0 +1,109 @@
+From 34e8418e53b2879ad1b0c7d21cc2ed2a3c451458 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 13 Sep 2023 10:55:24 +0800
+Subject: [PATCH 10/11] Support enabling features by env
+
+Add support for env FRECON_SHELL, FRECON_VTS and FRECON_VT1.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ main.c |  6 ++++++
+ term.c | 38 ++++++++++++++++++++++++++++++--------
+ 2 files changed, 36 insertions(+), 8 deletions(-)
+
+diff --git a/main.c b/main.c
+index 313f9d4..5187531 100644
+--- a/main.c
++++ b/main.c
+@@ -183,6 +183,12 @@ int main(int argc, char* argv[])
+ 	unsigned vt;
+ 	drm_t* drm;
+ 
++	if (getenv("FRECON_VTS"))
++		command_flags.enable_vts = true;
++
++	if (getenv("FRECON_VT1"))
++		command_flags.enable_vt1 = true;
++
+ 	fix_stdio();
+ 
+ 	optind = 1;
+diff --git a/term.c b/term.c
+index 8e51320..200a663 100644
+--- a/term.c
++++ b/term.c
+@@ -48,8 +48,7 @@ struct _terminal_t {
+ 	char** exec;
+ };
+ 
+-#ifdef USE_GETTY
+-static char* interactive_cmd_line[] =
++static char* interactive_cmd_getty[] =
+ {
+ 	"/sbin/getty",
+ 	"-",
+@@ -57,14 +56,20 @@ static char* interactive_cmd_line[] =
+ 	"xterm",
+ 	NULL
+ };
+-#else
+-static char* interactive_cmd_line[] =
++
++static __attribute__((unused)) char* interactive_cmd_bash[] =
++{
++	"/bin/bash",
++	"-il",
++	NULL
++};
++
++static __attribute__((unused)) char* interactive_cmd_sh[] =
+ {
+ 	"/bin/sh",
+ 	"-il",
+ 	NULL
+ };
+-#endif
+ 
+ static bool in_background = true;
+ static bool hotplug_occured = false;
+@@ -321,10 +326,25 @@ terminal_t* term_init(unsigned vt, int pts_fd)
+ 		return NULL;
+ 	}
+ 
+-	if (interactive)
+-		new_terminal->exec = interactive_cmd_line;
+-	else
++	if (interactive) {
++		const char *env = getenv("FRECON_SHELL");
++		if (env) {
++			if (!strcmp(env, "getty"))
++				new_terminal->exec = interactive_cmd_getty;
++			else if (!strcmp(env, "bash"))
++				new_terminal->exec = interactive_cmd_bash;
++			else
++				new_terminal->exec = interactive_cmd_sh;
++		} else {
++#ifdef USE_GETTY
++			new_terminal->exec = interactive_cmd_getty;
++#else
++			new_terminal->exec = interactive_cmd_sh;
++#endif
++		}
++	} else {
+ 		new_terminal->exec = NULL;
++	}
+ 
+ 	status = tsm_screen_new(&new_terminal->term->screen,
+ 			log_tsm, new_terminal->term);
+@@ -588,6 +608,8 @@ void term_update_current_link(void)
+ 
+ void term_set_current(uint32_t t)
+ {
++	LOG(ERROR, "set_current: %d->%d / %d",
++        current_terminal, t, term_num_terminals);
+ 	if (t >= TERM_MAX_TERMINALS)
+ 		LOG(ERROR, "set_current: larger than array size");
+ 	else
+-- 
+2.20.1
+

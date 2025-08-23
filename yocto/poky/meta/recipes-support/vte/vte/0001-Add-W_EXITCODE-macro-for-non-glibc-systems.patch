@@ -1,0 +1,35 @@
+From de9639baac792327c701e509258b8a13f6959e82 Mon Sep 17 00:00:00 2001
+From: Danilo Spinella <danyspin97@protonmail.com>
+Date: Thu, 21 Mar 2019 14:19:26 +0100
+Subject: [PATCH] Add W_EXITCODE macro for non-glibc systems
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Upstream-Status: Submitted [1]
+
+Signed-off-by: Andreas Müller <schnitzeltony@gmail.com>
+
+[1] https://gitlab.gnome.org/GNOME/vte/issues/72
+---
+ src/widget.cc  | 4 +++
+ 1 files changed, 4 insertions(+)
+
+diff --git a/src/widget.cc b/src/widget.cc
+index 07f7cabf..31a77f68 100644
+--- a/src/widget.cc
++++ b/src/widget.cc
+@@ -16,6 +16,10 @@
+  * along with this library.  If not, see <https://www.gnu.org/licenses/>.
+  */
+ 
++#ifndef W_EXITCODE
++#define W_EXITCODE(ret, sig) ((ret) << 8 | (sig))
++#endif
++
+ #include "config.h"
+ 
+ #include "widget.hh"
+-- 
+2.42.0
+

@@ -1,0 +1,2 @@
+option('init_script', type : 'feature', value : 'auto', description : 'Install init script')
+

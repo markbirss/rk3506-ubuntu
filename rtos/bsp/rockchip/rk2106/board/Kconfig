@@ -1,0 +1,11 @@
+menu "RT-Thread board config"
+
+config RT_BOARD_NAME
+    string "the board name of you use"
+    default "evb"
+
+config RT_USING_JTAG
+    bool "Enable JTAG for debug"
+    default n
+
+endmenu

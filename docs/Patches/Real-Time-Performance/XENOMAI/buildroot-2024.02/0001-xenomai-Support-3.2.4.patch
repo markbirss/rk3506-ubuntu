@@ -1,0 +1,48 @@
+From d1b70e55269ee7748682f0d14d84983cdebee45d Mon Sep 17 00:00:00 2001
+From: ZhiZhan Chen <zhizhan.chen@rock-chips.com>
+Date: Thu, 7 Mar 2024 16:50:07 +0800
+Subject: [PATCH] xenomai: Support 3.2.4
+
+    We need 3.2.4 for linux-kernel-6.1.
+
+Change-Id: Ic877c402136471f8868b946a4b9703e7c171acb1
+Signed-off-by: ZhiZhan Chen <zhizhan.chen@rock-chips.com>
+---
+ package/xenomai/Config.in    | 4 ++++
+ package/xenomai/xenomai.hash | 1 +
+ 2 files changed, 5 insertions(+)
+
+diff --git a/package/xenomai/Config.in b/package/xenomai/Config.in
+index 6317f95565..0730708064 100644
+--- a/package/xenomai/Config.in
++++ b/package/xenomai/Config.in
+@@ -51,6 +51,9 @@ choice
+ 	  patch manually with BR2_LINUX_KERNEL_EXT_XENOMAI_ADEOS_PATCH,
+ 	  in the Linux Kernel -> Linux Kernel Extensions menu.
+ 
++config BR2_PACKAGE_XENOMAI_3_2_4
++	bool "3.2.4"
++
+ config BR2_PACKAGE_XENOMAI_3_2
+ 	bool "3.2"
+ 
+@@ -89,6 +92,7 @@ config BR2_PACKAGE_XENOMAI_REPOSITORY_VERSION
+ 
+ config BR2_PACKAGE_XENOMAI_VERSION
+ 	string
++	default "v3.2.4" if BR2_PACKAGE_XENOMAI_3_2_4
+ 	default "v3.2.2" if BR2_PACKAGE_XENOMAI_3_2
+ 	default "v3.1.3" if BR2_PACKAGE_XENOMAI_3_1
+ 	default "v3.0.13" if BR2_PACKAGE_XENOMAI_3_0
+diff --git a/package/xenomai/xenomai.hash b/package/xenomai/xenomai.hash
+index 8a1eee1392..8e3927481e 100644
+--- a/package/xenomai/xenomai.hash
++++ b/package/xenomai/xenomai.hash
+@@ -2,3 +2,4 @@
+ sha256  12446c6d206028e0e135dad7194a8ec306fab94cad8794da207f64fb11437260  xenomai-v3.0.13.tar.bz2
+ sha256  450a63138bf7f533240f02fe59f75fa3daa2ef11d338bdd0ddf4c628ee09bfd1  xenomai-v3.1.3.tar.bz2
+ sha256  28e7cbad6a8a91cb260cfa0225bedc6a0259a0cce0a205cbf9298846bbcc5f20  xenomai-v3.2.2.tar.bz2
++sha256  020052d5cf668f26cceb8117ffbc9fd8e8c66151686c088d9e3ce97eb69f8915  xenomai-v3.2.4.tar.bz2
+-- 
+2.38.5
+

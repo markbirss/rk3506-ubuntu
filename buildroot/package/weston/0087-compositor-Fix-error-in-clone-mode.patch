@@ -1,0 +1,113 @@
+From 57bac03164d5fca697e9d102e586ab221568e297 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Mon, 17 Jun 2024 08:53:35 +0800
+Subject: [PATCH 87/98] compositor: Fix error in clone mode
+
+Avoid multiple globals to remain a single panel and background.
+
+Tested on RK3588 EVB with:
+Add to weston.ini:
+[output]
+name=HDMI-A-2
+
+[output]
+name=HDMI-A-1
+same-as=HDMI-A-2
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ frontend/main.c             |  2 +-
+ libweston/backend-drm/drm.c | 13 +++++++++++++
+ libweston/compositor.c      | 15 +++++++++++++++
+ 3 files changed, 29 insertions(+), 1 deletion(-)
+
+diff --git a/frontend/main.c b/frontend/main.c
+index 385c538e4..db6a748ba 100644
+--- a/frontend/main.c
++++ b/frontend/main.c
+@@ -2846,7 +2846,7 @@ drm_try_attach(struct weston_output *output,
+ 	unsigned i;
+ 
+ 	/* try to attach remaining heads, this probably succeeds */
+-	for (i = 1; i < add->n; i++) {
++	for (i = 0; i < add->n; i++) {
+ 		if (!add->heads[i])
+ 			continue;
+ 
+diff --git a/libweston/backend-drm/drm.c b/libweston/backend-drm/drm.c
+index 4f2fdc553..8ee293afd 100644
+--- a/libweston/backend-drm/drm.c
++++ b/libweston/backend-drm/drm.c
+@@ -2247,6 +2247,8 @@ drm_output_detach_head(struct weston_output *output_base,
+ 		       struct weston_head *head_base)
+ {
+ 	struct drm_output *output = to_drm_output(output_base);
++	struct drm_backend *b = output->backend;
++	struct drm_device *device = b->drm;
+ 	struct drm_head *head = to_drm_head(head_base);
+ 
+ 	if (!output_base->enabled)
+@@ -2255,6 +2257,17 @@ drm_output_detach_head(struct weston_output *output_base,
+ 	/* Drop connectors that should no longer be driven on next repaint. */
+ 	wl_list_remove(&head->disable_head_link);
+ 	wl_list_insert(&output->disable_head, &head->disable_head_link);
++
++	if (!wl_list_length(&output_base->head_list))
++		return;
++
++	/* Need to go through modeset to drop connectors that should no longer
++	 * be driven. */
++	/* XXX: Ideally we'd do this per-output, not globally. */
++	device->state_invalid = true;
++	output->state_invalid = true;
++
++	weston_output_schedule_repaint(output_base);
+ }
+ 
+ int
+diff --git a/libweston/compositor.c b/libweston/compositor.c
+index 5282bca5a..ad0fc1f24 100644
+--- a/libweston/compositor.c
++++ b/libweston/compositor.c
+@@ -6489,9 +6489,16 @@ bind_output(struct wl_client *client,
+ static void
+ weston_head_add_global(struct weston_head *head)
+ {
++	struct weston_head *tmp_head;
+ 	int version = 4;
+ 	const char *buf;
+ 
++	/* Avoid multiple globals to remain a single panel and background */
++	wl_list_for_each(tmp_head, &head->output->head_list, output_link) {
++		if (tmp_head->global)
++			return;
++	}
++
+ 	/**
+ 	 * HACK: Allow lowering wl_output version for old chromium
+ 	 * See:
+@@ -6913,6 +6920,10 @@ weston_output_attach_head(struct weston_output *output,
+ {
+ 	char *head_names;
+ 
++	/* HACK: Already attached */
++	if (head->output == output)
++		return 0;
++
+ 	if (!wl_list_empty(&head->output_link))
+ 		return -1;
+ 
+@@ -6985,6 +6996,10 @@ weston_head_detach(struct weston_head *head)
+ 			free(head_names);
+ 
+ 			weston_output_emit_heads_changed(output);
++
++			head = weston_output_get_first_head(output);
++			if (head)
++				weston_head_add_global(head);
+ 		}
+ 	}
+ }
+-- 
+2.20.1
+

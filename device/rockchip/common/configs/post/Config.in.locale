@@ -1,0 +1,22 @@
+#
+
+choice
+	prompt "locale"
+
+config RK_ROOTFS_LOCALE_DEFAULT
+	bool "auto"
+	help
+	  Use "en_US.UTF-8" for non-debian OS.
+
+config RK_ROOTFS_LOCALE_ORIGINAL
+	bool "original"
+
+config RK_ROOTFS_LOCALE_CUSTOM
+	bool "custom"
+
+endchoice # locale
+
+config RK_ROOTFS_LOCALE
+	string "custom locale"
+	depends on RK_ROOTFS_LOCALE_CUSTOM
+	default "en_US.UTF-8"

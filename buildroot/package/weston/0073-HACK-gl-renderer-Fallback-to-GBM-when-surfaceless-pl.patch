@@ -1,0 +1,167 @@
+From b33da20bdbfd7af25dbbbf36be62de9589505e79 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 20 Dec 2023 09:24:31 +0800
+Subject: [PATCH 73/95] HACK: gl-renderer: Fallback to GBM when surfaceless
+ platform not supported
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/renderer-gl/egl-glue.c             |  8 ++++
+ libweston/renderer-gl/gl-renderer-internal.h |  4 ++
+ libweston/renderer-gl/gl-renderer.c          | 41 ++++++++++++++++++--
+ libweston/renderer-gl/meson.build            |  3 +-
+ 4 files changed, 52 insertions(+), 4 deletions(-)
+
+diff --git a/libweston/renderer-gl/egl-glue.c b/libweston/renderer-gl/egl-glue.c
+index f6d7c48..b89e1ca 100644
+--- a/libweston/renderer-gl/egl-glue.c
++++ b/libweston/renderer-gl/egl-glue.c
+@@ -604,6 +604,14 @@ gl_renderer_setup_egl_client_extensions(struct gl_renderer *gr)
+ 	if (weston_check_egl_extension(extensions, s))
+ 		return 0;
+ 
++	/* HACK: Fallback to GBM platform */
++	if (gr->platform == EGL_PLATFORM_SURFACELESS_MESA) {
++		gr->platform = EGL_PLATFORM_GBM_KHR;
++		weston_log("Warn: EGL does not support %s platform, try GBM\n",
++			   extension_suffix);
++		return gl_renderer_setup_egl_client_extensions(gr);
++	}
++
+ 	/* at this point we definitely have some platform extensions but
+ 	 * haven't found the supplied platform, so chances are it's
+ 	 * not supported. */
+diff --git a/libweston/renderer-gl/gl-renderer-internal.h b/libweston/renderer-gl/gl-renderer-internal.h
+index 703f88b..49c490a 100644
+--- a/libweston/renderer-gl/gl-renderer-internal.h
++++ b/libweston/renderer-gl/gl-renderer-internal.h
+@@ -46,6 +46,7 @@
+ #include <time.h>
+ 
+ #include <wayland-util.h>
++#include <gbm.h>
+ #include <GLES2/gl2.h>
+ #include <GLES2/gl2ext.h>
+ #include "shared/weston-egl-ext.h"  /* for PFN* stuff */
+@@ -307,6 +308,9 @@ struct gl_renderer {
+ 	struct dmabuf_allocator *allocator;
+ 
+ 	bool is_mali_egl;
++
++	int drm_fd;
++	struct gbm_device *gbm;
+ };
+ 
+ static inline struct gl_renderer *
+diff --git a/libweston/renderer-gl/gl-renderer.c b/libweston/renderer-gl/gl-renderer.c
+index 1216557..e1704ac 100644
+--- a/libweston/renderer-gl/gl-renderer.c
++++ b/libweston/renderer-gl/gl-renderer.c
+@@ -45,6 +45,8 @@
+ 
+ #include <gbm.h>
+ 
++#include <xf86drm.h>
++
+ #include "linux-sync-file.h"
+ #include "timeline.h"
+ 
+@@ -4429,6 +4431,11 @@ gl_renderer_destroy(struct weston_compositor *ec)
+ 	if (gr->debug_mode_binding)
+ 		weston_binding_destroy(gr->debug_mode_binding);
+ 
++	if (gr->gbm) {
++		gbm_device_destroy(gr->gbm);
++		close(gr->drm_fd);
++	}
++
+ 	weston_log_scope_destroy(gr->shader_scope);
+ 	weston_log_scope_destroy(gr->renderer_scope);
+ 	free(gr);
+@@ -4472,6 +4479,8 @@ gl_renderer_display_create(struct weston_compositor *ec,
+ 			   const struct gl_renderer_display_options *options)
+ {
+ 	struct gl_renderer *gr;
++	EGLint egl_surface_type = options->egl_surface_type;
++	void *egl_native_display = options->egl_native_display;
+ 	int ret;
+ 
+ 	gr = zalloc(sizeof *gr);
+@@ -4494,6 +4503,29 @@ gl_renderer_display_create(struct weston_compositor *ec,
+ 	if (gl_renderer_setup_egl_client_extensions(gr) < 0)
+ 		goto fail;
+ 
++	/* HACK: Fixup options for GBM platform */
++	if (gr->platform == EGL_PLATFORM_GBM_KHR) {
++		if (!egl_surface_type)
++			egl_surface_type = EGL_WINDOW_BIT;
++
++		if (!egl_native_display) {
++			gr->drm_fd = drmOpen("rockchip", NULL);
++			if (gr->drm_fd < 0)
++				gr->drm_fd = open("/dev/dri/card0",
++						  O_RDWR | O_CLOEXEC);
++			if (gr->drm_fd < 0)
++				goto fail;
++
++			gr->gbm = gbm_create_device(gr->drm_fd);
++			if (!gr->gbm) {
++				close(gr->drm_fd);
++				goto fail;
++			}
++
++			egl_native_display = gr->gbm;
++		}
++	}
++
+ 	gr->base.read_pixels = gl_renderer_read_pixels;
+ 	gr->base.repaint_output = gl_renderer_repaint_output;
+ 	gr->base.resize_output = gl_renderer_resize_output;
+@@ -4505,7 +4537,7 @@ gl_renderer_display_create(struct weston_compositor *ec,
+ 	gr->base.buffer_init = gl_renderer_buffer_init;
+ 	gr->base.type = WESTON_RENDERER_GL;
+ 
+-	if (gl_renderer_setup_egl_display(gr, options->egl_native_display) < 0)
++	if (gl_renderer_setup_egl_display(gr, egl_native_display) < 0)
+ 		goto fail;
+ 
+ 	gr->allocator = gl_renderer_allocator_create(gr, options);
+@@ -4525,8 +4557,6 @@ gl_renderer_display_create(struct weston_compositor *ec,
+ 		goto fail_terminate;
+ 
+ 	if (!gr->has_configless_context) {
+-		EGLint egl_surface_type = options->egl_surface_type;
+-
+ 		if (!gr->has_surfaceless_context)
+ 			egl_surface_type |= EGL_PBUFFER_BIT;
+ 
+@@ -4628,6 +4658,11 @@ fail_terminate:
+ 	weston_drm_format_array_fini(&gr->supported_formats);
+ 	eglTerminate(gr->egl_display);
+ fail:
++	if (gr->gbm) {
++		gbm_device_destroy(gr->gbm);
++		close(gr->drm_fd);
++	}
++
+ 	weston_log_scope_destroy(gr->shader_scope);
+ 	weston_log_scope_destroy(gr->renderer_scope);
+ 	free(gr);
+diff --git a/libweston/renderer-gl/meson.build b/libweston/renderer-gl/meson.build
+index 274a296..93ae313 100644
+--- a/libweston/renderer-gl/meson.build
++++ b/libweston/renderer-gl/meson.build
+@@ -33,8 +33,9 @@ deps_renderer_gl = [
+ 	dep_gbm,
+ 	dep_libm,
+ 	dep_pixman,
++	dep_gbm,
++	dep_libdrm,
+ 	dep_libweston_private,
+-	dep_libdrm_headers,
+ 	dep_vertex_clipping
+ ]
+ 
+-- 
+2.20.1
+

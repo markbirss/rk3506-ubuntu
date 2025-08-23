@@ -1,0 +1,60 @@
+import rtconfig
+from building import *
+import os
+
+cwd     = GetCurrentDir()
+CPPPATH = [cwd]
+
+lib = ['']
+mcu = ['']
+group = []
+nvram = ['']
+chip_type = ['']
+
+drv_src = Glob('*.c')
+LOCAL_CPPPATH = [cwd, str(Dir('#'))]
+
+AMPAKDEFINES=['BUILDCFG']
+
+if GetDepend('RKMCU_RK2118'):
+   mcu = '/rk2118'
+if GetDepend('RKMCU_RK2108'):
+   mcu = '/rk2108'
+if GetDepend('SOC_RK1808'):
+   mcu = '/rk1808'
+
+if GetDepend('RT_USING_WLAN_SIP_AP6212A'):
+   chip_type = 'ap6212a'
+   lib       = 'mhd4343x'
+if GetDepend('RT_USING_WLAN_SIP_AP6214A'):
+   chip_type = 'ap6214a'
+   lib       = 'mhd4343x'
+if GetDepend('RT_USING_WLAN_SIP_AP6256'):
+   chip_type = 'ap6256'
+   lib       = 'mhd4345x'
+if GetDepend('RT_USING_WLAN_SIP_AP6203'):
+   chip_type = 'ap6203'
+   lib       = 'mhd4301x'
+
+if GetDepend('RT_USING_MHD_MFG_TEST'):
+   LIBS    = [lib + '_mfg']
+if not GetDepend('RT_USING_MHD_MFG_TEST'):
+   LIBS    = [lib]
+
+#Note, if change LwIP version, please modify version path
+RT_LWIP_INCLUDES = [
+   cwd + r'/../../components/net/lwip/lwip-2.0.3/src/include',
+   cwd + r'/../../components/net/lwip/lwip-2.0.3/src/include/lwip',
+   cwd + r'/../../components/net/lwip/port/netif']
+
+LOCAL_CCFLAGS = ' -Wno-unused-variable -Wno-maybe-uninitialized -Wno-array-parameter -Wno-unused-function'
+
+if GetDepend('RT_AMPAK_WIFI'):
+   nvram = ['.' + mcu + '/' + chip_type + '/' + 'nvram_' + chip_type + '.c']
+   src = drv_src + nvram
+   LIBPATH = [cwd + mcu + '/' + chip_type]
+   group = DefineGroup('mhd_drv', src, depend = ['RT_USING_LWIP'], LOCAL_CPPPATH = RT_LWIP_INCLUDES, CPPDEFINES=AMPAKDEFINES, CPPPATH = CPPPATH, LIBS = LIBS, LIBPATH = LIBPATH, LOCAL_CCFLAGS = LOCAL_CCFLAGS)
+
+#   group = DefineGroup('mhd_drv', src, depend = ['RT_USING_LWIP', 'RT_USING_LWIP202'], LOCAL_CPPPATH = RT_LWIP_INCLUDES, CPPDEFINES=AMPAKDEFINES, CPPPATH = CPPPATH, LIBS = LIBS, LIBPATH = LIBPATH)
+
+Return('group')

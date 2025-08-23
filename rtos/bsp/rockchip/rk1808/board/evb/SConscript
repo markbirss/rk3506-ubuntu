@@ -1,0 +1,13 @@
+Import('RTT_ROOT')
+Import('rtconfig')
+from building import *
+
+cwd = GetCurrentDir()
+src = Glob('*.c')
+CPPPATH = [cwd]
+
+group = DefineGroup('BoardConfig', src, depend = ['RT_USING_BOARD_RK1808_EVB'], CPPPATH = CPPPATH)
+
+if GetDepend(['BT_ENABLED']) is True:
+    group += SConscript(os.path.join(cwd, 'ap6212/SConscript'))
+Return('group')

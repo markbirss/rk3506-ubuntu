@@ -1,0 +1,8 @@
+config BR2_PACKAGE_MUPEN64PLUS_VIDEO_GLIDE64MK2
+        bool "mupen64plus-video-glide64mk2"
+	depends on BR2_PACKAGE_MUPEN64PLUS_CORE
+	depends on BR2_PACKAGE_SDL2
+        help
+          mupen64plus video glide64mk2.
+
+	  https://mupen64plus.org/

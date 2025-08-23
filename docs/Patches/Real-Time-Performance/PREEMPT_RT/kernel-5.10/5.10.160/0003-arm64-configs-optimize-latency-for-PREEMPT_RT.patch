@@ -1,0 +1,44 @@
+From b5df1150a73a3fe955a93c638458c3ca48705212 Mon Sep 17 00:00:00 2001
+From: Liang Chen <cl@rock-chips.com>
+Date: Tue, 4 Jul 2023 11:47:16 +0800
+Subject: [PATCH 3/3] arm64: configs: optimize latency for PREEMPT_RT
+
+Change-Id: I463d66d69d8ab45435511265d0b977040bc26dac
+Signed-off-by: Liang Chen <cl@rock-chips.com>
+---
+ arch/arm64/configs/rockchip_rt.config | 22 +++++++++++++++++++++-
+ 1 file changed, 21 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm64/configs/rockchip_rt.config b/arch/arm64/configs/rockchip_rt.config
+index e57555e7eedd1..2c6e12e2baa32 100644
+--- a/arch/arm64/configs/rockchip_rt.config
++++ b/arch/arm64/configs/rockchip_rt.config
+@@ -1,4 +1,24 @@
+-# CONFIG_ARM_ROCKCHIP_DMC_DEVFREQ is not set
+ # CONFIG_ARM_PSCI_CPUIDLE is not set
++# CONFIG_ARM_ROCKCHIP_DMC_DEVFREQ is not set
++# CONFIG_CGROUP_CPUACCT is not set
++# CONFIG_CGROUP_SCHED is not set
+ # CONFIG_CPU_FREQ_TIMES is not set
++# CONFIG_CPU_FREQ_THERMAL is not set
++# CONFIG_DEBUG_SPINLOCK is not set
++# CONFIG_FTRACE is not set
++# CONFIG_IRQ_TIME_ACCOUNTING is not set
++# CONFIG_MALI_BIFROST_ENABLE_TRACE is not set
++# CONFIG_MALI_BIFROST_SYSTEM_TRACE is not set
++# CONFIG_PSI is not set
++# CONFIG_PERF_EVENTS is not set
++# CONFIG_PROFILING is not set
++# CONFIG_SCHED_DEBUG is not set
++# CONFIG_SCHED_INFO is not set
++# CONFIG_SWAP is not set
++# CONFIG_TASKSTATS is not set
++# CONFIG_ZRAM is not set
++CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=y
++CONFIG_JUMP_LABEL=y
++CONFIG_HZ_PERIODIC=y
++CONFIG_HZ_1000=y
+ CONFIG_PREEMPT_RT=y
+-- 
+2.38.0
+

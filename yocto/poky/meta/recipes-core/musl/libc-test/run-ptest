@@ -1,0 +1,3 @@
+#!/bin/sh
+chown -R ptest:ptest /opt/libc-test
+ su -c ./run-libc-ptests ptest

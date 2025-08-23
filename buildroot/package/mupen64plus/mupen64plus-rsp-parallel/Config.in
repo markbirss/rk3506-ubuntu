@@ -1,0 +1,7 @@
+config BR2_PACKAGE_MUPEN64PLUS_RSP_PARALLEL
+        bool "mupen64plus-video-rsp-parallel"
+	depends on BR2_PACKAGE_MUPEN64PLUS_CORE
+        help
+          mupen64plus rsp parallel.
+
+	  https://github.com/Mastergatto/parallel-rsp.

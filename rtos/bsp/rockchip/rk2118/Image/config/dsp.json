@@ -1,0 +1,9 @@
+{
+    "MAGIC": "RESC",
+    "CHIP": "2118",
+    "MODEL": "HiFi4",
+    "DESC": "RK2118 HiFi4",
+    "VERSION": "1.00.0000",
+    "DIGEST": "SHA256",
+    "LOADING_ADDRESS": "0xFFFFFFFF"
+}

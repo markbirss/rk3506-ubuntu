@@ -1,0 +1,54 @@
+#!/bin/sh -e
+### BEGIN INIT INFO
+# Provides:       fstrim
+# Required-Start:
+# Required-Stop:
+# Default-Start:  S
+# Default-Stop:
+# Description:    Discard unused blocks on all filesystems
+### END INIT INFO
+
+PID_FILE=/var/run/fstrim.pid
+INTERVAL=$((60 * 60)) # 1 hour
+
+fstrim_stop()
+{
+	PID=$(cat $PID_FILE 2>/dev/null || true)
+	[ "$PID" ] || return 0
+
+	logger -s -t fstrim "Stopping fstrim process ($PID)..."
+	kill -9 -$PID 2>/dev/null || true
+	rm -f "$PID_FILE"
+}
+
+fstrim_start()
+{
+	fstrim_stop
+
+	{
+		trap 'rm -f "$PID_FILE"' EXIT QUIT TERM INT
+		echo $$ > $PID_FILE
+
+		logger -s -t fstrim "Starting fstrim process ($$)..."
+		while true; do
+			cut -d' ' -f2 /proc/mounts | \
+				xargs -n 1 /sbin/fstrim -v 2>/dev/null | \
+				logger -t fstrim || true
+			sleep $INTERVAL
+		done
+	}&
+}
+
+case "$1" in
+	start|restart|reload|force-reload|"") fstrim_start ;;
+	stop) fstrim_stop ;;
+	status)
+		# No-op
+		;;
+	*)
+		echo "Usage: start" >&2
+		exit 3
+		;;
+esac
+
+:

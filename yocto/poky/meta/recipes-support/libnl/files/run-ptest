@@ -1,0 +1,3 @@
+#! /bin/sh
+
+CK_AUTOMAKE=1 ./check-all

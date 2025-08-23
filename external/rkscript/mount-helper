@@ -1,0 +1,92 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:       mount-all
+# Default-Start:  S
+# Default-Stop:
+# Description:    Mount all internal partitions in /etc/fstab
+### END INIT INFO
+
+# Don't exit on error status
+set +e
+
+# Uncomment below to see more logs
+# set -x
+
+. $(dirname $0)/disk-helper
+
+LOGFILE=/var/log/mount-all.log
+
+BASIC_FSTYPE="proc devtmpfs devpts tmpfs sysfs configfs debugfs pstore"
+
+do_part()
+{
+	# Not enough args
+	[ $# -lt 6 ] && return
+
+	DEV=${1##*=}
+	MOUNT_POINT=$2
+	FSTYPE=$3
+	OPTS=$4
+	PASS=$6 # Skip fsck when pass is 0
+
+	# Setup check/mount tools and do some prepare
+	prepare_part || return
+
+	# Check and repair partition
+	check_part
+
+	# Mount partition
+	mount_part || return
+
+	# Resize partition if needed
+	resize_part
+
+	# Restore ro/rw
+	remount_part $MOUNT_RO_RW
+}
+
+mount_all()
+{
+	AUTO_MKFS="/.auto_mkfs"
+	if [ -f $AUTO_MKFS ];then
+		echo "Note: Will auto format partitons, remove $AUTO_MKFS to disable"
+	else
+		unset AUTO_MKFS
+	fi
+
+	SKIP_FSCK="/.skip_fsck"
+	if [ -f $SKIP_FSCK ];then
+		echo "Note: Will skip fsck, remove $SKIP_FSCK to enable"
+	else
+		echo "Note: Create $SKIP_FSCK to skip fsck"
+		echo " - The check might take a while if didn't shutdown properly!"
+		unset SKIP_FSCK
+	fi
+
+	# Ignore basic file systems
+	ID=0
+	grep -vwE "^#|${BASIC_FSTYPE// /|}" /etc/fstab | \
+		while read LINE;do
+			do_part $LINE&
+			ID=$(( $ID + 1 ))
+		done
+	wait
+}
+
+case "$1" in
+	start|"")
+		echo "Start mounting all internal partitions in /etc/fstab"
+		echo "Log saved to $LOGFILE"
+
+		# Mount basic file systems firstly
+		mount -a -t "$(echo "${BASIC_FSTYPE// /,}")"
+
+		mount_all 2>&1 | tee $LOGFILE
+		;;
+	*)
+		echo "Usage: mount-helper start" >&2
+		exit 3
+		;;
+esac
+
+:

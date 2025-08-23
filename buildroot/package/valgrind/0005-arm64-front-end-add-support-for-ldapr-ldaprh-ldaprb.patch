@@ -1,0 +1,45 @@
+From eaa7c870da2352cde5eae219f7080ffa19991d8a Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 7 Feb 2024 09:38:32 +0800
+Subject: [PATCH 5/5] arm64 front end: add support for 'ldapr', 'ldaprh',
+ 'ldaprb'
+
+From:
+https://bugs.kde.org/show_bug.cgi?id=476465
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ VEX/priv/guest_arm64_toIR.c | 12 +++++++++---
+ 1 file changed, 9 insertions(+), 3 deletions(-)
+
+diff --git a/VEX/priv/guest_arm64_toIR.c b/VEX/priv/guest_arm64_toIR.c
+index 3d8b7fe..1a387cb 100644
+--- a/VEX/priv/guest_arm64_toIR.c
++++ b/VEX/priv/guest_arm64_toIR.c
+@@ -7061,14 +7061,20 @@ Bool dis_ARM64_load_store(/*MB_OUT*/DisResult* dres, UInt insn,
+ 
+    /* ------------------ LDA{R,RH,RB} ------------------ */
+    /* ------------------ STL{R,RH,RB} ------------------ */
++   /* ------------------ LDAP{R,RH,RB} ----------------- */
+    /* 31 29     23  20      14    9 4
+       sz 001000 110 11111 1 11111 n t   LDAR<sz> Rt, [Xn|SP]
+       sz 001000 100 11111 1 11111 n t   STLR<sz> Rt, [Xn|SP]
++      sz 111000 101 11111 1 10000 n t   LDAPR<sz> Rt, [Xn|SP]
+    */
+-   if (INSN(29,23) == BITS7(0,0,1,0,0,0,1)
+-       && INSN(21,10) == BITS12(0,1,1,1,1,1,1,1,1,1,1,1)) {
++   if ((INSN(29,23) == BITS7(0,0,1,0,0,0,1)
++        && INSN(21,10) == BITS12(0,1,1,1,1,1,1,1,1,1,1,1))
++       ||
++       (INSN(29,21) == BITS9(1,1,1,0,0,0,1,0,1)
++        && INSN(20,10) == BITS11(1,1,1,1,1,1,1,0,0,0,0)))
++   {
+       UInt szBlg2 = INSN(31,30);
+-      Bool isLD   = INSN(22,22) == 1;
++      Bool isLD   = INSN(23,21) != BITS3(1,0,0);
+       UInt nn     = INSN(9,5);
+       UInt tt     = INSN(4,0);
+ 
+-- 
+2.20.1
+

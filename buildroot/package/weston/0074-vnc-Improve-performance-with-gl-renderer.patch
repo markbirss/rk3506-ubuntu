@@ -1,0 +1,655 @@
+From 1bcbf3013905971f68e14143200df14c418fdea6 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Mon, 25 Dec 2023 16:58:31 +0800
+Subject: [PATCH 74/95] vnc: Improve performance with gl-renderer
+
+Major changes:
+1/ Use GBM instead of FBO
+2/ Support increasing buffers
+
+Tested on RK3588 EVB with:
+1/ Run "weston -B vnc" or "weston -B drm,vnc"
+2/ Launch vncviewer on remote PC
+3/ Run "weston-simple-egl -f"
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/backend-vnc/meson.build            |   7 +
+ libweston/backend-vnc/vnc.c                  | 321 +++++++++++++++----
+ libweston/renderer-gl/gl-renderer-internal.h |   2 +
+ libweston/renderer-gl/gl-renderer.c          |  27 +-
+ libweston/renderer-gl/gl-renderer.h          |   2 +
+ 5 files changed, 293 insertions(+), 66 deletions(-)
+
+diff --git a/libweston/backend-vnc/meson.build b/libweston/backend-vnc/meson.build
+index 39b15cf..53e5037 100644
+--- a/libweston/backend-vnc/meson.build
++++ b/libweston/backend-vnc/meson.build
+@@ -13,12 +13,19 @@ if not dep_aml.found()
+ 	error('VNC backend requires libaml which was not found. Or, you can use \'-Dbackend-vnc=false\'.')
+ endif
+ 
++dep_gbm = dependency('gbm', required: false, version: '>= 21.1.1')
++if not dep_gbm.found()
++	error('VNC backend requires gbm which was not found. Or, you can use \'-Dbackend-vnc=false\'.')
++endif
++
+ deps_vnc = [
+ 	dep_libweston_private,
+ 	dep_neatvnc,
+ 	dep_aml,
+ 	dep_libdrm_headers,
++	dep_gbm,
+ ]
++
+ plugin_vnc = shared_library(
+ 	'vnc-backend',
+ 	[ 'vnc.c' ],
+diff --git a/libweston/backend-vnc/vnc.c b/libweston/backend-vnc/vnc.c
+index 928e484..574b699 100644
+--- a/libweston/backend-vnc/vnc.c
++++ b/libweston/backend-vnc/vnc.c
+@@ -47,6 +47,11 @@
+ #include <neatvnc.h>
+ #include <drm_fourcc.h>
+ 
++#include <gbm.h>
++
++#include <fcntl.h>
++#include <xf86drm.h>
++
+ #include "shared/helpers.h"
+ #include "shared/xalloc.h"
+ #include "shared/timespec-util.h"
+@@ -60,6 +65,7 @@
+ #include "shared/weston-egl-ext.h"
+ 
+ #define DEFAULT_AXIS_STEP_DISTANCE 10
++#define VNC_MAX_BUFFERS            16
+ 
+ struct vnc_output;
+ 
+@@ -79,6 +85,9 @@ struct vnc_backend {
+ 
+ 	const struct pixel_format_info **formats;
+ 	unsigned int formats_count;
++
++	int drm_fd;
++	struct gbm_device *gbm;
+ };
+ 
+ struct vnc_output {
+@@ -94,6 +103,12 @@ struct vnc_output {
+ 	struct wl_list peers;
+ 
+ 	bool resizeable;
++
++	struct gbm_surface *gbm_surfaces[VNC_MAX_BUFFERS];
++	unsigned int num_surfaces;
++
++	struct weston_renderbuffer *renderbuffer[VNC_MAX_BUFFERS];
++	int next_buffer;
+ };
+ 
+ struct vnc_peer {
+@@ -109,6 +124,11 @@ struct vnc_head {
+ 	struct weston_head base;
+ };
+ 
++struct vnc_gl_data {
++	struct gbm_surface *gbm_surface;
++	struct gbm_bo *bo;
++};
++
+ static void
+ vnc_output_destroy(struct weston_output *base);
+ 
+@@ -673,52 +693,35 @@ vnc_log_damage(struct vnc_backend *backend, pixman_region32_t *buffer_damage,
+ 	weston_log_scope_printf(backend->debug, "\n\n");
+ }
+ 
+-static void
+-vnc_update_buffer(struct nvnc_display *display, struct pixman_region32 *damage)
++static struct nvnc_fb *
++vnc_output_render_pixman(struct vnc_output *output, struct pixman_region32 *damage)
+ {
+-	struct nvnc *server = nvnc_display_get_server(display);
+-	struct vnc_backend *backend = nvnc_get_userdata(server);
+-	struct vnc_output *output = backend->output;
+ 	struct weston_compositor *ec = output->base.compositor;
+ 	struct weston_renderbuffer *renderbuffer;
+-	pixman_region32_t local_damage;
+-	pixman_region16_t nvnc_damage;
++	struct vnc_backend *backend = output->backend;
+ 	struct nvnc_fb *fb;
+ 
+ 	fb = nvnc_fb_pool_acquire(output->fb_pool);
+-	assert(fb);
++	if (!fb)
++		return NULL;
+ 
+ 	renderbuffer = nvnc_get_userdata(fb);
+ 	if (!renderbuffer) {
++		const struct pixman_renderer_interface *pixman;
+ 		const struct pixel_format_info *pfmt;
+ 
+ 		pfmt = pixel_format_get_info(DRM_FORMAT_XRGB8888);
+ 
+-		switch (ec->renderer->type) {
+-		case WESTON_RENDERER_PIXMAN: {
+-			const struct pixman_renderer_interface *pixman;
++		pixman = ec->renderer->pixman;
+ 
+-			pixman = ec->renderer->pixman;
+-
+-			renderbuffer =
+-				pixman->create_image_from_ptr(&output->base, pfmt,
+-							      output->base.width,
+-							      output->base.height,
+-							      nvnc_fb_get_addr(fb),
+-							      output->base.width * 4);
+-			break;
+-		}
+-		case WESTON_RENDERER_GL: {
+-			renderbuffer =
+-				ec->renderer->gl->create_fbo(&output->base, pfmt,
+-							     output->base.width,
+-							     output->base.height,
+-							     nvnc_fb_get_addr(fb));
+-			break;
+-		}
+-		default:
+-			unreachable("cannot have auto renderer at runtime");
+-		}
++		renderbuffer =
++			pixman->create_image_from_ptr(&output->base, pfmt,
++						      output->base.width,
++						      output->base.height,
++						      nvnc_fb_get_addr(fb),
++						      output->base.width * 4);
++		if (!renderbuffer)
++			return NULL;
+ 
+ 		/* This is a new buffer, so the whole surface is damaged. */
+ 		pixman_region32_copy(&renderbuffer->damage,
+@@ -732,6 +735,85 @@ vnc_update_buffer(struct nvnc_display *display, struct pixman_region32 *damage)
+ 
+ 	ec->renderer->repaint_output(&output->base, damage, renderbuffer);
+ 
++	return fb;
++}
++
++static void
++vnc_gl_data_cleanup(void* userdata)
++{
++	struct vnc_gl_data *data = userdata;
++
++	gbm_surface_release_buffer(data->gbm_surface, data->bo);
++	free(data);
++}
++
++static struct nvnc_fb *
++vnc_output_render_gl(struct vnc_output *output, struct pixman_region32 *damage)
++{
++	struct weston_compositor *ec = output->base.compositor;
++	struct weston_renderbuffer *renderbuffer;
++	struct vnc_backend *backend = output->backend;
++	struct vnc_gl_data *data;
++	struct nvnc_fb *fb;
++
++	data = zalloc(sizeof *data);
++	if (!data)
++		return NULL;
++
++	data->gbm_surface = output->gbm_surfaces[output->next_buffer];
++	renderbuffer = output->renderbuffer[output->next_buffer];
++	output->next_buffer = (output->next_buffer + 1) % output->num_surfaces;
++
++	vnc_log_damage(backend, &renderbuffer->damage, damage);
++
++	ec->renderer->repaint_output(&output->base, damage, renderbuffer);
++
++	data->bo = gbm_surface_lock_front_buffer(data->gbm_surface);
++	if (!data->bo) {
++		weston_log("failed to lock front buffer: %s\n",
++			   strerror(errno));
++		free(data);
++		return NULL;
++	}
++
++	fb = nvnc_fb_from_gbm_bo(data->bo);
++	if (!fb) {
++		weston_log("failed to import gbm bo\n");
++		free(data);
++		return NULL;
++	}
++
++	nvnc_set_userdata(fb, data, (nvnc_cleanup_fn)vnc_gl_data_cleanup);
++
++	return fb;
++}
++
++static void
++vnc_output_render(struct vnc_output *output, struct pixman_region32 *damage)
++{
++	struct weston_compositor *ec = output->base.compositor;
++	pixman_region32_t local_damage;
++	pixman_region16_t nvnc_damage;
++	struct nvnc_fb *fb;
++
++	switch (ec->renderer->type) {
++	case WESTON_RENDERER_PIXMAN: {
++		fb = vnc_output_render_pixman(output, damage);
++		break;
++	}
++	case WESTON_RENDERER_GL: {
++		fb = vnc_output_render_gl(output, damage);
++		break;
++	}
++	default:
++		unreachable("cannot have auto renderer at runtime");
++	}
++
++	if (!fb) {
++		weston_log("failed to render vnc\n");
++		return;
++	}
++
+ 	/* Convert to local coordinates */
+ 	pixman_region32_init(&local_damage);
+ 	weston_region_global_to_output(&local_damage, &output->base, damage);
+@@ -791,6 +873,88 @@ finish_frame_handler(void *data)
+ 	return 1;
+ }
+ 
++static void
++vnc_output_fini_egl(struct vnc_output *output)
++{
++	struct weston_renderer *renderer = output->base.compositor->renderer;
++	unsigned int i;
++
++	renderer->gl->output_destroy(&output->base);
++
++	for (i = 0; i < output->num_surfaces; i++) {
++		if (output->renderbuffer[i])
++			weston_renderbuffer_unref(output->renderbuffer[i]);
++		output->renderbuffer[i] = NULL;
++	}
++	for (i = 0; i < output->num_surfaces; i++) {
++		if (output->gbm_surfaces[i])
++			gbm_surface_destroy(output->gbm_surfaces[i]);
++		output->gbm_surfaces[i] = NULL;
++	}
++}
++
++static int
++vnc_output_init_egl(struct vnc_output *output, struct vnc_backend *b)
++{
++	const struct weston_renderer *renderer = b->compositor->renderer;
++	struct weston_mode *mode = output->base.current_mode;
++	const struct gl_renderer_interface *gl = renderer->gl;
++	const struct gl_renderer_display_options *display_options =
++		gl->get_display_options(b->compositor);
++	struct gl_renderer_output_options options = {
++		.formats = &b->formats[0],
++		.formats_count = b->formats_count,
++		.area.x = 0,
++		.area.y = 0,
++		.area.width = mode->width,
++		.area.height = mode->height,
++		.fb_size.width = mode->width,
++		.fb_size.height = mode->height,
++		.window_for_legacy = NULL,
++		.window_for_platform = NULL,
++	};
++	uint32_t i;
++
++	if (display_options->egl_platform != EGL_PLATFORM_GBM_KHR ||
++	    !display_options->egl_native_display)
++		return -1;
++
++	for (i = 0; i < output->num_surfaces; i++) {
++		struct gbm_device *gbm = display_options->egl_native_display;
++		output->gbm_surfaces[i] =
++			gbm_surface_create(gbm, mode->width, mode->height,
++					   b->formats[0]->format,
++					   GBM_BO_USE_LINEAR | GBM_BO_USE_RENDERING);
++		if (!output->gbm_surfaces[i]) {
++			weston_log("failed to create gbm surface\n");
++			goto err;
++		}
++	}
++
++	if (gl->output_window_create(&output->base, &options) < 0) {
++		weston_log("failed to create gl renderer output state\n");
++		goto err;
++	}
++
++	for (i = 0; i < output->num_surfaces; i++) {
++		options.window_for_legacy =
++			(EGLNativeWindowType) output->gbm_surfaces[i];
++		options.window_for_platform = output->gbm_surfaces[i];
++
++		output->renderbuffer[i] =
++			gl->create_buffer(&output->base, &options);
++		if (!output->renderbuffer[i]) {
++			weston_log("failed to create window surface\n");
++			goto err;
++		}
++	}
++
++	return 0;
++err:
++	vnc_output_fini_egl(output);
++	return -1;
++}
++
+ static int
+ vnc_output_enable(struct weston_output *base)
+ {
+@@ -817,20 +981,15 @@ vnc_output_enable(struct weston_output *base)
+ 		};
+ 		if (renderer->pixman->output_create(&output->base, &options) < 0)
+ 			return -1;
++
++		output->fb_pool = nvnc_fb_pool_new(output->base.width,
++						   output->base.height,
++						   backend->formats[0]->format,
++						   output->base.width);
+ 		break;
+ 	}
+ 	case WESTON_RENDERER_GL: {
+-		const struct gl_renderer_fbo_options options = {
+-			.area = {
+-				.width = output->base.width,
+-				.height = output->base.height,
+-			},
+-			.fb_size = {
+-				.width = output->base.width,
+-				.height = output->base.height,
+-			},
+-		};
+-		if (renderer->gl->output_fbo_create(&output->base, &options) < 0)
++		if (vnc_output_init_egl(output, backend) < 0)
+ 			return -1;
+ 		break;
+ 	}
+@@ -843,11 +1002,6 @@ vnc_output_enable(struct weston_output *base)
+ 							     finish_frame_handler,
+ 							     output);
+ 
+-	output->fb_pool = nvnc_fb_pool_new(output->base.width,
+-					   output->base.height,
+-					   backend->formats[0]->format,
+-					   output->base.width);
+-
+ 	output->display = nvnc_display_new(0, 0);
+ 
+ 	nvnc_add_display(backend->server, output->display);
+@@ -871,14 +1025,14 @@ vnc_output_disable(struct weston_output *base)
+ 
+ 	nvnc_remove_display(backend->server, output->display);
+ 	nvnc_display_unref(output->display);
+-	nvnc_fb_pool_unref(output->fb_pool);
+ 
+ 	switch (renderer->type) {
+ 	case WESTON_RENDERER_PIXMAN:
+ 		renderer->pixman->output_destroy(&output->base);
++		nvnc_fb_pool_unref(output->fb_pool);
+ 		break;
+ 	case WESTON_RENDERER_GL:
+-		renderer->gl->output_destroy(&output->base);
++		vnc_output_fini_egl(output);
+ 		break;
+ 	default:
+ 		unreachable("cannot have auto renderer at runtime");
+@@ -911,6 +1065,8 @@ vnc_create_output(struct weston_backend *backend, const char *name)
+ {
+ 	struct vnc_backend *b = container_of(backend, struct vnc_backend, base);
+ 	struct vnc_output *output;
++	const char *env;
++	int num_buffers = 0;
+ 
+ 	output = zalloc(sizeof *output);
+ 	if (output == NULL)
+@@ -918,6 +1074,14 @@ vnc_create_output(struct weston_backend *backend, const char *name)
+ 
+ 	weston_output_init(&output->base, b->compositor, name);
+ 
++	env = getenv("WESTON_VNC_MIN_BUFFERS");
++	if (env)
++		num_buffers = atoi(env);
++
++	num_buffers = MIN(MAX(num_buffers, 2), VNC_MAX_BUFFERS);
++	output->num_surfaces = (num_buffers + 1) / 2;
++	weston_log("%s using at least %d buffers\n", name, num_buffers);
++
+ 	output->base.destroy = vnc_output_destroy;
+ 	output->base.disable = vnc_output_disable;
+ 	output->base.enable = vnc_output_enable;
+@@ -953,6 +1117,11 @@ vnc_destroy(struct weston_backend *base)
+ 	if (backend->debug)
+ 		weston_log_scope_destroy(backend->debug);
+ 
++	if (backend->gbm) {
++		gbm_device_destroy(backend->gbm);
++		close(backend->drm_fd);
++	}
++
+ 	free(backend);
+ }
+ 
+@@ -1015,7 +1184,7 @@ vnc_output_repaint(struct weston_output *base)
+ 	weston_output_flush_damage_for_primary_plane(base, &damage);
+ 
+ 	if (pixman_region32_not_empty(&damage)) {
+-		vnc_update_buffer(output->display, &damage);
++		vnc_output_render(output, &damage);
+ 	}
+ 
+ 	pixman_region32_fini(&damage);
+@@ -1064,7 +1233,9 @@ vnc_output_assign_planes(struct weston_output *base)
+ static int
+ vnc_switch_mode(struct weston_output *base, struct weston_mode *target_mode)
+ {
++	struct weston_renderer *renderer = base->compositor->renderer;
+ 	struct vnc_output *output = to_vnc_output(base);
++	struct vnc_backend *backend = output->backend;
+ 	struct weston_size fb_size;
+ 
+ 	assert(output);
+@@ -1076,9 +1247,23 @@ vnc_switch_mode(struct weston_output *base, struct weston_mode *target_mode)
+ 
+ 	weston_renderer_resize_output(base, &fb_size, NULL);
+ 
+-	nvnc_fb_pool_resize(output->fb_pool, target_mode->width,
+-			    target_mode->height, DRM_FORMAT_XRGB8888,
+-			    target_mode->width);
++	switch (renderer->type) {
++	case WESTON_RENDERER_PIXMAN:
++		nvnc_fb_pool_resize(output->fb_pool, target_mode->width,
++				    target_mode->height, DRM_FORMAT_XRGB8888,
++				    target_mode->width);
++		break;
++	case WESTON_RENDERER_GL:
++		vnc_output_fini_egl(output);
++		if (vnc_output_init_egl(output, backend) < 0) {
++			weston_log("failed to init output egl state with "
++				   "new mode");
++			return -1;
++		}
++		break;
++	default:
++		unreachable("cannot have auto renderer at runtime");
++	}
+ 
+ 	return 0;
+ }
+@@ -1165,19 +1350,36 @@ vnc_backend_create(struct weston_compositor *compositor,
+ 						  backend->formats_count);
+ 	if (!compositor->renderer) {
+ 		switch (config->renderer) {
+-		case WESTON_RENDERER_AUTO:
+ 		case WESTON_RENDERER_PIXMAN:
+ 			if (weston_compositor_init_renderer(compositor,
+ 							    WESTON_RENDERER_PIXMAN,
+ 							    NULL) < 0)
+ 				goto err_compositor;
+ 			break;
++		case WESTON_RENDERER_AUTO:
+ 		case WESTON_RENDERER_GL: {
+-			const struct gl_renderer_display_options options = {
+-				.egl_platform = EGL_PLATFORM_SURFACELESS_MESA,
++			struct gl_renderer_display_options options = {
++				.egl_platform = EGL_PLATFORM_GBM_KHR,
++				.egl_surface_type = EGL_WINDOW_BIT,
+ 				.formats = backend->formats,
+ 				.formats_count = backend->formats_count,
+ 			};
++
++			backend->drm_fd = drmOpen("rockchip", NULL);
++			if (backend->drm_fd < 0)
++				backend->drm_fd = open("/dev/dri/card0",
++						       O_RDWR | O_CLOEXEC);
++			if (backend->drm_fd < 0)
++				goto err_compositor;
++
++			backend->gbm = gbm_create_device(backend->drm_fd);
++			if (!backend->gbm) {
++				close(backend->drm_fd);
++				goto err_compositor;
++			}
++
++			options.egl_native_display = backend->gbm;
++
+ 			if (weston_compositor_init_renderer(compositor,
+ 							    WESTON_RENDERER_GL,
+ 							    &options.base) < 0)
+@@ -1303,6 +1505,11 @@ err_output:
+ 	wl_list_for_each_safe(base, next, &compositor->head_list, compositor_link)
+ 		vnc_head_destroy(base);
+ err_compositor:
++	if (backend->gbm) {
++		gbm_device_destroy(backend->gbm);
++		close(backend->drm_fd);
++	}
++
+ 	wl_list_remove(&backend->base.link);
+ 	free(backend);
+ 	return NULL;
+diff --git a/libweston/renderer-gl/gl-renderer-internal.h b/libweston/renderer-gl/gl-renderer-internal.h
+index 49c490a..756a180 100644
+--- a/libweston/renderer-gl/gl-renderer-internal.h
++++ b/libweston/renderer-gl/gl-renderer-internal.h
+@@ -311,6 +311,8 @@ struct gl_renderer {
+ 
+ 	int drm_fd;
+ 	struct gbm_device *gbm;
++
++	struct gl_renderer_display_options options;
+ };
+ 
+ static inline struct gl_renderer *
+diff --git a/libweston/renderer-gl/gl-renderer.c b/libweston/renderer-gl/gl-renderer.c
+index e1704ac..7ddf80e 100644
+--- a/libweston/renderer-gl/gl-renderer.c
++++ b/libweston/renderer-gl/gl-renderer.c
+@@ -732,6 +732,13 @@ gl_renderer_create_fbo(struct weston_output *output,
+ 	return &renderbuffer->base;
+ }
+ 
++static const struct gl_renderer_display_options *
++gl_renderer_get_display_options(struct weston_compositor *ec)
++{
++	struct gl_renderer *gr = get_renderer(ec);
++	return &gr->options;
++}
++
+ static bool
+ gl_renderer_do_read_pixels(struct gl_renderer *gr,
+ 			   struct gl_output_state *go,
+@@ -4479,8 +4486,6 @@ gl_renderer_display_create(struct weston_compositor *ec,
+ 			   const struct gl_renderer_display_options *options)
+ {
+ 	struct gl_renderer *gr;
+-	EGLint egl_surface_type = options->egl_surface_type;
+-	void *egl_native_display = options->egl_native_display;
+ 	int ret;
+ 
+ 	gr = zalloc(sizeof *gr);
+@@ -4491,6 +4496,9 @@ gl_renderer_display_create(struct weston_compositor *ec,
+ 	wl_list_init(&gr->shader_list);
+ 	gr->platform = options->egl_platform;
+ 
++	gr->options = *options;
++	options = &gr->options;
++
+ 	gr->renderer_scope = weston_compositor_add_log_scope(ec, "gl-renderer",
+ 		"GL-renderer verbose messages\n", NULL, NULL, gr);
+ 	if (!gr->renderer_scope)
+@@ -4505,10 +4513,10 @@ gl_renderer_display_create(struct weston_compositor *ec,
+ 
+ 	/* HACK: Fixup options for GBM platform */
+ 	if (gr->platform == EGL_PLATFORM_GBM_KHR) {
+-		if (!egl_surface_type)
+-			egl_surface_type = EGL_WINDOW_BIT;
++		if (!options->egl_surface_type)
++			gr->options.egl_surface_type = EGL_WINDOW_BIT;
+ 
+-		if (!egl_native_display) {
++		if (!options->egl_native_display) {
+ 			gr->drm_fd = drmOpen("rockchip", NULL);
+ 			if (gr->drm_fd < 0)
+ 				gr->drm_fd = open("/dev/dri/card0",
+@@ -4522,7 +4530,7 @@ gl_renderer_display_create(struct weston_compositor *ec,
+ 				goto fail;
+ 			}
+ 
+-			egl_native_display = gr->gbm;
++			gr->options.egl_native_display = gr->gbm;
+ 		}
+ 	}
+ 
+@@ -4537,7 +4545,7 @@ gl_renderer_display_create(struct weston_compositor *ec,
+ 	gr->base.buffer_init = gl_renderer_buffer_init;
+ 	gr->base.type = WESTON_RENDERER_GL;
+ 
+-	if (gl_renderer_setup_egl_display(gr, egl_native_display) < 0)
++	if (gl_renderer_setup_egl_display(gr, options->egl_native_display) < 0)
+ 		goto fail;
+ 
+ 	gr->allocator = gl_renderer_allocator_create(gr, options);
+@@ -4558,11 +4566,11 @@ gl_renderer_display_create(struct weston_compositor *ec,
+ 
+ 	if (!gr->has_configless_context) {
+ 		if (!gr->has_surfaceless_context)
+-			egl_surface_type |= EGL_PBUFFER_BIT;
++			gr->options.egl_surface_type |= EGL_PBUFFER_BIT;
+ 
+ 		gr->egl_config =
+ 			gl_renderer_get_egl_config(gr,
+-						   egl_surface_type,
++						   options->egl_surface_type,
+ 						   options->formats,
+ 						   options->formats_count);
+ 		if (gr->egl_config == EGL_NO_CONFIG_KHR) {
+@@ -4957,4 +4965,5 @@ WL_EXPORT struct gl_renderer_interface gl_renderer_interface = {
+ 	.output_set_border = gl_renderer_output_set_border,
+ 	.create_fence_fd = gl_renderer_create_fence_fd,
+ 	.create_fbo = gl_renderer_create_fbo,
++	.get_display_options = gl_renderer_get_display_options,
+ };
+diff --git a/libweston/renderer-gl/gl-renderer.h b/libweston/renderer-gl/gl-renderer.h
+index 7e7d1bc..8bc4ace 100644
+--- a/libweston/renderer-gl/gl-renderer.h
++++ b/libweston/renderer-gl/gl-renderer.h
+@@ -237,4 +237,6 @@ struct gl_renderer_interface {
+ 						  const struct pixel_format_info *format,
+ 						  int width, int height,
+ 						  uint32_t *pixels);
++
++	const struct gl_renderer_display_options *(*get_display_options)(struct weston_compositor *ec);
+ };
+-- 
+2.20.1
+

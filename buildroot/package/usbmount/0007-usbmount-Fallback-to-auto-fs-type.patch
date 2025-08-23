@@ -1,0 +1,29 @@
+From c0caf82d84c6b9022ec614ee99fea8db3c309a2e Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 7 Aug 2024 14:59:27 +0800
+Subject: [PATCH 7/7] usbmount: Fallback to auto fs type
+
+The blkid might report wrong fs type.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ usbmount | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/usbmount b/usbmount
+index 94afdee..870e9d6 100755
+--- a/usbmount
++++ b/usbmount
+@@ -131,7 +131,8 @@ if [ "$1" = add ]; then
+ 
+ 		# Mount the filesystem.
+ 		log info "executing command: mount -t$fstype ${options:+-o$options} $DEVNAME $mountpoint"
+-		mount "-t$fstype" "${options:+-o$options}" "$DEVNAME" "$mountpoint"
++		mount "-t$fstype" "${options:+-o$options}" "$DEVNAME" "$mountpoint" || \
++			mount "${options:+-o$options}" "$DEVNAME" "$mountpoint"
+ 
+ 		# Determine vendor and model.
+ 		vendor=
+-- 
+2.20.1
+

@@ -1,0 +1,15 @@
+menu "RT-Thread board config"
+
+choice
+    prompt "Board Type"
+    default RT_USING_BOARD_RK2206_EVB
+
+    config RT_USING_BOARD_RK2206_EVB
+        bool "Enable RK2206_EVB board"
+endchoice
+
+if RT_USING_BOARD_RK2206_EVB
+    source "$BSP_DIR/board/rk2206_evb/Kconfig"
+endif
+
+endmenu

@@ -1,0 +1,612 @@
+From 7e5b4f0a8726b263fc7864fac8618d77ef13e414 Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Thu, 24 Oct 2024 19:11:54 +0800
+Subject: [PATCH 09/12] feat(drivers): support rkadk
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ src/drivers/display/rkadk/rkadk.c | 559 ++++++++++++++++++++++++++++++
+ src/drivers/display/rkadk/rkadk.h |  25 ++
+ 2 files changed, 584 insertions(+)
+ create mode 100644 src/drivers/display/rkadk/rkadk.c
+ create mode 100644 src/drivers/display/rkadk/rkadk.h
+
+diff --git a/src/drivers/display/rkadk/rkadk.c b/src/drivers/display/rkadk/rkadk.c
+new file mode 100644
+index 000000000..e4cae80cc
+--- /dev/null
++++ b/src/drivers/display/rkadk/rkadk.c
+@@ -0,0 +1,559 @@
++/*
++ * Copyright (c) 2023 Rockchip, Inc. All Rights Reserved.
++ *
++ *  Licensed under the Apache License, Version 2.0 (the "License");
++ *  you may not use this file except in compliance with the License.
++ *  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ *  Unless required by applicable law or agreed to in writing, software
++ *  distributed under the License is distributed on an "AS IS" BASIS,
++ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ *  See the License for the specific language governing permissions and
++ *  limitations under the License.
++ */
++#include <stdlib.h>
++#include <unistd.h>
++#include <stddef.h>
++#include <stdio.h>
++#include <fcntl.h>
++#include <xf86drm.h>
++#include <xf86drmMode.h>
++
++#include <lvgl.h>
++
++#if LV_USE_RKADK
++#include <rkadk/rkadk_media_comm.h>
++#include <rkadk/rkadk_ui.h>
++
++#include <rga/rga.h>
++#include <rga/im2d.h>
++
++#include "rkadk.h"
++/**********************
++ *      MACROS
++ **********************/
++#define DRM_CARD            "/dev/dri/card0"
++#define DRM_CONNECTOR_ID    -1    /* -1 for the first connected one */
++
++#define DBG_TAG             "drm"
++
++#define DIV_ROUND_UP(n, d)  (((n) + (d) - 1) / (d))
++
++#define print               LV_LOG_USER
++#define err                 LV_LOG_ERROR
++#define info                LV_LOG_INFO
++#define dbg                 LV_LOG_TRACE
++
++struct disp_buffer
++{
++    unsigned long int size;
++    int32_t fd;
++    void *map;
++};
++
++typedef struct disp_dev
++{
++    RKADK_MW_PTR ui_ptr;
++    lv_display_rotation_t rot;
++    MB_BLK draw_buf_blk;
++    struct disp_buffer draw_buf;
++    RKADK_UI_FRAME_INFO frame_info;
++    MB_POOL buf_pool;
++    uint32_t width, height;
++    uint32_t mm_width, mm_height;
++    int drm_encode;
++} disp_dev_t;
++
++/**********************
++ *  GLOBAL PROTOTYPES
++ **********************/
++
++/**********************
++ *  GLOBAL VARIABLES
++ **********************/
++
++/**********************
++ *  STATIC PROTOTYPES
++ **********************/
++
++/**********************
++ *  STATIC VARIABLES
++ **********************/
++
++
++/**********************
++ *   STATIC FUNCTIONS
++ **********************/
++static int32_t drm_open(const char *path)
++{
++    int32_t fd, flags;
++    uint64_t has_dumb;
++    int32_t ret;
++
++    fd = open(path, O_RDWR);
++    if (fd < 0)
++    {
++        err("cannot open \"%s\"", path);
++        return -1;
++    }
++
++    /* set FD_CLOEXEC flag */
++    if ((flags = fcntl(fd, F_GETFD)) < 0 ||
++            fcntl(fd, F_SETFD, flags | FD_CLOEXEC) < 0)
++    {
++        err("fcntl FD_CLOEXEC failed");
++        goto err;
++    }
++
++    /* check capability */
++    ret = drmGetCap(fd, DRM_CAP_DUMB_BUFFER, &has_dumb);
++    if (ret < 0 || has_dumb == 0)
++    {
++        err("drmGetCap DRM_CAP_DUMB_BUFFER failed or \"%s\" doesn't have dumb "
++            "buffer", path);
++        goto err;
++    }
++
++    return fd;
++err:
++    close(fd);
++    return -1;
++}
++
++static int drm_find_connector(int32_t dev_fd, disp_dev_t * rkadk_dev)
++{
++    drmModeConnector *conn = NULL;
++    drmModeRes *res = NULL;
++    drmModeEncoder *encode = NULL;
++    int32_t i;
++
++    if ((res = drmModeGetResources(dev_fd)) == NULL)
++    {
++        err("drmModeGetResources() failed");
++        return -1;
++    }
++
++    if (res->count_crtcs <= 0)
++    {
++        err("no Crtcs");
++        goto free_res;
++    }
++
++    /* find all available connectors */
++    for (i = 0; i < res->count_connectors; i++)
++    {
++        conn = drmModeGetConnector(dev_fd, res->connectors[i]);
++        if (!conn)
++            continue;
++
++#if DRM_CONNECTOR_ID >= 0
++        if (conn->connector_id != DRM_CONNECTOR_ID)
++        {
++            drmModeFreeConnector(conn);
++            continue;
++        }
++#endif
++
++        if (conn->connection == DRM_MODE_CONNECTED)
++        {
++            dbg("drm: connector %d: connected", conn->connector_id);
++        }
++        else if (conn->connection == DRM_MODE_DISCONNECTED)
++        {
++            dbg("drm: connector %d: disconnected", conn->connector_id);
++        }
++        else if (conn->connection == DRM_MODE_UNKNOWNCONNECTION)
++        {
++            dbg("drm: connector %d: unknownconnection", conn->connector_id);
++        }
++        else
++        {
++            dbg("drm: connector %d: unknown", conn->connector_id);
++        }
++
++        if (conn->connection == DRM_MODE_CONNECTED && conn->count_modes > 0)
++            break;
++
++        drmModeFreeConnector(conn);
++        conn = NULL;
++    };
++
++    if (!conn)
++    {
++        err("suitable connector not found");
++        goto free_res;
++    }
++
++    encode = drmModeGetEncoder(dev_fd, conn->encoders[0]);
++    if(encode != NULL) {
++        if(encode->encoder_type == DRM_MODE_ENCODER_DSI){
++            printf("drm encode type is MIPI\n");
++            rkadk_dev->drm_encode = DRM_MODE_ENCODER_DSI;
++        }
++        if(encode->encoder_type == DRM_MODE_ENCODER_DPI){
++            printf("drm encode type is LCD\n");
++            rkadk_dev->drm_encode = DRM_MODE_ENCODER_DPI;
++        }
++    }
++    if(encode) {
++        drmModeFreeEncoder(encode);
++    }
++    rkadk_dev->width = conn->modes[0].hdisplay;
++    rkadk_dev->height = conn->modes[0].vdisplay;
++    rkadk_dev->mm_width = conn->mmWidth;
++    rkadk_dev->mm_height = conn->mmHeight;
++
++    if(conn) {
++        drmModeFreeConnector(conn);
++    }
++    return 0;
++
++free_res:
++    drmModeFreeResources(res);
++
++    return -1;
++}
++
++static int32_t get_disp_info(disp_dev_t * rkadk_dev)
++{
++    int32_t dev_fd, ret;
++    const char *device_path = NULL;
++
++    device_path = getenv("DRM_CARD");
++    if (!device_path)
++        device_path = DRM_CARD;
++
++    dev_fd = drm_open(device_path);
++    if (dev_fd < 0)
++        return -1;
++
++    ret = drm_find_connector(dev_fd, rkadk_dev);
++    if (ret)
++    {
++        err("available drm devices not found");
++        close(dev_fd);
++        return -1;
++    }
++
++    close(dev_fd);
++
++    info("rk_disp: %dx%d (%dmm X% dmm)",
++         rkadk_dev->width, rkadk_dev->height, rkadk_dev->mm_width, rkadk_dev->mm_height);
++
++    return 0;
++}
++
++static int32_t rk_disp_setup(disp_dev_t * rkadk_dev)
++{
++    int32_t ret;
++
++    RKADK_MPI_SYS_Init();
++
++    RKADK_UI_ATTR_S ui_attr;
++
++    memset(&ui_attr, 0, sizeof(ui_attr));
++
++    ui_attr.u32VoChn = 1;
++    ui_attr.u32VoDev = -1;
++    ui_attr.u32VoLay = -1;
++    ui_attr.u32DispFrmRt = 60;
++    ui_attr.u32DispWidth = rkadk_dev->width;
++    ui_attr.u32DispHeight = rkadk_dev->height;
++    ui_attr.u32ImgWidth = rkadk_dev->width;
++    ui_attr.u32ImgHeight = rkadk_dev->height;
++    ui_attr.enUiVoFormat = VO_FORMAT_RGB888;
++    ui_attr.enVoSpliceMode = SPLICE_MODE_RGA;
++    ui_attr.u32Rotation = rkadk_dev->rot;
++    ui_attr.u32DispBufLen = 2;
++
++#ifdef PLATFORM_RV1106
++    ui_attr.enUiVoIntfTye = DISPLAY_TYPE_DEFAULT;
++#else
++    if (rkadk_dev->drm_encode == DRM_MODE_ENCODER_DSI)
++        ui_attr.enUiVoIntfTye = DISPLAY_TYPE_MIPI;
++    else if (rkadk_dev->drm_encode == DRM_MODE_ENCODER_DPI)
++        ui_attr.enUiVoIntfTye = DISPLAY_TYPE_LCD;
++    else
++        ui_attr.enUiVoIntfTye = DISPLAY_TYPE_MIPI;
++#endif
++
++    ret = RKADK_UI_Create(&ui_attr, &rkadk_dev->ui_ptr);
++    if (0 != ret)
++    {
++        err("RKADK_DISP_Init failed(%d)", ret);
++        return -1;
++    }
++
++    info("rk_disp: ui created successfullyl.");
++
++    return 0;
++}
++
++static void rk_disp_teardown(disp_dev_t * rkadk_dev)
++{
++    if (NULL == rkadk_dev->ui_ptr)
++        return;
++
++    int32_t ret = RKADK_UI_Destroy(rkadk_dev->ui_ptr);
++    if (0 != ret)
++        err("RKADK_DISP_Init failed(%d)", ret);
++
++    info("rk_disp: ui destroyed successfully.");
++}
++
++static int rk_disp_setup_buffers(disp_dev_t * rkadk_dev)
++{
++    int32_t ret;
++    uint32_t i, size;
++    void *blk = NULL;
++    MB_POOL_CONFIG_S pool_cfg;
++    RKADK_FORMAT_E format;
++
++    if (LV_COLOR_DEPTH == 32)
++    {
++        format = RKADK_FMT_BGRA8888;
++    }
++    else
++    {
++        format = -1;
++        err("%d: Unsupported format\n", __LINE__);
++        return -1;
++    }
++
++    size = rkadk_dev->width * rkadk_dev->height * (LV_COLOR_DEPTH >> 3);
++
++    memset(&pool_cfg, 0, sizeof(MB_POOL_CONFIG_S));
++    pool_cfg.u64MBSize = size;
++    pool_cfg.u32MBCnt  = 3;
++    pool_cfg.enRemapMode = MB_REMAP_MODE_CACHED;
++    pool_cfg.enDmaType = MB_DMA_TYPE_CMA;
++    pool_cfg.enAllocType = MB_ALLOC_TYPE_DMA;
++    pool_cfg.bPreAlloc = RK_TRUE;
++    rkadk_dev->buf_pool = RK_MPI_MB_CreatePool(&pool_cfg);
++    if (rkadk_dev->buf_pool == -1)
++    {
++        err("%d: Create pool failed\n", __LINE__);
++        return -1;
++    }
++
++    rkadk_dev->frame_info.Format = format;
++
++    if ((rkadk_dev->rot == LV_DISPLAY_ROTATION_90) ||
++        (rkadk_dev->rot == LV_DISPLAY_ROTATION_270))
++    {
++        rkadk_dev->frame_info.u32Width = rkadk_dev->height;
++        rkadk_dev->frame_info.u32Height = rkadk_dev->width;
++    }
++    else
++    {
++        rkadk_dev->frame_info.u32Width = rkadk_dev->width;
++        rkadk_dev->frame_info.u32Height = rkadk_dev->height;
++    }
++
++    return 0;
++}
++
++static void rk_disp_teardown_buffers(disp_dev_t * rkadk_dev)
++{
++    RK_MPI_MB_DestroyPool(rkadk_dev->buf_pool);
++}
++
++disp_dev_t * rk_disp_init(lv_display_rotation_t rotate_disp)
++{
++    disp_dev_t * rkadk_dev;
++    int32_t ret;
++
++    rkadk_dev = lv_malloc_zeroed(sizeof(disp_dev_t));
++    if (!rkadk_dev)
++    {
++        err("%d: create rkadk_dev failed", __LINE__);
++        return NULL;
++    }
++    rkadk_dev->rot = rotate_disp;
++
++    ret = get_disp_info(rkadk_dev);
++    if (0 != ret)
++    {
++        err("%d: get display info failed", __LINE__);
++        lv_free(rkadk_dev);
++        goto err1;
++    }
++
++    ret = rk_disp_setup(rkadk_dev);
++    if (0 != ret)
++    {
++        err("%d: rk_disp_setup failed", __LINE__);
++        goto err1;
++    }
++
++    ret = rk_disp_setup_buffers(rkadk_dev);
++    if (0 != ret)
++    {
++        err("%d, Allocating display buffer failed", __LINE__);
++        goto err2;
++    }
++
++    return rkadk_dev;
++err1:
++    rk_disp_teardown(rkadk_dev);
++err2:
++    lv_free(rkadk_dev);
++
++    return NULL;
++}
++
++void rk_disp_exit(disp_dev_t * rkadk_dev)
++{
++    rk_disp_teardown_buffers(rkadk_dev);
++    rk_disp_teardown(rkadk_dev);
++    RKADK_MPI_SYS_Exit();
++    lv_free(rkadk_dev);
++}
++
++static int count = 0;
++void rk_disp_flush(lv_display_t * disp, const lv_area_t * area, uint8_t * color_p)
++{
++    disp_dev_t * rkadk_dev = lv_display_get_driver_data(disp);
++    MB_BLK blk;
++    void *dst_ptr;
++    int src_fd;
++    int dst_fd;
++    lv_coord_t w = (area->x2 - area->x1 + 1);
++    lv_coord_t h = (area->y2 - area->y1 + 1);
++
++    if (!lv_display_flush_is_last(disp))
++        goto end;
++
++    dbg("x %d:%d y %d:%d w %d h %d", area->x1, area->x2,
++        area->y1, area->y2, w, h);
++
++    blk = RK_MPI_MB_GetMB(rkadk_dev->buf_pool, rkadk_dev->draw_buf.size, RK_TRUE);
++    if (!blk)
++    {
++        err("%d, GetMB failed\n", __LINE__);
++        return;
++    }
++
++    src_fd = rkadk_dev->draw_buf.fd;
++    dst_ptr = RK_MPI_MMZ_Handle2VirAddr(blk);
++    dst_fd = RK_MPI_MMZ_Handle2Fd(blk);
++    RK_MPI_SYS_MmzFlushCache(rkadk_dev->draw_buf_blk, RK_FALSE);
++#if 0
++    // CPU
++    memcpy(dst_ptr, color_p, lv_area_get_size(area) * (LV_COLOR_DEPTH >> 3));
++#else
++    // RGA
++    rga_buffer_t src_img, dst_img;
++    int hor_res, ver_res;
++    int format;
++    int ret;
++
++    if (LV_COLOR_DEPTH == 32)
++        format = RK_FORMAT_BGRA_8888;
++    else if (LV_COLOR_DEPTH == 16)
++        format = RK_FORMAT_BGR_565;
++    else
++        err("Unsupport format\n");
++    hor_res = lv_display_get_horizontal_resolution(disp);
++    ver_res = lv_display_get_vertical_resolution(disp);
++    src_img = wrapbuffer_fd(src_fd, hor_res, ver_res, format);
++    dst_img = wrapbuffer_fd(dst_fd, hor_res, ver_res, format);
++    //src_img = wrapbuffer_physicaladdr(color_p, hor_res, ver_res, format);
++    //dst_img = wrapbuffer_physicaladdr(dst_ptr, hor_res, ver_res, format);
++    ret = imcheck(src_img, dst_img, (im_rect){}, (im_rect){});
++    if (ret != IM_STATUS_NOERROR) {
++        err("%d, check error! %s\n", __LINE__, imStrError((IM_STATUS)ret));
++        return;
++    }
++    ret = imcopy(src_img, dst_img);
++    if (ret != IM_STATUS_SUCCESS)
++        err("%d, running failed, %s\n", __LINE__, imStrError((IM_STATUS)ret));
++#endif
++    rkadk_dev->frame_info.pMblk = blk;
++    RK_MPI_SYS_MmzFlushCache(blk, RK_FALSE);
++    RKADK_UI_Update(rkadk_dev->ui_ptr, &(rkadk_dev->frame_info));
++    RK_MPI_MB_ReleaseMB(blk);
++end:
++    lv_disp_flush_ready(disp);
++}
++
++void rk_disp_get_sizes(disp_dev_t * rkadk_dev, lv_coord_t *width, lv_coord_t *height, uint32_t *dpi)
++{
++    if (width)
++        *width = rkadk_dev->width;
++
++    if (height)
++        *height = rkadk_dev->height;
++
++    if (dpi && rkadk_dev->mm_width)
++        *dpi = DIV_ROUND_UP(rkadk_dev->width * 25400, rkadk_dev->mm_width * 1000);
++
++    return;
++}
++
++lv_display_t *lv_rkadk_disp_create(lv_display_rotation_t rotate_disp)
++{
++    disp_dev_t * rkadk_dev;
++    lv_coord_t lcd_w, lcd_h;
++    int ret;
++
++    rkadk_dev = rk_disp_init(rotate_disp);
++    if(ret == -1) {
++        err("rk_disp_init failed\n");
++        return NULL;
++    }
++    rk_disp_get_sizes(rkadk_dev, &lcd_w, &lcd_h, NULL);
++
++    uint32_t size = lcd_w * lcd_h * (LV_COLOR_DEPTH >> 3);
++    MB_BLK blk;
++    if (0 != RK_MPI_MMZ_Alloc(&blk, size, RK_MMZ_ALLOC_CACHEABLE))
++    {
++        err("RK_MPI_MMZ_Alloc failed\n");
++        rk_disp_exit(rkadk_dev);
++        return NULL;
++    }
++    rkadk_dev->draw_buf_blk = blk;
++    rkadk_dev->draw_buf.size = size;
++    rkadk_dev->draw_buf.map = RK_MPI_MMZ_Handle2VirAddr(blk);
++    rkadk_dev->draw_buf.fd = RK_MPI_MMZ_Handle2Fd(blk);
++
++    lv_display_t * disp;
++    if ((rotate_disp == LV_DISPLAY_ROTATION_90) ||
++        (rotate_disp == LV_DISPLAY_ROTATION_270))
++        disp = lv_display_create(lcd_h, lcd_w);
++    else
++        disp = lv_display_create(lcd_w, lcd_h);
++    if (disp == NULL) {
++        RK_MPI_MMZ_Free(rkadk_dev->draw_buf_blk);
++        rk_disp_exit(rkadk_dev);
++        err("lv_display_create failed");
++        return NULL;
++    }
++    lv_display_set_driver_data(disp, rkadk_dev);
++    lv_display_set_flush_cb(disp, rk_disp_flush);
++    lv_display_set_buffers(disp, rkadk_dev->draw_buf.map, NULL,
++                           rkadk_dev->draw_buf.size,
++                           LV_DISPLAY_RENDER_MODE_DIRECT);
++    lv_display_set_color_format(disp, LV_COLOR_FORMAT_NATIVE_WITH_ALPHA);
++
++    return disp;
++}
++
++void lv_rkadk_disp_delete(lv_display_t * disp)
++{
++    disp_dev_t * rkadk_dev = lv_display_get_driver_data(disp);
++
++    if (NULL != rkadk_dev->draw_buf_blk)
++    {
++        RK_MPI_MMZ_Free(rkadk_dev->draw_buf_blk);
++        rkadk_dev->draw_buf_blk = NULL;
++    }
++
++    rk_disp_exit(rkadk_dev);
++
++    lv_display_delete(disp);
++}
++
++#endif
+diff --git a/src/drivers/display/rkadk/rkadk.h b/src/drivers/display/rkadk/rkadk.h
+new file mode 100644
+index 000000000..8926602c0
+--- /dev/null
++++ b/src/drivers/display/rkadk/rkadk.h
+@@ -0,0 +1,25 @@
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++/*********************
++ *      INCLUDES
++ *********************/
++#include <lvgl.h>
++
++#if LV_USE_RKADK
++#include <rkadk/rkadk_media_comm.h>
++#include <rkadk/rkadk_ui.h>
++
++// Concrete realization
++/**********************
++ * GLOBAL PROTOTYPES
++ **********************/
++lv_display_t *lv_rkadk_disp_create(lv_display_rotation_t rotate_disp);
++void lv_rkadk_disp_delete(lv_display_t * disp);
++
++#endif  /*USE_RKADK*/
++
++#ifdef __cplusplus
++} /* extern "C" */
++#endif
+-- 
+2.25.1
+

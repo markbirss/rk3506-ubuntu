@@ -1,0 +1,5 @@
+config BR2_PACKAGE_ROCKCHIP_UAC_APP
+	bool "rockchip-uac-app"
+	depends on BR2_PACKAGE_ROCKIT
+	help
+	  Rockchip uac app.

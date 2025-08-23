@@ -1,0 +1,184 @@
+source "$BSP_DIR/../common/drivers/Kconfig"
+
+menu "RT-Thread rockchip rk2108 drivers"
+
+source "$BSP_DIR/drivers/Kconfig.audio"
+
+config RT_USING_CRU
+    bool "Enable CRU"
+    default n
+
+config RT_USING_DMA
+    bool "Enable General DMA Framework"
+    default n
+
+if RT_USING_DMA
+    config RT_USING_DMA_PL330
+        bool "Enable PL330 DMA Controller"
+        default n
+
+    config RT_USING_DMA0
+        bool "Enable PL330 DMA0 Controller"
+        default n
+endif
+
+config RT_USING_PMU
+    bool "Enable PMU"
+    default n
+
+config RT_USING_DISPLAY
+    bool "Enable Display"
+    default n
+
+choice
+    prompt "Display Controller"
+    depends on RT_USING_DISPLAY
+
+    config RT_USING_VOP
+        bool "Enable VOP Composite"
+        depends on RT_USING_DISPLAY
+        default n
+
+    config RT_USING_SPI_SCREEN
+        bool "Enable SPI Transfer"
+        depends on RT_USING_SPI
+        default n
+        help
+          This display driver does not require the use of a VOP controller, and only
+          uses SPI to transmit display data.
+endchoice
+
+choice
+    prompt "Display Interface"
+    depends on RT_USING_VOP
+
+    config RT_USING_VOP_MCU
+        bool "Enable MCU Display Port"
+        default n
+
+    config RT_USING_DSI
+        bool "Enable MIPI DSI"
+        default n
+endchoice
+
+config RT_USING_KEYCTRL
+     bool "Enable KEYCTRL"
+     default n
+
+if RT_USING_PWM
+config RT_USING_PWM0
+    bool "Enable PWM0"
+    default n
+endif
+
+menu "Enable DSP"
+    config RT_USING_DSP
+        bool "Enable DSP"
+        select RT_USING_UNCACHE_HEAP
+        default n
+
+    if RT_USING_DSP
+    config RT_USING_DSPFW_LOADER
+        bool "Enable firmware loader to dsp"
+        default n
+
+    choice
+        prompt "Dsp firmware path"
+        default RT_USING_DSPFW_FILE
+        depends on RT_USING_DSPFW_LOADER
+
+        config RT_USING_DSPFW_BUILTIN
+            bool "Store firmware data in builtin"
+
+        config RT_USING_DSPFW_FILE
+            bool "Store firmware data in file"
+    endchoice
+
+    config RT_PATH_DSPFW
+        string "Dsp firmware path"
+        default "/rkdsp.bin"
+        depends on RT_USING_DSPFW_FILE
+
+    config RT_DSPFW_FILE_NAME
+        string "Dsp firmware file name"
+        default "rkdsp_fw.c"
+        depends on RT_USING_DSPFW_BUILTIN
+
+    config RT_USING_DSP_TRACE
+        bool "Enable dsp send trace to cm4"
+        default n
+
+    config RT_DSP_UART_PORT
+        int "Config dsp debug uart port"
+        range -1 2
+        default -1
+        help
+            set -1, will not set uart port to dsp
+    endif
+endmenu
+
+menu "Enable UART"
+    config RT_USING_UART
+        bool "Enable UART"
+        default n
+
+    if RT_USING_UART
+    config RT_USING_UART0
+        bool "Enable UART0"
+        default n
+
+    config RT_USING_UART1
+        bool "Enable UART1"
+        default n
+
+    config RT_USING_UART2
+        bool "Enable UART2"
+        default n
+    endif
+endmenu
+
+if RT_USING_I2C
+menu "Enable I2C"
+    config RT_USING_I2C0
+        bool "Enable I2C0"
+        default n
+
+    config RT_USING_I2C1
+        bool "Enable I2C1"
+        default n
+
+    config RT_USING_I2C2
+        bool "Enable I2C2"
+        default n
+endmenu
+endif
+
+if RT_USING_SPI
+menu "Enable SPI"
+    config RT_USING_SPI2APB
+        bool "Enable SPI0 (SPI2APB)"
+        default n
+
+    config RT_USING_SPI1
+        bool "Enable SPI1"
+        default n
+
+    config RT_USING_SPI2
+        bool "Enable SPI2"
+        default n
+endmenu
+endif
+
+if RT_USING_SDIO
+menu "Enable SDIO/SDMMC/eMMC"
+    config RT_USING_SDIO0
+        bool "Enable SDIO controller"
+        default n
+endmenu
+endif
+
+config RT_USING_SYSTICK
+     bool "Enable SYSTICK"
+     default n
+
+endmenu

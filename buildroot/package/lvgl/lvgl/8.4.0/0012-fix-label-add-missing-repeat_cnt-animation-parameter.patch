@@ -1,0 +1,33 @@
+From ce5ccd430a415a3dbbbd46cb347fd87a64fed977 Mon Sep 17 00:00:00 2001
+From: BBsan <bbsan2k@gmail.com>
+Date: Wed, 2 Oct 2024 15:22:45 +0200
+Subject: [PATCH 12/35] fix(label): add missing repeat_cnt animation parameter
+ synchronization (#6970)
+
+---
+ src/widgets/lv_label.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/widgets/lv_label.c b/src/widgets/lv_label.c
+index 840a1313f..e1b3e8df1 100644
+--- a/src/widgets/lv_label.c
++++ b/src/widgets/lv_label.c
+@@ -1059,6 +1059,7 @@ static void lv_label_refr_text(lv_obj_t * obj)
+             if(anim_template) {
+                 a.act_time = anim_template->act_time;
+                 a.repeat_delay = anim_template->repeat_delay;
++                a.repeat_cnt = anim_template->repeat_cnt;
+             }
+             else if(act_time < a.time) {
+                 a.act_time = act_time;      /*To keep the old position when the label text is updated mid-scrolling*/
+@@ -1086,6 +1087,7 @@ static void lv_label_refr_text(lv_obj_t * obj)
+             if(anim_template) {
+                 a.act_time = anim_template->act_time;
+                 a.repeat_delay = anim_template->repeat_delay;
++                a.repeat_cnt = anim_template->repeat_cnt;
+             }
+             else if(act_time < a.time) {
+                 a.act_time = act_time;      /*To keep the old position when the label text is updated mid-scrolling*/
+-- 
+2.25.1
+

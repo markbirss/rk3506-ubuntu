@@ -1,0 +1,9 @@
+{
+    "MAGIC": "RESC",
+    "CHIP": "2118",
+    "MODEL": "RT-Thread",
+    "DESC": "RK2118 RT-Thread",
+    "VERSION": "1.00.0000",
+    "DIGEST": "SHA256",
+    "LOADING_ADDRESS": "0x013a0800"
+}

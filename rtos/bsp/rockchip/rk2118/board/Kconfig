@@ -1,0 +1,84 @@
+menu "RT-Thread board config"
+
+config IS_FPGA
+    bool "Is FPGA Board"
+    default n
+
+choice
+    prompt "Clock config"
+    default RT_USING_CLK_CONFIG0
+
+    config RT_USING_CLK_CONFIG0
+        bool "clk config0: for RK2118M"
+
+    config RT_USING_CLK_CONFIG1
+        bool "clk config1: for rk2118BM"
+
+    config RT_USING_CLK_CONFIG2
+        bool "clk config2: for rk2118G or RK2118B"
+
+endchoice
+
+config RT_USING_DDR
+    bool "using DRAM, only available for RK2118B or RK2118G"
+    default n
+
+choice
+    prompt "Board Type"
+    default RT_USING_BOARD_FPGA
+
+    config RT_USING_BOARD_FPGA
+        bool "Enable FPGA board"
+        select IS_FPGA
+
+    config RT_USING_BOARD_ADSP_DEMO
+        bool "Enable ADSP demo board"
+
+    config RT_USING_BOARD_IOTEST
+        bool "Enable io test board"
+        select RT_USING_DDR
+
+    config RT_USING_BOARD_SOUNDBAR_CORE
+        bool "Enable soundbar core board"
+        select RT_USING_DDR
+
+    config RT_USING_BOARD_EVB
+        bool "Enable evb board"
+        select RT_USING_DDR
+
+    config RT_USING_BOARD_EVB1_V20
+        bool "Enable evb1 v20 board"
+        select RT_USING_DDR
+
+    config RT_USING_BOARD_EVB3_V10
+        bool "Enable evb3 v10 board"
+        select RT_USING_DDR
+
+    config RT_USING_BOARD_TEST1
+        bool "Enable test1 board"
+        select RT_USING_DDR
+
+    config RT_USING_BOARD_AMP_DEMO
+        bool "Enable amplifier terminal demo board"
+
+    config RT_USING_BOARD_VEHICLE_DEMO
+        bool "Enable vehicle terminal demo board"
+endchoice
+
+config RT_USING_HIFI4
+    bool "Enable hifi4 driver"
+    default n
+
+    if RT_USING_HIFI4
+        config RT_USING_HIFI4_FW_BUILTIN
+        bool "hifi4 firmware builtin"
+        default n
+    endif
+
+source "$RTT_DIR/components/hifi4/samples/rk2118/Kconfig"
+source "$RTT_DIR/components/hifi4/rtt/app/Kconfig"
+source "$RTT_DIR/components/hifi4/rtt/codecs/Kconfig"
+source "$RTT_DIR/components/hifi4/rtt/rkstudio_comm/Kconfig"
+source "$RTT_DIR/components/hifi4/rtt/rkstudio_parser/Kconfig"
+source "$BSP_DIR/../common/fwmgr/Kconfig"
+endmenu

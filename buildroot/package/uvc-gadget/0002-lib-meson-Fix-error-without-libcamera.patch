@@ -1,0 +1,26 @@
+From 2b15f9159f0295bc702d189011369cf4133e395f Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 21 Jun 2024 17:49:17 +0800
+Subject: [PATCH 2/2] lib: meson: Fix error without libcamera
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ lib/meson.build | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/lib/meson.build b/lib/meson.build
+index f2626fa..8f18ee6 100644
+--- a/lib/meson.build
++++ b/lib/meson.build
+@@ -19,7 +19,7 @@ if libcamera.found()
+   libuvcgadget_sources += files(['libcamera-source.cpp'])
+ endif
+ 
+-if libjpeg.found() and threads.found()
++if libcamera.found() and libjpeg.found() and threads.found()
+   libuvcgadget_sources += files(['mjpeg_encoder.cpp'])
+ endif
+ 
+-- 
+2.20.1
+

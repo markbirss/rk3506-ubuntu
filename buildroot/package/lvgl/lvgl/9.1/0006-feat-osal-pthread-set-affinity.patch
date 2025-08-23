@@ -1,0 +1,110 @@
+From da5352a495793d8f558f8affe997a3aa3eb33b7c Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Sat, 2 Nov 2024 10:33:11 +0800
+Subject: [PATCH 06/12] feat(osal): pthread set affinity
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ src/osal/lv_pthread.c | 48 +++++++++++++++++++++++++++++++++++++++++++
+ src/osal/lv_pthread.h |  1 +
+ 2 files changed, 49 insertions(+)
+
+diff --git a/src/osal/lv_pthread.c b/src/osal/lv_pthread.c
+index 68676c9..a1f4760 100644
+--- a/src/osal/lv_pthread.c
++++ b/src/osal/lv_pthread.c
+@@ -6,10 +6,21 @@
+ /*********************
+  *      INCLUDES
+  *********************/
++#define __USE_GNU
++#define _GNU_SOURCE
++#define __GNU_SOURCE
+ #include "lv_os.h"
+ 
+ #if LV_USE_OS == LV_OS_PTHREAD
+ 
++#include <stdlib.h>
++#include <unistd.h>
++#include <stdio.h>
++#include <assert.h>
++#include <sys/syscall.h>
++
++#define gettid() syscall(SYS_gettid)
++
+ #include <errno.h>
+ #include "../misc/lv_log.h"
+ 
+@@ -38,6 +49,35 @@ static void * generic_callback(void * user_data);
+  *   GLOBAL FUNCTIONS
+  **********************/
+ 
++static int thread_bind_cpu(int target_cpu)
++{
++   cpu_set_t mask;
++   int cpu_num = sysconf(_SC_NPROCESSORS_CONF);
++   int i;
++
++   if (target_cpu >= cpu_num)
++      return -1;
++
++   CPU_ZERO(&mask);
++   CPU_SET(target_cpu, &mask);
++
++   if (pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask) < 0)
++      perror("pthread_setaffinity_np");
++
++   if (pthread_getaffinity_np(pthread_self(), sizeof(mask), &mask) < 0)
++      perror("pthread_getaffinity_np");
++
++   printf("Thread(%ld) bound to cpu:", gettid());
++   for (i = 0; i < CPU_SETSIZE; i++) {
++      if (CPU_ISSET(i, &mask))
++         printf(" %d", i);
++   }
++   printf("\n");
++
++   return i >= cpu_num ? -1 : i;
++}
++
++static int thread_id = 0;
+ lv_result_t lv_thread_init(lv_thread_t * thread, lv_thread_prio_t prio, void (*callback)(void *), size_t stack_size,
+                            void * user_data)
+ {
+@@ -45,6 +85,7 @@ lv_result_t lv_thread_init(lv_thread_t * thread, lv_thread_prio_t prio, void (*c
+     LV_UNUSED(stack_size);
+     thread->callback = callback;
+     thread->user_data = user_data;
++    thread->id = thread_id++;
+     pthread_create(&thread->thread, NULL, generic_callback, thread);
+     return LV_RESULT_OK;
+ }
+@@ -157,6 +198,13 @@ lv_result_t lv_thread_sync_delete(lv_thread_sync_t * sync)
+ static void * generic_callback(void * user_data)
+ {
+     lv_thread_t * thread = user_data;
++
++    /* HACK, bind thread to CPU in order */
++    int cpu_num = sysconf(_SC_NPROCESSORS_CONF);
++    int id = thread->id;
++    id %= cpu_num;
++    thread_bind_cpu(id);
++
+     thread->callback(thread->user_data);
+     return NULL;
+ }
+diff --git a/src/osal/lv_pthread.h b/src/osal/lv_pthread.h
+index e7abc90..f557e0f 100644
+--- a/src/osal/lv_pthread.h
++++ b/src/osal/lv_pthread.h
+@@ -30,6 +30,7 @@ typedef struct {
+     pthread_t thread;
+     void (*callback)(void *);
+     void * user_data;
++    int id;
+ } lv_thread_t;
+ 
+ typedef pthread_mutex_t lv_mutex_t;
+-- 
+2.25.1
+

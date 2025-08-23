@@ -1,0 +1,75 @@
+################################################################################
+#
+# lvgl_demo
+#
+################################################################################
+
+LVGL_DEMO_SITE = $(TOPDIR)/../app/lvgl_demo
+LVGL_DEMO_SITE_METHOD = local
+
+# add dependencies
+LVGL_DEMO_DEPENDENCIES += lvgl
+
+LVGL_DEMO_INSTALL_STAGING = YES
+
+ifeq ($(BR2_PACKAGE_LVGL_VERSION_9), y)
+LVGL_DEMO_CONF_OPTS += -DLVGL_V9=1
+endif
+
+ifeq ($(BR2_LVGL_DEMO_WIDGETS), y)
+LVGL_DEMO_CONF_OPTS += -DLVGL_DEMO_WIDGETS=1
+endif
+
+ifeq ($(BR2_LVGL_DEMO_BENCHMARK), y)
+LVGL_DEMO_CONF_OPTS += -DLVGL_DEMO_BENCHMARK=1
+endif
+
+ifeq ($(BR2_LVGL_DEMO_MUSIC), y)
+LVGL_DEMO_CONF_OPTS += -DLVGL_DEMO_MUSIC=1
+endif
+
+ifeq ($(BR2_LVGL_DEMO_RK_DEMO), y)
+ifeq ($(BR2_RK_DEMO_ENABLE_MULTIMEDIA), y)
+LVGL_DEMO_DEPENDENCIES += rockit rkadk
+endif
+ifeq ($(BR2_RK_DEMO_ENABLE_WIFIBT), y)
+LVGL_DEMO_DEPENDENCIES += rkwifibt-app
+endif
+LVGL_DEMO_CONF_OPTS += -DRK_DEMO_MULTIMEDIA_EN=$(if $(BR2_RK_DEMO_ENABLE_MULTIMEDIA),1,0)
+LVGL_DEMO_CONF_OPTS += -DRK_DEMO_SENSOR_EN=$(if $(BR2_RK_DEMO_ENABLE_SENSOR),1,0)
+LVGL_DEMO_CONF_OPTS += -DRK_DEMO_WIFIBT_EN=$(if $(BR2_RK_DEMO_ENABLE_WIFIBT),1,0)
+LVGL_DEMO_CONF_OPTS += -DRK_DEMO_ASR_EN=$(if $(BR2_RK_DEMO_ENABLE_ASR),1,0)
+LVGL_DEMO_CONF_OPTS += -DLV_USE_RK_DEMO=1
+endif
+
+ifeq ($(BR2_LVGL_DEMO_BACKEND_SDL), y)
+LVGL_DEMO_CONF_OPTS += -DLV_DRV_USE_SDL_GPU=1
+LVGL_DEMO_DEPENDENCIES += sdl2
+endif
+
+ifeq ($(BR2_LVGL_DEMO_BACKEND_DRM), y)
+LVGL_DEMO_CONF_OPTS += -DLV_DRV_USE_DRM=1
+LVGL_DEMO_DEPENDENCIES += libdrm libevdev
+ifeq ($(BR2_LV_DRM_USE_RGA), y)
+LVGL_DEMO_CONF_OPTS += -DLV_USE_RGA=1
+LVGL_DEMO_DEPENDENCIES += rockchip-rga
+endif
+endif
+
+ifeq ($(BR2_LVGL_DEMO_BACKEND_RKADK), y)
+LVGL_DEMO_CONF_OPTS += -DLV_DRV_USE_RKADK=1
+LVGL_DEMO_DEPENDENCIES += rkadk rockchip-rga libevdev
+endif
+
+ifeq ($(BR2_PACKAGE_LV_DRIVERS), y)
+LVGL_DEMO_DEPENDENCIES += lv_drivers
+ifeq ($(BR2_LV_DRIVERS_USE_OPENGL), y)
+LVGL_DEMO_CONF_OPTS += -DLV_DRV_USE_OPENGL=1
+endif
+endif
+
+ifeq ($(BR2_PACKAGE_RK3506), y)
+LVGL_DEMO_CONF_OPTS += -DLVGL_DEMO_RK3506=1
+endif
+
+$(eval $(cmake-package))

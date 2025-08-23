@@ -1,0 +1,15 @@
+ver 1.6.2
+	Support ANCS (Apple Notification Center Service (ANCS) Specification)
+	Support ATT_MTU Report for ble read/write
+	Fixed scan_type error
+	Support Separate management of BLE/BREDR with same addr
+	Update SPP API
+	Support Disconnected Reason to User
+	Add bt config file (/data/main.conf: ssp/sc/gatt_client/discovery time/Controll_mode)
+	Support custom pincode for ssp_disable
+	Support debug info options
+	Support WPA2_WPA3 mixed encryption
+	Support pairing confirm callback
+	Fixed error during bt_on/off test
+	Refactoring bt_test_vendor_cb in bt_test.c
+	Refactoring bt/ble_name field

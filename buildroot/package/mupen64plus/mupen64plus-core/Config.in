@@ -1,0 +1,11 @@
+config BR2_PACKAGE_MUPEN64PLUS_CORE
+        bool "mupen64plus-core"
+	depends on BR2_PACKAGE_SDL2
+	depends on BR2_INSTALL_LIBSTDCPP
+	depends on BR2_PACKAGE_LIBPNG
+	depends on BR2_PACKAGE_ZLIB
+	default y
+        help
+          mupen64plus core.
+
+	  https://mupen64plus.org/

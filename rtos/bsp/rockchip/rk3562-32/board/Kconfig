@@ -1,0 +1,9 @@
+menu "RT-Thread board config"
+
+config RT_BOARD_NAME
+    string "the board name that you use"
+    default "rk3562_evb1_lp4x"
+
+source "$BSP_DIR/board/$RT_BOARD_NAME/Kconfig"
+
+endmenu

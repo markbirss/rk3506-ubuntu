@@ -1,0 +1,201 @@
+From dc9372345f7e5a339be564ad43c2f695f1d6261d Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Thu, 9 May 2024 18:17:00 +0800
+Subject: [PATCH 1/2] Support device icon
+
+Use "/etc/umtprd/devicon.ico" by default.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ inc/default_cfg.h          |  2 ++
+ inc/mtp.h                  |  2 ++
+ src/mtp_cfg.c              |  9 ++++++
+ src/mtp_constant_strings.c |  1 +
+ src/mtp_properties.c       | 62 ++++++++++++++++++++++++++++++++++++++
+ 5 files changed, 76 insertions(+)
+
+diff --git a/inc/default_cfg.h b/inc/default_cfg.h
+index ad41e28..03c8c74 100644
+--- a/inc/default_cfg.h
++++ b/inc/default_cfg.h
+@@ -53,4 +53,6 @@
+ #define PRODUCT      "The Viveris Product !"
+ #define SERIALNUMBER "01234567"
+ 
++#define DEVICE_ICON "/etc/umtprd/devicon.ico"
++
+ #endif
+diff --git a/inc/mtp.h b/inc/mtp.h
+index 2c7db88..30b2b07 100644
+--- a/inc/mtp.h
++++ b/inc/mtp.h
+@@ -66,6 +66,8 @@ typedef struct mtp_usb_cfg_
+ 
+ 	char usb_string_interface[MAX_CFG_STRING_SIZE + 1];
+ 
++	char device_icon[MAX_CFG_STRING_SIZE + 1];
++
+ 	int wait_connection;
+ 	int loop_on_disconnect;
+ 
+diff --git a/src/mtp_cfg.c b/src/mtp_cfg.c
+index 6a23637..c0e38ec 100644
+--- a/src/mtp_cfg.c
++++ b/src/mtp_cfg.c
+@@ -70,6 +70,8 @@ enum
+ 	VERSION_STRING_CMD,
+ 	INTERFACE_STRING_CMD,
+ 
++	DEVICE_ICON_PATH_CMD,
++
+ 	WAIT_CONNECTION,
+ 	LOOP_ON_DISCONNECT,
+ 
+@@ -530,6 +532,10 @@ static int get_str_param(mtp_ctx * context, char * line,int cmd)
+ 			case INTERFACE_STRING_CMD:
+ 				strncpy(context->usb_cfg.usb_string_interface,tmp_txt,MAX_CFG_STRING_SIZE);
+ 			break;
++
++			case DEVICE_ICON_PATH_CMD:
++				strncpy(context->usb_cfg.device_icon,tmp_txt,MAX_CFG_STRING_SIZE);
++			break;
+ 		}
+ 	}
+ 
+@@ -606,6 +612,7 @@ kw_list kwlist[] =
+ 	{"serial",                 get_str_param,   SERIAL_STRING_CMD},
+ 	{"firmware_version",       get_str_param,   VERSION_STRING_CMD},
+ 	{"interface",              get_str_param,   INTERFACE_STRING_CMD},
++	{"device_icon",            get_str_param,   DEVICE_ICON_PATH_CMD},
+ 
+ 	{"wait",                   get_hex_param,   WAIT_CONNECTION},
+ 	{"loop_on_disconnect",     get_hex_param,   LOOP_ON_DISCONNECT},
+@@ -681,6 +688,7 @@ int mtp_load_config_file(mtp_ctx * context, const char * conffile)
+ 	strncpy(context->usb_cfg.usb_string_serial,       SERIALNUMBER,           MAX_CFG_STRING_SIZE);
+ 	strncpy(context->usb_cfg.usb_string_version,      "Rev A",                MAX_CFG_STRING_SIZE);
+ 	strncpy(context->usb_cfg.usb_string_interface,    "MTP",                  MAX_CFG_STRING_SIZE);
++	strncpy(context->usb_cfg.device_icon,             DEVICE_ICON,            MAX_CFG_STRING_SIZE);
+ 
+ 	context->usb_cfg.usb_vendor_id       = USB_DEV_VENDOR_ID;
+ 	context->usb_cfg.usb_product_id      = USB_DEV_PRODUCT_ID;
+@@ -745,6 +753,7 @@ int mtp_load_config_file(mtp_ctx * context, const char * conffile)
+ 	PRINT_MSG("USB subclass ID : 0x%.2X",context->usb_cfg.usb_subclass);
+ 	PRINT_MSG("USB Protocol ID : 0x%.2X",context->usb_cfg.usb_protocol);
+ 	PRINT_MSG("USB Device version : 0x%.4X",context->usb_cfg.usb_dev_version);
++	PRINT_MSG("USB Device icon : %s",context->usb_cfg.device_icon);
+ 
+ 	if(context->usb_cfg.usb_functionfs_mode)
+ 	{
+diff --git a/src/mtp_constant_strings.c b/src/mtp_constant_strings.c
+index 0e5c7dd..b5dd8d0 100644
+--- a/src/mtp_constant_strings.c
++++ b/src/mtp_constant_strings.c
+@@ -110,6 +110,7 @@ const propertystring property_codes[]=
+ {
+ 	{ "MTP_DEVICE_PROPERTY_SYNCHRONIZATION_PARTNER",       0xD401 },
+ 	{ "MTP_DEVICE_PROPERTY_DEVICE_FRIENDLY_NAME",          0xD402 },
++	{ "MTP_DEVICE_PROPERTY_DEVICE_ICON",                   0xD405 },
+ 	{ "MTP_DEVICE_PROPERTY_IMAGE_SIZE",                    0x5003 },
+ 	{ "MTP_DEVICE_PROPERTY_BATTERY_LEVEL",                 0x5001 },
+ 	{ "MTP_PROPERTY_STORAGE_ID",                           0xDC01 },
+diff --git a/src/mtp_properties.c b/src/mtp_properties.c
+index d21229d..60d0d2f 100644
+--- a/src/mtp_properties.c
++++ b/src/mtp_properties.c
+@@ -29,6 +29,8 @@
+ #include <pthread.h>
+ #include <string.h>
+ #include <stdio.h>
++#include <fcntl.h>
++#include <unistd.h>
+ #include <sys/types.h>
+ #include <sys/stat.h>
+ #include <time.h>
+@@ -279,10 +281,55 @@ const profile_property dev_properties[]=
+ 	//{MTP_DEVICE_PROPERTY_IMAGE_SIZE,                       MTP_TYPE_UINT32,    0x00,   0x00000000           , 0x000000000 , 0x00 },
+ 	{MTP_DEVICE_PROPERTY_BATTERY_LEVEL,                    MTP_TYPE_UINT16,    0x00,   0x00000000           , 0x000000000 , 0x00 },
+ 	{MTP_DEVICE_PROPERTY_DEVICE_FRIENDLY_NAME,             MTP_TYPE_STR,       0x00,   0x00000000           , 0x000000000 , 0x00 },
++	{MTP_DEVICE_PROPERTY_DEVICE_ICON,                      MTP_TYPE_AUINT8,    0x00,   0x00000000           , 0x000000000 , 0x00 },
+ 
+ 	{0xFFFF,                                               MTP_TYPE_UINT32,    0x00,   0x00000000           , 0x000000000 , 0x00 }
+ };
+ 
++static int poke_icon(mtp_ctx * ctx, void * buffer, int ofs, int maxsize)
++{
++	const char *path = ctx->usb_cfg.device_icon;
++	char *data;
++	int fd, size;
++
++	fd = open(path, O_RDONLY);
++	if (fd < 0) {
++		PRINT_MSG("No icon(%s)", path);
++		return -1;
++	}
++
++	size = lseek(fd, 0, SEEK_END);
++	if (size < 0) {
++		PRINT_ERROR("failed to seek icon(%s)", path);
++		close(fd);
++		return -1;
++	}
++	lseek(fd, 0, SEEK_SET);
++
++	data = malloc(size);
++	if (!data) {
++		PRINT_ERROR("failed to alloc with %d", size);
++		close(fd);
++		return -1;
++	}
++
++	size = read(fd, data, size);
++	if (size < 0) {
++		PRINT_ERROR("failed to read icon(%s)", path);
++		free(data);
++		close(fd);
++		return -1;
++	}
++
++	ofs = poke_array(buffer, ofs, maxsize, size, 1, (unsigned char*)data, 1);
++	if (ofs < 0)
++		PRINT_ERROR("icon(%s) overrun (%d/%d), please increase usb_max_wr_buffer_size!", path, size, maxsize);
++
++	free(data);
++	close(fd);
++	return ofs;
++}
++
+ int build_properties_dataset(mtp_ctx * ctx,void * buffer, int maxsize,uint32_t property_id,uint32_t format_id)
+ {
+ 	int ofs,i,j;
+@@ -400,6 +447,17 @@ int build_device_properties_dataset(mtp_ctx * ctx,void * buffer, int maxsize,uin
+ 				ofs = poke32(buffer, ofs, maxsize, dev_properties[i].default_value >> 32);
+ 			break;
+ 
++			case MTP_TYPE_AUINT8:
++				if( property_id == MTP_DEVICE_PROPERTY_DEVICE_ICON ) {
++					ofs = poke32(buffer, ofs, maxsize, dev_properties[i].default_value);
++					ofs = poke_icon(ctx, buffer, ofs, maxsize);
++					if (ofs < 0)
++						return ofs;
++
++					break;
++				}
++				// fall-through
++
+ 			default:
+ 				PRINT_ERROR("build_device_properties_dataset : Unsupported data type : 0x%.4X", dev_properties[i].data_type );
+ 				return 0;
+@@ -663,6 +721,10 @@ int build_DevicePropValue_dataset(mtp_ctx * ctx,void * buffer, int maxsize,uint3
+ 			ofs = poke_string(buffer, ofs, maxsize, ctx->usb_cfg.usb_string_product);
+ 		break;
+ 
++		case MTP_DEVICE_PROPERTY_DEVICE_ICON:
++			ofs = poke_icon(ctx, buffer, ofs, maxsize);
++		break;
++
+ 		default:
+ 			PRINT_ERROR("build_DevicePropValue_dataset : Unsupported property : 0x%.4X (%s)", prop_code, mtp_get_property_string(prop_code));
+ 			return 0;
+-- 
+2.20.1
+

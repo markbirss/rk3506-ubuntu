@@ -1,0 +1,61 @@
+From 89a43f757485255bd7f0b0ab2f63d205d7fff59d Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Tue, 19 Sep 2023 11:05:33 +0800
+Subject: [PATCH 32/95] Support hiding cursor
+
+Add below to weston.ini:
+[shell]
+hide-cursor=true
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ frontend/main.c               | 4 ++++
+ include/libweston/libweston.h | 2 ++
+ libweston/compositor.c        | 3 +++
+ 3 files changed, 9 insertions(+)
+
+diff --git a/frontend/main.c b/frontend/main.c
+index f9824b8..587cf71 100644
+--- a/frontend/main.c
++++ b/frontend/main.c
+@@ -4801,6 +4801,10 @@ wet_main(int argc, char *argv[], const struct weston_testsuite_data *test_data)
+ 		}
+ 	}
+ 
++	section = weston_config_get_section(config, "shell", NULL, NULL);
++	weston_config_section_get_bool(section, "hide-cursor",
++				       &wet.compositor->hide_cursor, false);
++
+ 	if (argc > 1 && strcmp(argv[1], "--") == 0) {
+ 		/* remove the '--' entry and move up the rest */
+ 		for (i = 1; i < argc; i++)
+diff --git a/include/libweston/libweston.h b/include/libweston/libweston.h
+index ba961a8..a23c270 100644
+--- a/include/libweston/libweston.h
++++ b/include/libweston/libweston.h
+@@ -1655,6 +1655,8 @@ struct weston_compositor {
+ 	bool pin_output;
+ 
+ 	bool warm_up;
++
++	bool hide_cursor;
+ };
+ 
+ struct weston_solid_buffer_values {
+diff --git a/libweston/compositor.c b/libweston/compositor.c
+index 3bed0b9..047b6a1 100644
+--- a/libweston/compositor.c
++++ b/libweston/compositor.c
+@@ -3707,6 +3707,9 @@ weston_compositor_build_view_list(struct weston_compositor *compositor)
+ 	wl_list_for_each(layer, &compositor->layer_list, link) {
+ 		bool system_layer = weston_compositor_is_system_layer(layer);
+ 
++		if (compositor->hide_cursor && layer == &compositor->cursor_layer)
++			continue;
++
+ 		wl_list_for_each(view, &layer->view_list.link, layer_link.link) {
+ 			if (compositor->warm_up && !system_layer) {
+ 				weston_log("seeing the first app\n");
+-- 
+2.20.1
+

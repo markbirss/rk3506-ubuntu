@@ -1,0 +1,560 @@
+From a1db3ef45910901eaca6ebca1abdc8a35f74c7ca Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 3 Jul 2020 14:53:52 +0800
+Subject: [PATCH 29/95] HACK: pixman-renderer: Support mali egl client and egl
+ buffer attaching
+
+The mali clients requires mali_buffer_sharing extension, and it needs
+lots of hacks to attach a wl_buffer created in that way.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/meson.build       |   3 +
+ libweston/pixman-renderer.c | 337 +++++++++++++++++++++++++++++++-----
+ meson.build                 |   8 +-
+ 3 files changed, 303 insertions(+), 45 deletions(-)
+
+diff --git a/libweston/meson.build b/libweston/meson.build
+index fc904ee..9804536 100644
+--- a/libweston/meson.build
++++ b/libweston/meson.build
+@@ -88,6 +88,9 @@ subdir('desktop')
+ subdir('shell-utils')
+ 
+ dep_gbm = dependency('gbm', required: false, version: '>= 21.1.1')
++if dep_egl.found()
++	deps_libweston += [ dep_gbm ]
++endif
+ 
+ if get_option('backend-vnc')
+ 	dep_pam = dependency('pam', required: false)
+diff --git a/libweston/pixman-renderer.c b/libweston/pixman-renderer.c
+index 82854a2..914fbb6 100644
+--- a/libweston/pixman-renderer.c
++++ b/libweston/pixman-renderer.c
+@@ -48,6 +48,19 @@
+ #include "linux-dmabuf.h"
+ #include "linux-dmabuf-unstable-v1-server-protocol.h"
+ 
++#ifdef ENABLE_EGL
++#include <fcntl.h>
++#include <sys/stat.h>
++
++#include <gbm.h>
++#include <EGL/egl.h>
++#include <EGL/eglext.h>
++#include <GLES2/gl2.h>
++#include <GLES2/gl2ext.h>
++#include "shared/platform.h"
++#include "shared/weston-egl-ext.h"  /* for PFN* stuff */
++#endif
++
+ struct pixman_output_state {
+ 	pixman_image_t *shadow_image;
+ 	const struct pixel_format_info *shadow_format;
+@@ -86,6 +99,18 @@ struct pixman_renderer {
+ 	struct wl_signal destroy_signal;
+ 
+ 	struct weston_drm_format_array supported_formats;
++
++#ifdef ENABLE_EGL
++	PFNEGLBINDWAYLANDDISPLAYWL bind_display;
++	PFNEGLUNBINDWAYLANDDISPLAYWL unbind_display;
++	PFNEGLQUERYWAYLANDBUFFERWL query_buffer;
++	EGLDisplay egl_display;
++
++	int drm_fd;
++	struct gbm_device *gbm;
++
++	bool egl_inited;
++#endif
+ };
+ 
+ struct dmabuf_data {
+@@ -93,6 +118,17 @@ struct dmabuf_data {
+ 	size_t size;
+ };
+ 
++#ifdef ENABLE_EGL
++/* HACK: It's a guessed struct for mali_buffer_sharing extension */
++struct mali_buffer_sharing_info {
++	int dma_fd;
++	int width;
++	int height;
++	int stride;
++	uint32_t fourcc;
++};
++#endif
++
+ static inline struct pixman_renderbuffer *
+ to_pixman_renderbuffer(struct weston_renderbuffer *renderbuffer)
+ {
+@@ -737,9 +773,22 @@ pixman_renderer_flush_damage(struct weston_paint_node *pnode)
+ 	/* No-op for pixman renderer */
+ }
+ 
++static void
++pixman_renderer_destroy_dmabuf_data(struct dmabuf_data *data)
++{
++	if (!data)
++		return;
++
++	if (data->ptr)
++		munmap(data->ptr, data->size);
++
++	free(data);
++}
++
+ static void
+ buffer_state_handle_buffer_destroy(struct wl_listener *listener, void *data)
+ {
++	struct weston_buffer *buffer = data;
+ 	struct pixman_surface_state *ps;
+ 
+ 	ps = container_of(listener, struct pixman_surface_state,
+@@ -751,6 +800,8 @@ buffer_state_handle_buffer_destroy(struct wl_listener *listener, void *data)
+ 	}
+ 
+ 	ps->buffer_destroy_listener.notify = NULL;
++
++	pixman_renderer_destroy_dmabuf_data(buffer->renderer_private);
+ }
+ 
+ static void
+@@ -776,15 +827,10 @@ pixman_renderer_surface_set_color(struct weston_surface *es,
+ static void
+ pixman_renderer_destroy_dmabuf(struct linux_dmabuf_buffer *dmabuf)
+ {
+-	struct dmabuf_data *data = dmabuf->user_data;
+-	linux_dmabuf_buffer_set_user_data(dmabuf, NULL, NULL);
+-
+-	if (data) {
+-		if (data->ptr)
+-			munmap(data->ptr, data->size);
++	void *data = linux_dmabuf_buffer_get_user_data(dmabuf);
+ 
+-		free(data);
+-	}
++	pixman_renderer_destroy_dmabuf_data(data);
++	linux_dmabuf_buffer_set_user_data(dmabuf, NULL, NULL);
+ }
+ 
+ static bool
+@@ -793,8 +839,15 @@ pixman_renderer_prepare_dmabuf(struct linux_dmabuf_buffer *dmabuf)
+ 	struct dmabuf_attributes *attributes = &dmabuf->attributes;
+ 	struct dmabuf_data *data;
+ 	size_t total_size, vstride0;
++	void *ptr;
+ 	int i;
+ 
++	data = linux_dmabuf_buffer_get_user_data(dmabuf);
++	if (data)
++		return true;
++
++	total_size = lseek(attributes->fd[0], 0, SEEK_END);
++
+ 	if (attributes->modifier != DRM_FORMAT_MOD_INVALID &&
+ 	    attributes->modifier != DRM_FORMAT_MOD_LINEAR)
+ 		return false;
+@@ -809,7 +862,6 @@ pixman_renderer_prepare_dmabuf(struct linux_dmabuf_buffer *dmabuf)
+ 	if (attributes->n_planes == 1)
+ 		goto out;
+ 
+-	total_size = lseek(attributes->fd[0], 0, SEEK_END);
+ 	vstride0 = (attributes->offset[1] - attributes->offset[0]) /
+ 		attributes->stride[0];
+ 
+@@ -832,18 +884,22 @@ pixman_renderer_prepare_dmabuf(struct linux_dmabuf_buffer *dmabuf)
+ out:
+ 	/* Handle contig dma buffer */
+ 
++	ptr = mmap(NULL, total_size, PROT_READ,
++		   MAP_SHARED, attributes->fd[0], 0);
++	if (!ptr)
++		return false;
++
+ 	data = zalloc(sizeof *data);
+-	if (!data)
++	if (!data) {
++		munmap(ptr, total_size);
+ 		return false;
++	}
+ 
++	data->size = total_size;
++	data->ptr = ptr;
+ 	linux_dmabuf_buffer_set_user_data(dmabuf, data,
+ 					  pixman_renderer_destroy_dmabuf);
+-
+-	data->size = lseek(attributes->fd[0], 0, SEEK_END);
+-
+-	data->ptr = mmap(NULL, data->size, PROT_READ,
+-			 MAP_SHARED, attributes->fd[0], 0);
+-	return data->ptr != MAP_FAILED;
++	return true;
+ }
+ 
+ static void
+@@ -853,18 +909,16 @@ pixman_renderer_attach_dmabuf(struct weston_surface *es,
+ {
+ 	struct pixman_surface_state *ps = get_surface_state(es);
+ 	struct dmabuf_attributes *attributes = &dmabuf->attributes;
+-	struct dmabuf_data *data;
++	struct dmabuf_data *data = NULL;
+ 	pixman_format_code_t pixman_format;
+ 	size_t vstride;
+ 
++	if (!pixman_renderer_prepare_dmabuf(dmabuf))
++		goto err;
++
+ 	data = linux_dmabuf_buffer_get_user_data(dmabuf);
+-	if (!data || !data->ptr) {
+-		weston_buffer_reference(&ps->buffer_ref, NULL,
+-					BUFFER_WILL_NOT_BE_ACCESSED);
+-		weston_buffer_release_reference(&ps->buffer_release_ref,
+-						NULL);
+-		return;
+-	}
++	if (!data || !data->ptr)
++		goto err;
+ 
+ 	buffer->width = attributes->width;
+ 	buffer->height = attributes->height;
+@@ -897,6 +951,9 @@ pixman_renderer_attach_dmabuf(struct weston_surface *es,
+ 	case DRM_FORMAT_BGR888:
+ 		pixman_format = PIXMAN_b8g8r8;
+ 		break;
++	case DRM_FORMAT_BGR565:
++		pixman_format = PIXMAN_b5g6r5;
++		break;
+ 	case DRM_FORMAT_ARGB8888:
+ 		pixman_format = PIXMAN_a8r8g8b8;
+ 		break;
+@@ -906,6 +963,9 @@ pixman_renderer_attach_dmabuf(struct weston_surface *es,
+ 	case DRM_FORMAT_RGB888:
+ 		pixman_format = PIXMAN_r8g8b8;
+ 		break;
++	case DRM_FORMAT_RGB565:
++		pixman_format = PIXMAN_r5g6b5;
++		break;
+ 	case DRM_FORMAT_YUYV:
+ 		pixman_format = PIXMAN_yuy2;
+ 		break;
+@@ -929,11 +989,7 @@ pixman_renderer_attach_dmabuf(struct weston_surface *es,
+ #endif
+ 	default:
+ 		weston_log("Unsupported dmabuf format\n");
+-		weston_buffer_reference(&ps->buffer_ref, NULL,
+-					BUFFER_WILL_NOT_BE_ACCESSED);
+-		weston_buffer_release_reference(&ps->buffer_release_ref,
+-						NULL);
+-		return;
++		goto err;
+ 	}
+ 
+ 	ps->image = pixman_image_create_bits(pixman_format,
+@@ -945,6 +1001,13 @@ pixman_renderer_attach_dmabuf(struct weston_surface *es,
+ 		buffer_state_handle_buffer_destroy;
+ 	wl_signal_add(&buffer->destroy_signal,
+ 		      &ps->buffer_destroy_listener);
++	return;
++err:
++	pixman_renderer_destroy_dmabuf_data(data);
++
++	weston_buffer_reference(&ps->buffer_ref, NULL,
++				BUFFER_WILL_NOT_BE_ACCESSED);
++	weston_buffer_release_reference(&ps->buffer_release_ref, NULL);
+ }
+ 
+ static void
+@@ -955,7 +1018,6 @@ pixman_renderer_attach(struct weston_paint_node *pnode)
+ 	struct weston_buffer *buffer = pnode->surface->buffer_ref.buffer;
+ 	struct pixman_surface_state *ps = get_surface_state(es);
+ 	struct wl_shm_buffer *shm_buffer;
+-	struct linux_dmabuf_buffer *dmabuf;
+ 	const struct pixel_format_info *pixel_info;
+ 
+ 	weston_buffer_reference(&ps->buffer_ref, buffer,
+@@ -989,19 +1051,51 @@ pixman_renderer_attach(struct weston_paint_node *pnode)
+ 		return;
+ 	}
+ 
+-	if (buffer->type != WESTON_BUFFER_SHM) {
+-		if ((dmabuf = linux_dmabuf_buffer_get(ec, buffer->resource))) {
+-			pixman_renderer_attach_dmabuf(es, buffer, dmabuf);
+-		} else {
+-			weston_log("unhandled buffer type!\n");
+-			weston_buffer_reference(&ps->buffer_ref, NULL,
+-						BUFFER_WILL_NOT_BE_ACCESSED);
+-			weston_buffer_release_reference(&ps->buffer_release_ref,
+-							NULL);
+-		}
++	if (buffer->type == WESTON_BUFFER_DMABUF) {
++		struct linux_dmabuf_buffer *dmabuf =
++			linux_dmabuf_buffer_get(ec, buffer->resource);
++		pixman_renderer_attach_dmabuf(es, buffer, dmabuf);
++		return;
++	}
++
++#ifdef ENABLE_EGL
++	if (buffer->type == WESTON_BUFFER_RENDERER_OPAQUE) {
++		struct mali_buffer_sharing_info *info;
++		struct linux_dmabuf_buffer dmabuf = { 0 };
++		struct dmabuf_attributes *attributes = &dmabuf.attributes;
++
++		info = wl_resource_get_user_data(buffer->resource);
++
++		attributes->format = buffer->pixel_format->format;
++		attributes->width = buffer->width;
++		attributes->height = buffer->height;
++
++		attributes->n_planes = 1;
++		attributes->fd[0] = info->dma_fd;
++		attributes->stride[0] = info->stride;
++
++		/* Reuse the old user_data */
++		linux_dmabuf_buffer_set_user_data(&dmabuf,
++                                                 buffer->renderer_private, NULL);
++
++		pixman_renderer_attach_dmabuf(es, buffer, &dmabuf);
++
++		/* Use renderer_private for user_data destruction */
++		buffer->renderer_private =
++			linux_dmabuf_buffer_get_user_data(&dmabuf);
+ 
+ 		return;
+ 	}
++#endif
++
++	if (buffer->type != WESTON_BUFFER_SHM) {
++		weston_log("unhandled buffer type!\n");
++		weston_buffer_reference(&ps->buffer_ref, NULL,
++					BUFFER_WILL_NOT_BE_ACCESSED);
++		weston_buffer_release_reference(&ps->buffer_release_ref,
++						NULL);
++		return;
++	}
+ 
+ 	shm_buffer = buffer->shm_buffer;
+ 	/* This can happen if a SHM wl_buffer gets destroyed before we attach,
+@@ -1033,6 +1127,61 @@ pixman_renderer_attach(struct weston_paint_node *pnode)
+ 		      &ps->buffer_destroy_listener);
+ }
+ 
++#ifdef ENABLE_EGL
++static bool
++pixman_renderer_fill_buffer_info(struct weston_compositor *ec,
++				 struct weston_buffer *buffer)
++{
++	struct pixman_renderer *pr = get_renderer(ec);
++	struct mali_buffer_sharing_info *info;
++	struct stat s;
++	EGLint y_inverted;
++	bool ret = true;
++
++	if (!pr->egl_inited)
++		return false;
++
++	info = wl_resource_get_user_data(buffer->resource);
++	if (!info)
++		return false;
++
++	buffer->legacy_buffer = (struct wl_buffer *)buffer->resource;
++	ret &= pr->query_buffer(pr->egl_display, buffer->legacy_buffer,
++			        EGL_WIDTH, &buffer->width);
++	ret &= pr->query_buffer(pr->egl_display, buffer->legacy_buffer,
++				EGL_HEIGHT, &buffer->height);
++	if (!ret) {
++		weston_log("eglQueryWaylandBufferWL failed\n");
++		return false;
++	}
++
++
++	/* Check it carefully! */
++	if (fstat(info->dma_fd, &s) < 0 ||
++	    s.st_size < (buffer->width * buffer->height) ||
++	    info->width != buffer->width || info->height != buffer->height ||
++	    info->stride < buffer->width)
++		return false;
++
++	buffer->pixel_format = pixel_format_get_info(info->fourcc);
++	if (!buffer->pixel_format)
++		return false;
++
++	buffer->format_modifier = DRM_FORMAT_MOD_INVALID;
++
++	/* Assume scanout co-ordinate space i.e. (0,0) is top-left
++	 * if the query fails */
++	ret = pr->query_buffer(pr->egl_display, buffer->legacy_buffer,
++			       EGL_WAYLAND_Y_INVERTED_WL, &y_inverted);
++	if (!ret || y_inverted)
++		buffer->buffer_origin = ORIGIN_TOP_LEFT;
++	else
++		buffer->buffer_origin = ORIGIN_BOTTOM_LEFT;
++
++	return true;
++}
++#endif
++
+ static void
+ pixman_renderer_surface_state_destroy(struct pixman_surface_state *ps)
+ {
+@@ -1109,6 +1258,21 @@ pixman_renderer_destroy(struct weston_compositor *ec)
+ {
+ 	struct pixman_renderer *pr = get_renderer(ec);
+ 
++#ifdef ENABLE_EGL
++	if (pr->egl_inited) {
++		if (pr->unbind_display)
++			pr->unbind_display(pr->egl_display, ec->wl_display);
++
++		eglTerminate(pr->egl_display);
++		eglReleaseThread();
++
++		if (pr->gbm)
++			gbm_device_destroy(pr->gbm);
++
++		close(pr->drm_fd);
++	}
++#endif
++
+ 	wl_signal_emit(&pr->destroy_signal, pr);
+ 	weston_binding_destroy(pr->debug_binding);
+ 
+@@ -1294,6 +1458,89 @@ out:
+ 	return ret;
+ }
+ 
++#ifdef ENABLE_EGL
++static bool
++pixman_renderer_init_egl(struct pixman_renderer *pr,
++			 struct weston_compositor *ec)
++{
++	PFNEGLGETPLATFORMDISPLAYEXTPROC get_platform_display;
++	const char *extensions;
++
++	get_platform_display =
++		(void *) eglGetProcAddress("eglGetPlatformDisplayEXT");
++	pr->query_buffer =
++		(void *) eglGetProcAddress("eglQueryWaylandBufferWL");
++	pr->bind_display =
++		(void *) eglGetProcAddress("eglBindWaylandDisplayWL");
++	pr->unbind_display =
++		(void *) eglGetProcAddress("eglUnbindWaylandDisplayWL");
++
++	if (!get_platform_display || !pr->query_buffer ||
++	    !pr->bind_display || !pr->unbind_display) {
++		weston_log("Failed to get egl proc\n");
++		return false;
++	}
++
++	pr->drm_fd = open("/dev/dri/card0", O_RDWR | O_CLOEXEC);
++	if (pr->drm_fd < 0) {
++		weston_log("Failed to open drm dev\n");
++		return false;
++	}
++
++	pr->gbm = gbm_create_device(pr->drm_fd);
++	if (!pr->gbm) {
++		weston_log("Failed to create gbm device\n");
++		goto err_close_fd;
++	}
++
++	pr->egl_display = get_platform_display(EGL_PLATFORM_GBM_KHR,
++					       (void*) pr->gbm, NULL);
++	if (pr->egl_display == EGL_NO_DISPLAY) {
++		weston_log("Failed to create egl display\n");
++		goto err_destroy_gbm;
++	}
++
++	if (!eglInitialize(pr->egl_display, NULL, NULL)) {
++		weston_log("Failed to initialize egl\n");
++		goto err_terminate_display;
++	}
++
++	extensions =
++		(const char *) eglQueryString(pr->egl_display, EGL_EXTENSIONS);
++	if (!extensions) {
++		weston_log("Retrieving EGL extension string failed.\n");
++		goto err_terminate_display;
++	}
++
++	if (!weston_check_egl_extension(extensions,
++					"EGL_WL_bind_wayland_display")) {
++		weston_log("Wayland extension not supported.\n");
++		goto err_terminate_display;
++	}
++
++	if (!eglBindAPI(EGL_OPENGL_ES_API)) {
++		weston_log("Failed to bind api\n");
++		goto err_terminate_display;
++	}
++
++	if (!pr->bind_display(pr->egl_display, ec->wl_display))
++		goto err_terminate_display;
++
++	pr->egl_inited = true;
++	return true;
++
++err_terminate_display:
++	eglTerminate(pr->egl_display);
++err_destroy_gbm:
++	gbm_device_destroy(pr->gbm);
++	pr->gbm = NULL;
++err_close_fd:
++	close(pr->drm_fd);
++	pr->drm_fd = -1;
++	return false;
++}
++#endif
++
+ WL_EXPORT int
+ pixman_renderer_init(struct weston_compositor *ec)
+ {
+@@ -1318,6 +1565,11 @@ pixman_renderer_init(struct weston_compositor *ec)
+ 		pixman_renderer_surface_copy_content;
+ 	renderer->base.type = WESTON_RENDERER_PIXMAN;
+ 	renderer->base.pixman = &pixman_renderer_interface;
++
++#ifdef ENABLE_EGL
++	renderer->base.fill_buffer_info = pixman_renderer_fill_buffer_info;
++#endif
++
+ 	ec->renderer = &renderer->base;
+ 	ec->capabilities |= WESTON_CAP_ROTATION_ANY;
+ 	ec->capabilities |= WESTON_CAP_VIEW_CLIP_MASK;
+@@ -1358,6 +1610,11 @@ pixman_renderer_init(struct weston_compositor *ec)
+ 	renderer->base.get_supported_formats =
+ 		pixman_renderer_get_supported_formats;
+ 
++#ifdef ENABLE_EGL
++	if (!getenv("WESTON_PIXMAN_WITHOUT_EGL"))
++		pixman_renderer_init_egl(renderer, ec);
++#endif
++
+ 	return 0;
+ }
+ 
+diff --git a/meson.build b/meson.build
+index 7b46ff3..07e11b5 100644
+--- a/meson.build
++++ b/meson.build
+@@ -185,13 +185,11 @@ deps_for_libweston_users = [
+ 	dep_xkbcommon,
+ ]
+ 
+-if get_option('renderer-gl')
+-	dep_egl = dependency('egl', required: false)
+-	if not dep_egl.found()
++dep_egl = dependency('egl', required: false)
++if not dep_egl.found()
++	if get_option('renderer-gl')
+ 		error('libweston + gl-renderer requires egl which was not found. Or, you can use \'-Drenderer-gl=false\'.')
+ 	endif
+-else
+-	dep_egl = dependency('', required: false)
+ endif
+ 
+ 
+-- 
+2.20.1
+

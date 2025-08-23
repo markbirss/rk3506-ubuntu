@@ -1,0 +1,376 @@
+From 053b31b5c31b424c58e10b716f30373fb234bb1f Mon Sep 17 00:00:00 2001
+From: Zou Dengming <marsow.zou@rock-chips.com>
+Date: Mon, 9 Sep 2024 16:51:15 +0800
+Subject: [PATCH 33/35] lvgl: implement deinit funcs
+
+---
+ src/core/lv_obj.c                     |  6 ++---
+ src/core/lv_obj.h                     |  4 ---
+ src/extra/libs/bmp/lv_bmp.c           |  3 ++-
+ src/extra/libs/bmp/lv_bmp.h           |  2 +-
+ src/extra/libs/freetype/lv_freetype.c | 12 +++++++--
+ src/extra/libs/png/lv_png.c           |  4 ++-
+ src/extra/libs/png/lv_png.h           |  2 +-
+ src/extra/libs/sjpg/lv_sjpg.c         |  4 ++-
+ src/extra/libs/sjpg/lv_sjpg.h         |  2 +-
+ src/extra/lv_extra.c                  | 37 ++++++++++++++++++++++++---
+ src/extra/lv_extra.h                  |  1 +
+ src/hal/lv_hal_disp.c                 |  7 +++++
+ src/hal/lv_hal_indev.c                | 19 ++++++++++++++
+ src/hal/lv_hal_indev.h                |  1 +
+ src/misc/lv_fs.c                      | 13 ++++++++++
+ src/misc/lv_fs.h                      |  2 ++
+ 16 files changed, 101 insertions(+), 18 deletions(-)
+
+diff --git a/src/core/lv_obj.c b/src/core/lv_obj.c
+index 23eef36c9..806db4624 100644
+--- a/src/core/lv_obj.c
++++ b/src/core/lv_obj.c
+@@ -192,10 +192,10 @@ void lv_init(void)
+     LV_LOG_TRACE("finished");
+ }
+ 
+-#if LV_ENABLE_GC || !LV_MEM_CUSTOM
+-
+ void lv_deinit(void)
+ {
++    lv_extra_deinit();
++#if LV_ENABLE_GC || !LV_MEM_CUSTOM
+     _lv_gc_clear_roots();
+ 
+     lv_disp_set_default(NULL);
+@@ -207,8 +207,8 @@ void lv_deinit(void)
+ #if LV_USE_LOG
+     lv_log_register_print_cb(NULL);
+ #endif
+-}
+ #endif
++}
+ 
+ lv_obj_t * lv_obj_create(lv_obj_t * parent)
+ {
+diff --git a/src/core/lv_obj.h b/src/core/lv_obj.h
+index 1f4ed716e..adcfa8328 100644
+--- a/src/core/lv_obj.h
++++ b/src/core/lv_obj.h
+@@ -201,16 +201,12 @@ typedef struct _lv_obj_t {
+  */
+ void lv_init(void);
+ 
+-#if LV_ENABLE_GC || !LV_MEM_CUSTOM
+-
+ /**
+  * Deinit the 'lv' library
+  * Currently only implemented when not using custom allocators, or GC is enabled.
+  */
+ void lv_deinit(void);
+ 
+-#endif
+-
+ /**
+  * Returns whether the 'lv' library is currently initialized
+  */
+diff --git a/src/extra/libs/bmp/lv_bmp.c b/src/extra/libs/bmp/lv_bmp.c
+index 6039009f7..c25b756da 100644
+--- a/src/extra/libs/bmp/lv_bmp.c
++++ b/src/extra/libs/bmp/lv_bmp.c
+@@ -50,13 +50,14 @@ static void decoder_close(lv_img_decoder_t * dec, lv_img_decoder_dsc_t * dsc);
+ /**********************
+  *   GLOBAL FUNCTIONS
+  **********************/
+-void lv_bmp_init(void)
++lv_img_decoder_t* lv_bmp_init(void)
+ {
+     lv_img_decoder_t * dec = lv_img_decoder_create();
+     lv_img_decoder_set_info_cb(dec, decoder_info);
+     lv_img_decoder_set_open_cb(dec, decoder_open);
+     lv_img_decoder_set_read_line_cb(dec, decoder_read_line);
+     lv_img_decoder_set_close_cb(dec, decoder_close);
++    return dec;
+ }
+ 
+ /**********************
+diff --git a/src/extra/libs/bmp/lv_bmp.h b/src/extra/libs/bmp/lv_bmp.h
+index db1e54096..d09b01028 100644
+--- a/src/extra/libs/bmp/lv_bmp.h
++++ b/src/extra/libs/bmp/lv_bmp.h
+@@ -27,7 +27,7 @@ extern "C" {
+ /**********************
+  * GLOBAL PROTOTYPES
+  **********************/
+-void lv_bmp_init(void);
++lv_img_decoder_t* lv_bmp_init(void);
+ 
+ /**********************
+  *      MACROS
+diff --git a/src/extra/libs/freetype/lv_freetype.c b/src/extra/libs/freetype/lv_freetype.c
+index 4bf660222..6acdb0d58 100644
+--- a/src/extra/libs/freetype/lv_freetype.c
++++ b/src/extra/libs/freetype/lv_freetype.c
+@@ -153,9 +153,17 @@ Fail:
+ void lv_freetype_destroy(void)
+ {
+ #if LV_FREETYPE_CACHE_SIZE >= 0
+-    FTC_Manager_Done(cache_manager);
++    if (cache_manager != NULL) {
++        LV_LOG_INFO("%s cache_manager:%p\n", cache_manager);
++        FTC_Manager_Done(cache_manager);
++        cache_manager = NULL;
++    }
+ #endif
+-    FT_Done_FreeType(library);
++    if (library != NULL) {
++        LV_LOG_INFO("%s library:%p\n", library);
++        FT_Done_FreeType(library);
++        library = NULL;
++    }
+ }
+ 
+ bool lv_ft_font_init(lv_ft_info_t * info)
+diff --git a/src/extra/libs/png/lv_png.c b/src/extra/libs/png/lv_png.c
+index 75b196c1c..397ea9f67 100644
+--- a/src/extra/libs/png/lv_png.c
++++ b/src/extra/libs/png/lv_png.c
+@@ -45,12 +45,14 @@ static inline lv_color_t lv_color_make_rounding(uint8_t r, uint8_t g, uint8_t b)
+ /**
+  * Register the PNG decoder functions in LVGL
+  */
+-void lv_png_init(void)
++lv_img_decoder_t* lv_png_init(void)
+ {
+     lv_img_decoder_t * dec = lv_img_decoder_create();
+     lv_img_decoder_set_info_cb(dec, decoder_info);
+     lv_img_decoder_set_open_cb(dec, decoder_open);
+     lv_img_decoder_set_close_cb(dec, decoder_close);
++
++    return dec;
+ }
+ 
+ /**********************
+diff --git a/src/extra/libs/png/lv_png.h b/src/extra/libs/png/lv_png.h
+index 438047238..5302e2278 100644
+--- a/src/extra/libs/png/lv_png.h
++++ b/src/extra/libs/png/lv_png.h
+@@ -31,7 +31,7 @@ extern "C" {
+ /**
+  * Register the PNG decoder functions in LVGL
+  */
+-void lv_png_init(void);
++lv_img_decoder_t* lv_png_init(void);
+ 
+ /**********************
+  *      MACROS
+diff --git a/src/extra/libs/sjpg/lv_sjpg.c b/src/extra/libs/sjpg/lv_sjpg.c
+index 1ec6b2bed..cca8a2f45 100644
+--- a/src/extra/libs/sjpg/lv_sjpg.c
++++ b/src/extra/libs/sjpg/lv_sjpg.c
+@@ -125,13 +125,15 @@ static void lv_sjpg_free(SJPEG * sjpeg);
+ /**********************
+  *   GLOBAL FUNCTIONS
+  **********************/
+-void lv_split_jpeg_init(void)
++lv_img_decoder_t* lv_split_jpeg_init(void)
+ {
+     lv_img_decoder_t * dec = lv_img_decoder_create();
+     lv_img_decoder_set_info_cb(dec, decoder_info);
+     lv_img_decoder_set_open_cb(dec, decoder_open);
+     lv_img_decoder_set_close_cb(dec, decoder_close);
+     lv_img_decoder_set_read_line_cb(dec, decoder_read_line);
++
++    return dec;
+ }
+ 
+ /**********************
+diff --git a/src/extra/libs/sjpg/lv_sjpg.h b/src/extra/libs/sjpg/lv_sjpg.h
+index d06e80de5..4dc1a17c9 100644
+--- a/src/extra/libs/sjpg/lv_sjpg.h
++++ b/src/extra/libs/sjpg/lv_sjpg.h
+@@ -28,7 +28,7 @@ extern "C" {
+  * GLOBAL PROTOTYPES
+  **********************/
+ 
+-void lv_split_jpeg_init(void);
++lv_img_decoder_t* lv_split_jpeg_init(void);
+ 
+ /**********************
+  *      MACROS
+diff --git a/src/extra/lv_extra.c b/src/extra/lv_extra.c
+index 380833725..96e103815 100644
+--- a/src/extra/lv_extra.c
++++ b/src/extra/lv_extra.c
+@@ -32,6 +32,10 @@
+  *   GLOBAL FUNCTIONS
+  **********************/
+ 
++lv_img_decoder_t *lv_bmp_extra = NULL;
++lv_img_decoder_t *lv_sjpeg_extra = NULL;
++lv_img_decoder_t *lv_png_extra = NULL;
++
+ void lv_extra_init(void)
+ {
+ #if LV_USE_FLEX
+@@ -71,15 +75,15 @@ void lv_extra_init(void)
+ #endif
+ 
+ #if LV_USE_PNG
+-    lv_png_init();
++    lv_png_extra = lv_png_init();
+ #endif
+ 
+ #if LV_USE_SJPG
+-    lv_split_jpeg_init();
++    lv_sjpeg_extra = lv_split_jpeg_init();
+ #endif
+ 
+ #if LV_USE_BMP
+-    lv_bmp_init();
++    lv_bmp_extra = lv_bmp_init();
+ #endif
+ 
+ #if LV_USE_FREETYPE
+@@ -92,6 +96,33 @@ void lv_extra_init(void)
+ #endif
+ }
+ 
++void lv_extra_deinit(void) {
++#if LV_USE_FREETYPE
++    lv_freetype_destroy();
++#endif
++
++#if LV_USE_BMP
++    if (lv_bmp_extra == NULL) {
++        lv_img_decoder_delete(lv_bmp_extra);
++        lv_bmp_extra = NULL;
++    }
++#endif
++
++#if LV_USE_SJPG
++    if (lv_bmp_extra == NULL) {
++        lv_img_decoder_delete(lv_sjpeg_extra);
++        lv_png_extra = NULL;
++    }
++#endif
++
++#if LV_USE_PNG
++    if (lv_png_extra == NULL) {
++        lv_img_decoder_delete(lv_png_extra);
++        lv_png_extra = NULL;
++    }
++#endif
++}
++
+ /**********************
+  *   STATIC FUNCTIONS
+  **********************/
+diff --git a/src/extra/lv_extra.h b/src/extra/lv_extra.h
+index c0306a980..53fa9216b 100644
+--- a/src/extra/lv_extra.h
++++ b/src/extra/lv_extra.h
+@@ -36,6 +36,7 @@ extern "C" {
+  * Initialize the extra components
+  */
+ void lv_extra_init(void);
++void lv_extra_deinit(void);
+ 
+ /**********************
+  *      MACROS
+diff --git a/src/hal/lv_hal_disp.c b/src/hal/lv_hal_disp.c
+index 6f1c9626d..f4da72c19 100644
+--- a/src/hal/lv_hal_disp.c
++++ b/src/hal/lv_hal_disp.c
+@@ -320,6 +320,13 @@ void lv_disp_remove(lv_disp_t * disp)
+     _lv_ll_remove(&LV_GC_ROOT(_lv_disp_ll), disp);
+     _lv_ll_clear(&disp->sync_areas);
+     if(disp->refr_timer) lv_timer_del(disp->refr_timer);
++
++    lv_disp_drv_t * driver = disp->driver;
++    if((driver != NULL) && (driver->draw_ctx != NULL)) {
++        driver->draw_ctx_deinit(driver, driver->draw_ctx);
++        lv_mem_free(driver->draw_ctx);
++    }
++
+     lv_mem_free(disp);
+ 
+     if(was_default) lv_disp_set_default(_lv_ll_get_head(&LV_GC_ROOT(_lv_disp_ll)));
+diff --git a/src/hal/lv_hal_indev.c b/src/hal/lv_hal_indev.c
+index c3661e422..6aea718e6 100644
+--- a/src/hal/lv_hal_indev.c
++++ b/src/hal/lv_hal_indev.c
+@@ -98,6 +98,25 @@ lv_indev_t * lv_indev_drv_register(lv_indev_drv_t * driver)
+     return indev;
+ }
+ 
++void lv_indev_drv_unregister(lv_indev_drv_t * driver) {
++    lv_indev_t * indev = _lv_ll_get_head(&LV_GC_ROOT(_lv_indev_ll));
++
++    LV_ASSERT_NULL(driver);
++    LV_ASSERT_NULL(indev);
++    while (indev) {
++        if (indev->driver == driver) {
++            if(indev->driver->read_timer) {
++                lv_timer_del(indev->driver->read_timer);
++                indev->driver->read_timer = NULL;
++            }
++            _lv_ll_remove(&LV_GC_ROOT(_lv_indev_ll), indev);
++            lv_mem_free(indev);
++            break;
++        }
++        indev = _lv_ll_get_next(&LV_GC_ROOT(_lv_indev_ll), indev);
++    }
++}
++
+ /**
+  * Update the driver in run time.
+  * @param indev pointer to a input device. (return value of `lv_indev_drv_register`)
+diff --git a/src/hal/lv_hal_indev.h b/src/hal/lv_hal_indev.h
+index 48599c69e..5971559ef 100644
+--- a/src/hal/lv_hal_indev.h
++++ b/src/hal/lv_hal_indev.h
+@@ -199,6 +199,7 @@ void lv_indev_drv_init(struct _lv_indev_drv_t * driver);
+  */
+ lv_indev_t * lv_indev_drv_register(struct _lv_indev_drv_t * driver);
+ 
++void lv_indev_drv_unregister(lv_indev_drv_t * driver);
+ /**
+  * Update the driver in run time.
+  * @param indev pointer to an input device. (return value of `lv_indev_drv_register`)
+diff --git a/src/misc/lv_fs.c b/src/misc/lv_fs.c
+index 52f3ce07d..279d7b10d 100644
+--- a/src/misc/lv_fs.c
++++ b/src/misc/lv_fs.c
+@@ -406,6 +406,19 @@ void lv_fs_drv_register(lv_fs_drv_t * drv_p)
+     *new_drv = drv_p;
+ }
+ 
++void lv_fs_drv_unregister(lv_fs_drv_t * drv_p)
++{
++    lv_fs_drv_t **new_drv = _lv_ll_get_head(&LV_GC_ROOT(_lv_fsdrv_ll));
++    while (new_drv) {
++        if (drv_p == *new_drv) {
++            _lv_ll_remove(&LV_GC_ROOT(_lv_fsdrv_ll), new_drv);
++            lv_mem_free(new_drv);
++            break;
++        }
++        new_drv = _lv_ll_get_next(&LV_GC_ROOT(_lv_fsdrv_ll), new_drv);
++    }
++}
++
+ lv_fs_drv_t * lv_fs_get_drv(char letter)
+ {
+     lv_fs_drv_t ** drv;
+diff --git a/src/misc/lv_fs.h b/src/misc/lv_fs.h
+index c941402c5..f9570bdc7 100644
+--- a/src/misc/lv_fs.h
++++ b/src/misc/lv_fs.h
+@@ -130,6 +130,8 @@ void lv_fs_drv_init(lv_fs_drv_t * drv);
+  */
+ void lv_fs_drv_register(lv_fs_drv_t * drv);
+ 
++void lv_fs_drv_unregister(lv_fs_drv_t * drv);
++
+ /**
+  * Give a pointer to a driver from its letter
+  * @param letter    the driver letter
+-- 
+2.25.1
+

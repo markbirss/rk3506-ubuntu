@@ -1,0 +1,26 @@
+From c36a7039f4d2ef10d53b840e03746c4313de7db2 Mon Sep 17 00:00:00 2001
+From: ym-terada <159906927+ym-terada@users.noreply.github.com>
+Date: Mon, 6 May 2024 21:48:54 +0900
+Subject: [PATCH 04/35] fix(event): fix LV_EVENT_PREPROCESS flag was not
+ processed correctly on VisualStudio (#6169)
+
+---
+ src/core/lv_event.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/core/lv_event.c b/src/core/lv_event.c
+index 1ca967210..3e201510c 100644
+--- a/src/core/lv_event.c
++++ b/src/core/lv_event.c
+@@ -20,7 +20,7 @@
+ typedef struct _lv_event_dsc_t {
+     lv_event_cb_t cb;
+     void * user_data;
+-    lv_event_code_t filter : 8;
++    uint8_t filter;
+ } lv_event_dsc_t;
+ 
+ /**********************
+-- 
+2.25.1
+

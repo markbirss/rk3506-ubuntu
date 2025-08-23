@@ -1,0 +1,155 @@
+From 1aba69969df6298bc4bc31fb3c5bd3ee6a301ac8 Mon Sep 17 00:00:00 2001
+From: Liang Chen <cl@rock-chips.com>
+Date: Tue, 4 Jul 2023 11:46:06 +0800
+Subject: [PATCH 2/3] patch-5.10.180-rt89.patch: fix runtime error on rockchip
+
+Change-Id: I437a4cbbbb00b08ed91efcd08625722ac84ac086
+Signed-off-by: Liang Chen <cl@rock-chips.com>
+---
+ arch/arm64/include/asm/pgtable.h      |  3 ++-
+ arch/arm64/kernel/fpsimd.c            | 10 ++++++++--
+ drivers/cpufreq/cpufreq_interactive.c |  3 ++-
+ drivers/cpufreq/cpufreq_times.c       | 22 +++++++++++-----------
+ 4 files changed, 23 insertions(+), 15 deletions(-)
+
+diff --git a/arch/arm64/include/asm/pgtable.h b/arch/arm64/include/asm/pgtable.h
+index 35fe1ca3cc6bb..7fb56c6997a08 100644
+--- a/arch/arm64/include/asm/pgtable.h
++++ b/arch/arm64/include/asm/pgtable.h
+@@ -996,7 +996,8 @@ static inline void update_mmu_cache(struct vm_area_struct *vma,
+  */
+ static inline bool arch_faults_on_old_pte(void)
+ {
+-	WARN_ON(preemptible());
++	/* The register read below requires a stable CPU to make any sense */
++	cant_migrate();
+ 
+ 	return !cpu_has_hw_af();
+ }
+diff --git a/arch/arm64/kernel/fpsimd.c b/arch/arm64/kernel/fpsimd.c
+index ac4fa79ec2a69..c347a8815cb37 100644
+--- a/arch/arm64/kernel/fpsimd.c
++++ b/arch/arm64/kernel/fpsimd.c
+@@ -180,7 +180,10 @@ static void __get_cpu_fpsimd_context(void)
+  */
+ static void get_cpu_fpsimd_context(void)
+ {
+-	local_bh_disable();
++	if (!IS_ENABLED(CONFIG_PREEMPT_RT))
++		local_bh_disable();
++	else
++		preempt_disable();
+ 	__get_cpu_fpsimd_context();
+ }
+ 
+@@ -201,7 +204,10 @@ static void __put_cpu_fpsimd_context(void)
+ static void put_cpu_fpsimd_context(void)
+ {
+ 	__put_cpu_fpsimd_context();
+-	local_bh_enable();
++	if (!IS_ENABLED(CONFIG_PREEMPT_RT))
++		local_bh_enable();
++	else
++		preempt_enable();
+ }
+ 
+ static bool have_cpu_fpsimd_context(void)
+diff --git a/drivers/cpufreq/cpufreq_interactive.c b/drivers/cpufreq/cpufreq_interactive.c
+index a486993cda406..c05eb4b2c9387 100644
+--- a/drivers/cpufreq/cpufreq_interactive.c
++++ b/drivers/cpufreq/cpufreq_interactive.c
+@@ -513,7 +513,8 @@ static void cpufreq_interactive_idle_end(void)
+ 			sampling_rate = icpu->ipolicy->tunables->sampling_rate;
+ 			icpu->last_sample_time = local_clock();
+ 			icpu->next_sample_jiffies = usecs_to_jiffies(sampling_rate) + jiffies;
+-			cpufreq_interactive_update(icpu);
++			icpu->work_in_progress = true;
++			irq_work_queue_on(&icpu->irq_work, icpu->cpu);
+ 		}
+ 	}
+ 
+diff --git a/drivers/cpufreq/cpufreq_times.c b/drivers/cpufreq/cpufreq_times.c
+index 47dc34c012997..60ee53704edc5 100644
+--- a/drivers/cpufreq/cpufreq_times.c
++++ b/drivers/cpufreq/cpufreq_times.c
+@@ -23,7 +23,7 @@
+ #include <linux/threads.h>
+ #include <trace/hooks/cpufreq.h>
+ 
+-static DEFINE_SPINLOCK(task_time_in_state_lock); /* task->time_in_state */
++static DEFINE_RAW_SPINLOCK(task_time_in_state_lock); /* task->time_in_state */
+ 
+ /**
+  * struct cpu_freqs - per-cpu frequency information
+@@ -47,9 +47,9 @@ void cpufreq_task_times_init(struct task_struct *p)
+ {
+ 	unsigned long flags;
+ 
+-	spin_lock_irqsave(&task_time_in_state_lock, flags);
++	raw_spin_lock_irqsave(&task_time_in_state_lock, flags);
+ 	p->time_in_state = NULL;
+-	spin_unlock_irqrestore(&task_time_in_state_lock, flags);
++	raw_spin_unlock_irqrestore(&task_time_in_state_lock, flags);
+ 	p->max_state = 0;
+ }
+ 
+@@ -64,9 +64,9 @@ void cpufreq_task_times_alloc(struct task_struct *p)
+ 	if (!temp)
+ 		return;
+ 
+-	spin_lock_irqsave(&task_time_in_state_lock, flags);
++	raw_spin_lock_irqsave(&task_time_in_state_lock, flags);
+ 	p->time_in_state = temp;
+-	spin_unlock_irqrestore(&task_time_in_state_lock, flags);
++	raw_spin_unlock_irqrestore(&task_time_in_state_lock, flags);
+ 	p->max_state = max_state;
+ }
+ 
+@@ -94,10 +94,10 @@ void cpufreq_task_times_exit(struct task_struct *p)
+ 	if (!p->time_in_state)
+ 		return;
+ 
+-	spin_lock_irqsave(&task_time_in_state_lock, flags);
++	raw_spin_lock_irqsave(&task_time_in_state_lock, flags);
+ 	temp = p->time_in_state;
+ 	p->time_in_state = NULL;
+-	spin_unlock_irqrestore(&task_time_in_state_lock, flags);
++	raw_spin_unlock_irqrestore(&task_time_in_state_lock, flags);
+ 	kfree(temp);
+ }
+ 
+@@ -110,7 +110,7 @@ int proc_time_in_state_show(struct seq_file *m, struct pid_namespace *ns,
+ 	struct cpu_freqs *freqs;
+ 	struct cpu_freqs *last_freqs = NULL;
+ 
+-	spin_lock_irqsave(&task_time_in_state_lock, flags);
++	raw_spin_lock_irqsave(&task_time_in_state_lock, flags);
+ 	for_each_possible_cpu(cpu) {
+ 		freqs = all_freqs[cpu];
+ 		if (!freqs || freqs == last_freqs)
+@@ -127,7 +127,7 @@ int proc_time_in_state_show(struct seq_file *m, struct pid_namespace *ns,
+ 				   (unsigned long)nsec_to_clock_t(cputime));
+ 		}
+ 	}
+-	spin_unlock_irqrestore(&task_time_in_state_lock, flags);
++	raw_spin_unlock_irqrestore(&task_time_in_state_lock, flags);
+ 	return 0;
+ }
+ 
+@@ -142,11 +142,11 @@ void cpufreq_acct_update_power(struct task_struct *p, u64 cputime)
+ 
+ 	state = freqs->offset + READ_ONCE(freqs->last_index);
+ 
+-	spin_lock_irqsave(&task_time_in_state_lock, flags);
++	raw_spin_lock_irqsave(&task_time_in_state_lock, flags);
+ 	if ((state < p->max_state || !cpufreq_task_times_realloc_locked(p)) &&
+ 	    p->time_in_state)
+ 		p->time_in_state[state] += cputime;
+-	spin_unlock_irqrestore(&task_time_in_state_lock, flags);
++	raw_spin_unlock_irqrestore(&task_time_in_state_lock, flags);
+ 
+ 	trace_android_vh_cpufreq_acct_update_power(cputime, p, state);
+ }
+-- 
+2.38.0
+

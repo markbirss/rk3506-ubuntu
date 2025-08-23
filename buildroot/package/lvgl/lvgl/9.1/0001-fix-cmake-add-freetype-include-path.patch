@@ -1,0 +1,25 @@
+From 1ccef74f3d2d01b3d078d46b82731dd88f817320 Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Mon, 18 Mar 2024 15:40:06 +0800
+Subject: [PATCH 01/12] fix(cmake): add freetype include path
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ env_support/cmake/custom.cmake | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/env_support/cmake/custom.cmake b/env_support/cmake/custom.cmake
+index 9800468..d0e82b7 100644
+--- a/env_support/cmake/custom.cmake
++++ b/env_support/cmake/custom.cmake
+@@ -43,6 +43,7 @@ endif()
+ # Include root and optional parent path of LV_CONF_PATH
+ target_include_directories(lvgl SYSTEM PUBLIC ${LVGL_ROOT_DIR} ${LV_CONF_DIR})
+ 
++target_include_directories(lvgl SYSTEM PUBLIC ${CMAKE_SYSROOT}/usr/include/freetype2)
+ 
+ if(NOT LV_CONF_BUILD_DISABLE_THORVG_INTERNAL)
+     add_library(lvgl_thorvg ${THORVG_SOURCES})
+-- 
+2.25.1
+

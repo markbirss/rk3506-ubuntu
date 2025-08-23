@@ -1,0 +1,23 @@
+from building import *
+Import("SOC")
+
+cwd     = GetCurrentDir()
+src     = Split('''
+test_comm_argparse.c
+''')
+
+CPPPATH = [cwd]
+CPPPATH += ["../../sdk/include"]
+CPPPATH += ["../include"]
+
+CPPDEFINES = ['OS_RTT']
+if SOC == 'RK3308':
+    CPPPATH += ["../../sdk/lib/arm/rk3308"]
+elif SOC == 'RK3506':
+    CPPPATH += ["../../sdk/lib/arm/rk3506"]
+else:
+    print("Unknown SOC.")
+
+group = DefineGroup('rockit', src, depend = ['RT_USING_ROCKIT'], CPPPATH = CPPPATH, CPPDEFINES=CPPDEFINES)
+
+Return('group')

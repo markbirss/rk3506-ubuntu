@@ -1,0 +1,122 @@
+From 0007351a8be1b325b0be9e505663d0ab9af1315c Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 2 Apr 2021 11:23:36 +0800
+Subject: [PATCH 15/95] backend-drm: Bind the Nth primary and cursor plane to
+ the Nth CRTC
+
+Some hardwares, e.g. Rockchip RK3588, allows planes to bind with other
+CRTCs, but we wouldn't want to do that for primary and cursor planes.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/backend-drm/drm-internal.h |  3 +++
+ libweston/backend-drm/drm.c          | 40 +++++++++++++++++++++++++---
+ 2 files changed, 39 insertions(+), 4 deletions(-)
+
+diff --git a/libweston/backend-drm/drm-internal.h b/libweston/backend-drm/drm-internal.h
+index 6118e1a..d00dc6f 100644
+--- a/libweston/backend-drm/drm-internal.h
++++ b/libweston/backend-drm/drm-internal.h
+@@ -520,6 +520,9 @@ struct drm_crtc {
+ 	uint32_t crtc_id; /* object ID to pass to DRM functions */
+ 	int pipe; /* index of CRTC in resource array / bitmasks */
+ 
++	uint32_t primary_plane_id; /* ID of the corresponding primary plane */
++	uint32_t cursor_plane_id; /* ID of the corresponding cursor plane */
++
+ 	/* Holds the properties for the CRTC */
+ 	struct drm_property_info props_crtc[WDRM_CRTC__COUNT];
+ };
+diff --git a/libweston/backend-drm/drm.c b/libweston/backend-drm/drm.c
+index 11a5c3d..360a865 100644
+--- a/libweston/backend-drm/drm.c
++++ b/libweston/backend-drm/drm.c
+@@ -209,6 +209,16 @@ drm_plane_is_available(struct drm_plane *plane, struct drm_output *output)
+ 	if (plane->state_cur->output && plane->state_cur->output != output)
+ 		return false;
+ 
++	/* The plane is not the primary plane for this CRTC. */
++	if (plane->type == WDRM_PLANE_TYPE_PRIMARY &&
++	    plane->plane_id != output->crtc->primary_plane_id)
++		return false;
++
++	/* The plane is not the cursor plane for this CRTC. */
++	if (plane->type == WDRM_PLANE_TYPE_CURSOR &&
++	    plane->plane_id != output->crtc->cursor_plane_id)
++		return false;
++
+ 	/* Check whether the plane can be used with this CRTC; possible_crtcs
+ 	 * is a bitmask of CRTC indices (pipe), rather than CRTC object ID. */
+ 	return !!(plane->possible_crtcs & (1 << output->crtc->pipe));
+@@ -1321,15 +1331,17 @@ drm_plane_destroy(struct drm_plane *plane)
+  * @param device DRM device
+  */
+ static void
+-create_sprites(struct drm_device *device)
++create_sprites(struct drm_device *device, drmModeRes *resources)
+ {
+ 	struct drm_backend *b = device->backend;
+ 	drmModePlaneRes *kplane_res;
+ 	drmModePlane *kplane;
+ 	struct drm_plane *drm_plane;
++	struct drm_crtc *drm_crtc;
+ 	uint32_t i;
+ 	uint32_t next_plane_idx = 0;
+ 	uint64_t primary_plane_zpos_min = DRM_PLANE_ZPOS_INVALID_PLANE;
++	uint32_t num_primary = 0, num_cursor = 0, crtc_pipe;
+ 	kplane_res = drmModeGetPlaneResources(device->drm.fd);
+ 
+ 	if (!kplane_res) {
+@@ -1348,10 +1360,30 @@ create_sprites(struct drm_device *device)
+ 		if (!drm_plane)
+ 			continue;
+ 
+-		if (drm_plane->type == WDRM_PLANE_TYPE_OVERLAY)
++		/**
++		 * Assuming the Nth primary or cursor plane is for the Nth CRTC.
++		 * See:
++		 * https://lore.kernel.org/dri-devel/20200807090706.GA2352366@phenom.ffwll.local/
++		 */
++		if (drm_plane->type == WDRM_PLANE_TYPE_PRIMARY) {
++			num_primary++;
++			crtc_pipe = num_primary - 1;
++			drm_crtc = drm_crtc_find(device,
++						 resources->crtcs[crtc_pipe]);
++			assert(drm_crtc);
++			drm_crtc->primary_plane_id = drm_plane->plane_id;
++		} else if (drm_plane->type == WDRM_PLANE_TYPE_CURSOR) {
++			num_cursor++;
++			crtc_pipe = num_cursor - 1;
++			drm_crtc = drm_crtc_find(device,
++						 resources->crtcs[crtc_pipe]);
++			assert(drm_crtc);
++			drm_crtc->cursor_plane_id = drm_plane->plane_id;
++		} else if (drm_plane->type == WDRM_PLANE_TYPE_OVERLAY) {
+ 			weston_compositor_stack_plane(b->compositor,
+ 						      &drm_plane->base,
+ 						      NULL);
++		}
+ 
+ 		if (drm_plane->type == WDRM_PLANE_TYPE_PRIMARY)
+ 			primary_plane_zpos_min = drm_plane->zpos_min;
+@@ -3904,7 +3936,7 @@ drm_device_create(struct drm_backend *backend, const char *name)
+ 			     WL_EVENT_READABLE, on_drm_input, device);
+ 
+ 	wl_list_init(&device->plane_list);
+-	create_sprites(device);
++	create_sprites(device, res);
+ 
+ 	wl_list_init(&device->writeback_connector_list);
+ 	if (drm_backend_discover_connectors(device, udev_device, res) < 0) {
+@@ -4094,7 +4126,7 @@ drm_backend_create(struct weston_compositor *compositor,
+ 	}
+ 
+ 	wl_list_init(&device->plane_list);
+-	create_sprites(b->drm);
++	create_sprites(b->drm, res);
+ 
+ 	if (udev_input_init(&b->input,
+ 			    compositor, b->udev, seat_id,
+-- 
+2.20.1
+

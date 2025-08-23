@@ -1,0 +1,65 @@
+#
+
+comment "Recovery depends on linux kernel"
+	depends on !RK_KERNEL
+
+menuconfig RK_RECOVERY
+	bool "Recovery (based on Buildroot)"
+	depends on RK_KERNEL
+	default y if !RK_AMP
+
+if RK_RECOVERY
+
+config RK_RECOVERY_BASE_CFG
+	string "buildroot base cfg (rockchip_<cfg>_recovery_defconfig)"
+	default "" if RK_AB_UPDATE
+	default RK_CHIP if RK_CHIP_FAMILY = "rk3566_rk3568"
+	default RK_CHIP_FAMILY
+	help
+	  Base name of buildroot defconfig for recovery.
+
+config RK_RECOVERY_CFG
+	string
+	default "rockchip_${RK_CHIP_FAMILY}_recovery" \
+		if RK_RECOVERY_BASE_CFG = ""
+	default "rockchip_${RK_RECOVERY_BASE_CFG}_recovery"
+
+config RK_RECOVERY_INITRD_TYPE
+	string
+	default "romfs" if RK_RECOVERY_ROMFS
+	default "cpio" if RK_RECOVERY_CPIO
+	default "cpio.gz" if RK_RECOVERY_CPIO_GZ
+	default "cpio.xz" if RK_RECOVERY_CPIO_XZ
+
+choice
+	prompt "ramdisk filesystem type"
+	default RK_RECOVERY_CPIO_GZ
+
+config RK_RECOVERY_ROMFS
+	bool "romfs"
+
+config RK_RECOVERY_CPIO
+	bool "cpio"
+
+config RK_RECOVERY_CPIO_GZ
+	bool "cpio.gz"
+
+config RK_RECOVERY_CPIO_XZ
+	bool "cpio.xz"
+
+endchoice # init RD type
+
+if RK_USE_FIT_IMG
+
+config RK_RECOVERY_FIT_ITS_NAME
+	string "its script for FIT recovery image"
+	default "boot4recovery.its"
+
+config RK_RECOVERY_FIT_ITS
+	string
+	default "$RK_CHIP_DIR/$RK_RECOVERY_FIT_ITS_NAME"
+
+endif # FIT image
+
+endif # Recovery
+endmenuconfig # Recovery

@@ -1,0 +1,73 @@
+From f89a61d7536a81a8afae9d9419b524098b61d538 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 1 Jun 2022 11:28:24 +0800
+Subject: [PATCH 55/95] desktop-shell: Delay locking when having pending
+ fade-out animations
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ desktop-shell/shell.c         | 13 ++++++++++++-
+ include/libweston/libweston.h |  2 ++
+ 2 files changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/desktop-shell/shell.c b/desktop-shell/shell.c
+index b815834..91063ec 100644
+--- a/desktop-shell/shell.c
++++ b/desktop-shell/shell.c
+@@ -3906,6 +3906,10 @@ static void
+ shell_fade_done(struct weston_view_animation *animation, void *data)
+ {
+ 	struct desktop_shell *shell = data;
++	struct weston_compositor *compositor = shell->compositor;
++
++	if (shell->fade.type == FADE_OUT)
++		compositor->pending_fade_out --;
+ 
+ 	if (!shell->fade.curtain)
+ 		return;
+@@ -3917,7 +3921,8 @@ shell_fade_done(struct weston_view_animation *animation, void *data)
+ 		shell->fade.curtain = NULL;
+ 		break;
+ 	case FADE_OUT:
+-		lock(shell);
++		if (!compositor->pending_fade_out)
++			lock(shell);
+ 		break;
+ 	default:
+ 		break;
+@@ -4007,6 +4012,9 @@ shell_fade(struct desktop_shell *shell, enum fade_type type)
+ 	if (shell->fade.animation) {
+ 		weston_fade_update(shell->fade.animation, tint);
+ 	} else {
++		if (type == FADE_OUT)
++			shell->compositor->pending_fade_out ++;
++
+ 		shell->fade.animation =
+ 			weston_fade_run(shell->fade.curtain->view,
+ 					1.0 - tint, tint,
+@@ -4917,6 +4925,9 @@ shell_destroy(struct wl_listener *listener, void *data)
+ 	if (shell->fade.animation) {
+ 		weston_view_animation_destroy(shell->fade.animation);
+ 		shell->fade.animation = NULL;
++
++		if (shell->fade.type == FADE_OUT)
++			shell->compositor->pending_fade_out --;
+ 	}
+ 
+ 	if (shell->fade.curtain) {
+diff --git a/include/libweston/libweston.h b/include/libweston/libweston.h
+index a286c21..576a34c 100644
+--- a/include/libweston/libweston.h
++++ b/include/libweston/libweston.h
+@@ -1658,6 +1658,8 @@ struct weston_compositor {
+ 	bool warm_up;
+ 
+ 	bool hide_cursor;
++
++	uint32_t pending_fade_out;
+ };
+ 
+ struct weston_solid_buffer_values {
+-- 
+2.20.1
+

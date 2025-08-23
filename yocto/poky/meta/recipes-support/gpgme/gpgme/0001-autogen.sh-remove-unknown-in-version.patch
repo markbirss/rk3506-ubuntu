@@ -1,0 +1,32 @@
+From acc4750ffa79a5c2ef3c95cf31ef51352a68837b Mon Sep 17 00:00:00 2001
+From: Chen Qi <Qi.Chen@windriver.com>
+Date: Tue, 28 Feb 2023 13:43:51 +0800
+Subject: [PATCH] autogen.sh: remove '-unknown' in version
+
+python setuptools >=66.0.0 treats '-unknown' as an invalid version.
+The error message is as below:
+  pkg_resources.extern.packaging.version.InvalidVersion: Invalid version: '1.18.0-unknown'
+
+Remove the '-unknown' suffix to fix this issue.
+
+Upstream-Status: Submitted [https://lists.gnupg.org/pipermail/gnupg-devel/2023-February/035293.html]
+
+Signed-off-by: Chen Qi <Qi.Chen@windriver.com>
+
+---
+ autogen.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/autogen.sh b/autogen.sh
+index 4e1665b..a55326d 100755
+--- a/autogen.sh
++++ b/autogen.sh
+@@ -269,7 +269,7 @@ if [ "$myhost" = "find-version" ]; then
+     else
+       ingit=no
+       beta=yes
+-      tmp="-unknown"
++      tmp=""
+       rev="0000000"
+       rvd="0"
+     fi

@@ -1,0 +1,28 @@
+From f9f2832a59af7c0441a03cd10505c04417cb08ff Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 8 Mar 2024 23:33:53 +0800
+Subject: [PATCH] Fix compile error
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ configure.ac | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/configure.ac b/configure.ac
+index 14ce7e5..1ec30c4 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -26,10 +26,6 @@ AC_CHECK_HEADERS([ctype.h errno.h stdio.h getopt.h stdarg.h string.h \
+ # Check for library functions.
+ AC_CHECK_FUNCS([memset strtoll])
+ 
+-# Check for LFS
+-AC_SYS_LARGEFILE
+-CFLAGS="$CFLAGS -D_FILE_OFFSET_BITS=${ac_cv_sys_file_offset_bits}"
+-
+ dnl libparted
+ # hack
+ LIBS="$LIBS -ldl"
+-- 
+2.20.1
+

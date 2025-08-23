@@ -1,0 +1,161 @@
+#
+
+comment "Security feature depends on loader"
+	depends on !RK_LOADER
+
+comment "Security feature depends on linux kernel"
+	depends on !RK_KERNEL
+
+comment "Security feature depends on buildroot rootfs"
+	depends on !RK_ROOTFS_SYSTEM_BUILDROOT
+
+comment "Security feature would use it's own initrd"
+	depends on RK_ROOTFS_INITRD
+
+menuconfig RK_SECURITY
+	bool "Security feature (secureboot, encryption, verity, etc.)"
+	depends on RK_LOADER
+	depends on RK_KERNEL
+	depends on RK_ROOTFS_SYSTEM_BUILDROOT
+	depends on !RK_ROOTFS_INITRD
+
+if RK_SECURITY
+
+comment "Security check method (system-verity) needs squashfs rootfs type"
+	depends on RK_ROOTFS_TYPE != "squashfs"
+
+config RK_SECUREBOOT_METHOD
+	string
+	default "avb" if RK_SECUREBOOT_AVB
+	default "fit" if RK_SECUREBOOT_FIT
+
+choice
+	prompt "Secureboot Method"
+	default RK_SECUREBOOT_FIT
+
+config RK_SECUREBOOT_FIT
+	bool "fit"
+	depends on RK_USE_FIT_IMG
+	select RK_UBOOT_SPL # Security feature depends on U-Boot SPL loader
+	help
+	  Open Source 'Flattened Image Tree'.
+	  For RK3568/RK3588/RK3562 etc..
+
+config RK_SECUREBOOT_AVB
+	bool "avb"
+	help
+	  Features follow Android Verified Boot.
+	  For RK3308/RK3399/RK3326/PX30 etc..
+
+endchoice # Secureboot Method
+
+config RK_SECURITY_OPTEE_STORAGE
+	string
+	default "rpmb" if RK_SECURITY_OPTEE_STORAGE_RPMB
+	default "security" if RK_SECURITY_OPTEE_STORAGE_SECURITY
+
+choice
+	prompt "Optee Storage"
+	default RK_SECURITY_OPTEE_STORAGE_RPMB
+
+config RK_SECURITY_OPTEE_STORAGE_RPMB
+	bool "rpmb"
+	help
+	  HW partitions in eMMC device.
+
+config RK_SECURITY_OPTEE_STORAGE_SECURITY
+	bool "security"
+	help
+	  Logic partitions can be defined by user in any storage.
+
+endchoice # Optee Storage
+
+config RK_SECURITY_CHECK_METHOD
+	string
+	default "base" if RK_SECURITY_CHECK_BASE
+	default "system-encryption" if RK_SECURITY_CHECK_SYSTEM_ENCRYPTION
+	default "system-verity" if RK_SECURITY_CHECK_SYSTEM_VERITY
+
+choice
+	prompt "security check method (base|system-encryption|system-verity)"
+	default RK_SECURITY_CHECK_SYSTEM_VERITY if RK_CHIP_FAMILY = "rk3566_rk3568"
+
+config RK_SECURITY_CHECK_BASE
+	bool "base"
+	help
+	  Check firmwares include loader,uboot,boot or recovery.
+
+config RK_SECURITY_CHECK_SYSTEM_ENCRYPTION
+	bool "system-encryption"
+	help
+	  Check firmwares include loader,uboot,boot or recovery.
+	  And encrypte system image.
+
+config RK_SECURITY_CHECK_SYSTEM_VERITY
+	bool "system-verity"
+	depends on RK_ROOTFS_TYPE = "squashfs"
+	help
+	  Check firmwares include loader,uboot,boot or recovery,system.
+	  And system must be read-only.
+
+endchoice # security check method
+
+if !RK_SECURITY_CHECK_BASE
+
+menu "Security ramdisk"
+
+config RK_SECURITY_INITRD_BASE_CFG
+	string "buildroot base cfg (rockchip_<cfg>_ramboot_defconfig)"
+	default RK_CHIP_FAMILY
+	help
+	  Base name of buildroot defconfig for security ramdisk.
+
+config RK_SECURITY_INITRD_CFG
+	string
+	default "rockchip_${RK_SECURITY_INITRD_BASE_CFG}_ramboot"
+
+config RK_SECURITY_INITRD_TYPE
+	string
+	default "romfs" if RK_SECURITY_ROMFS
+	default "cpio" if RK_SECURITY_CPIO
+	default "cpio.gz" if RK_SECURITY_CPIO_GZ
+
+choice
+	prompt "ramdisk filesystem type"
+	default RK_SECURITY_CPIO_GZ
+
+config RK_SECURITY_ROMFS
+	bool "romfs"
+
+config RK_SECURITY_CPIO
+	bool "cpio"
+
+config RK_SECURITY_CPIO_GZ
+	bool "cpio.gz"
+
+endchoice # init RD type
+
+config RK_SECURITY_FIT_ITS_NAME
+	string "its script for FIT ramboot image"
+	depends on RK_SECUREBOOT_FIT
+	default RK_RECOVERY_FIT_ITS_NAME if RK_RECOVERY_FIT_ITS_NAME != ""
+	default "boot4recovery.its"
+
+config RK_SECURITY_FIT_ITS
+	string
+	default "$RK_CHIP_DIR/$RK_SECURITY_FIT_ITS_NAME"
+
+endmenu # Security ramdisk
+
+endif # !base check
+
+comment "Burn security key is dangerous and cannot be reverted!"
+	depends on RK_SECURITY_BURN_KEY
+
+config RK_SECURITY_BURN_KEY
+	bool "burn security key"
+	help
+	  Burn security key's hash to non volatile memory.
+
+endif # Security
+endmenuconfig # Security

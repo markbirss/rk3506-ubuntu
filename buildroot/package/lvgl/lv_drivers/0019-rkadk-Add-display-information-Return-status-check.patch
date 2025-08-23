@@ -1,0 +1,30 @@
+From 7be71e1d89ca68741321f2676e048ed7c9050406 Mon Sep 17 00:00:00 2001
+From: ZiHan Huang <zack.huang@rock-chips.com>
+Date: Wed, 4 Sep 2024 17:51:31 +0800
+Subject: [PATCH] rkadk: Add display information Return status check
+
+Signed-off-by: ZiHan Huang <zack.huang@rock-chips.com>
+---
+ rkadk/rkadk.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/rkadk/rkadk.c b/rkadk/rkadk.c
+index fca7e53..1434523 100644
+--- a/rkadk/rkadk.c
++++ b/rkadk/rkadk.c
+@@ -632,7 +632,11 @@ void rkadk_disp_drv_init(lv_disp_rot_t rotate_disp)
+     /*-------------------------
+      * Initialize your display
+      * -----------------------*/
+-    rk_disp_init(rotate_disp);
++    int ret = rk_disp_init(rotate_disp);
++    if(ret == -1) {
++        printf("rk_disp_init is fail\n");
++        return;
++    }
+     rk_disp_get_sizes(&lcd_w, &lcd_h, NULL);
+     /*-----------------------------
+      * Create a buffer for drawing
+--
+2.34.1
+

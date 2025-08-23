@@ -1,0 +1,55 @@
+From 1d2f67d12bc76d27b03ff7303a2a36e14058b1d1 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 11 Sep 2024 16:24:32 +0800
+Subject: [PATCH] client: wayland: Fix multi-touch crash
+
+The touch ID starts with 0.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ client/Wayland/wlf_input.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/client/Wayland/wlf_input.c b/client/Wayland/wlf_input.c
+index 735245b..879cc7b 100644
+--- a/client/Wayland/wlf_input.c
++++ b/client/Wayland/wlf_input.c
+@@ -34,7 +34,7 @@
+ 
+ typedef struct touch_contact
+ {
+-	int id;
++	int id; /* touchId + 1 */
+ 	double pos_x;
+ 	double pos_y;
+ 	BOOL emulate_mouse;
+@@ -357,7 +357,7 @@ BOOL wlf_handle_touch_up(freerdp* instance, const UwacTouchUp* ev)
+ 
+ 	for (i = 0; i < MAX_CONTACTS; i++)
+ 	{
+-		if (contacts[i].id == touchId)
++		if (contacts[i].id == touchId + 1)
+ 		{
+ 			contacts[i].id = 0;
+ 			x = contacts[i].pos_x;
+@@ -414,7 +414,7 @@ BOOL wlf_handle_touch_down(freerdp* instance, const UwacTouchDown* ev)
+ 	{
+ 		if (contacts[i].id == 0)
+ 		{
+-			contacts[i].id = touchId;
++			contacts[i].id = touchId + 1;
+ 			contacts[i].pos_x = x;
+ 			contacts[i].pos_y = y;
+ 			contacts[i].emulate_mouse = FALSE;
+@@ -469,7 +469,7 @@ BOOL wlf_handle_touch_motion(freerdp* instance, const UwacTouchMotion* ev)
+ 
+ 	for (i = 0; i < MAX_CONTACTS; i++)
+ 	{
+-		if (contacts[i].id == touchId)
++		if (contacts[i].id == touchId + 1)
+ 		{
+ 			if (contacts[i].pos_x == x && contacts[i].pos_y == y)
+ 			{
+-- 
+2.20.1
+

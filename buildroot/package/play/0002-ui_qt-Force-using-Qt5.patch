@@ -1,0 +1,40 @@
+From 4e4a27204a41bb329d7416dc6b634ff55aa9b42a Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 27 Mar 2024 11:08:29 +0800
+Subject: [PATCH 2/2] ui_qt: Force using Qt5
+
+Also drop dependency of x11.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ Source/ui_qt/CMakeLists.txt | 12 +-----------
+ 1 file changed, 1 insertion(+), 11 deletions(-)
+
+diff --git a/Source/ui_qt/CMakeLists.txt b/Source/ui_qt/CMakeLists.txt
+index 27e8f81..29b53c3 100644
+--- a/Source/ui_qt/CMakeLists.txt
++++ b/Source/ui_qt/CMakeLists.txt
+@@ -246,19 +246,9 @@ set(QT_RESOURCES
+ 
+ set(QT_COMPONENTS Widgets Core)
+ 
+-find_package(Qt6 COMPONENTS ${QT_COMPONENTS})
+-if(NOT Qt6_FOUND)
+-	if(TARGET_PLATFORM_UNIX)
+-		list(APPEND QT_COMPONENTS X11Extras)
+-	endif()
+-
+-	find_package(Qt5 REQUIRED COMPONENTS ${QT_COMPONENTS})
+-endif()
++find_package(Qt5 REQUIRED COMPONENTS ${QT_COMPONENTS})
+ 
+ list(APPEND PROJECT_LIBS Qt::Widgets Qt::Core)
+-if(TARGET_PLATFORM_UNIX AND Qt5_FOUND)
+-	list(APPEND PROJECT_LIBS Qt::X11Extras)
+-endif()
+ 
+ add_definitions(${QT_DEFINITIONS})
+ 
+-- 
+2.20.1
+

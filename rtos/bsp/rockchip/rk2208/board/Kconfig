@@ -1,0 +1,35 @@
+menu "RT-Thread board config"
+
+    config IS_FPGA
+        bool "Is FPGA Board"
+        default n
+choice
+    prompt "Board Type"
+    default RT_USING_BOARD_M1_EVB
+
+    config RT_USING_BOARD_M1P_RK3399_EVB
+        bool "Enable M1P_RK3399_EVB board"
+
+    config RT_USING_BOARD_M1_EVB
+        bool "Enable M1_EVB board"
+
+    config RT_USING_BOARD_FPGA
+        bool "Enable FPGA board"
+        select IS_FPGA
+
+endchoice
+
+if RT_USING_BOARD_M1_EVB
+    config M4_JTAG_ENABLE
+        bool "Enable Cortex M4 JTAG"
+        default n
+        select RT_USING_UART1
+        help
+            you need set RT_CONSOLE_DEVICE_NAME=uart1 at the same time
+
+    config DSP_JTAG_ENABLE
+        bool "Enable DSP JTAG"
+        default n
+endif
+
+endmenu

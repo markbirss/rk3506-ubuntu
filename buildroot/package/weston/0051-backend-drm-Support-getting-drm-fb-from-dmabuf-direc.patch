@@ -1,0 +1,91 @@
+From 979aded56677085d6f5697f6cd040af986043a1c Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Mon, 7 Mar 2022 15:56:19 +0800
+Subject: [PATCH 51/95] backend-drm: Support getting drm fb from dmabuf
+ directly
+
+Try to import dmabuf to drm fb directly when GBM fd-import not working.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/backend-drm/fb.c | 48 +++++++++++++++++++++++---------------
+ 1 file changed, 29 insertions(+), 19 deletions(-)
+
+diff --git a/libweston/backend-drm/fb.c b/libweston/backend-drm/fb.c
+index 34507cb..cbfaf1e 100644
+--- a/libweston/backend-drm/fb.c
++++ b/libweston/backend-drm/fb.c
+@@ -370,10 +370,16 @@ drm_fb_destroy_dmabuf(struct drm_fb *fb)
+ {
+ 	int i;
+ 
+-	/* We deliberately do not close the GEM handles here; GBM manages
+-	 * their lifetime through the BO. */
+-	if (fb->bo)
++	if (fb->bo) {
++		/* We deliberately do not close the GEM handles here; GBM manages
++		 * their lifetime through the BO. */
+ 		gbm_bo_destroy(fb->bo);
++	} else {
++		for (i = 0; i < fb->num_planes; i++) {
++			struct drm_gem_close arg = { fb->handles[i], };
++			drmIoctl(fb->fd, DRM_IOCTL_GEM_CLOSE, &arg);
++		}
++	}
+ 
+ 	/*
+ 	 * If we imported the dmabuf into a scanout device, we are responsible
+@@ -444,13 +450,6 @@ drm_fb_get_from_dmabuf(struct linux_dmabuf_buffer *dmabuf,
+ 
+ 	fb->bo = gbm_bo_import(backend->gbm, GBM_BO_IMPORT_FD_MODIFIER,
+ 			       &import_mod, GBM_BO_USE_SCANOUT);
+-	if (!fb->bo) {
+-		if (try_view_on_plane_failure_reasons)
+-			*try_view_on_plane_failure_reasons |=
+-				FAILURE_REASONS_GBM_BO_IMPORT_FAILED;
+-		goto err_free;
+-	}
+-
+ 	fb->width = dmabuf->attributes.width;
+ 	fb->height = dmabuf->attributes.height;
+ 	fb->modifier = dmabuf->attributes.modifier;
+@@ -479,16 +478,27 @@ drm_fb_get_from_dmabuf(struct linux_dmabuf_buffer *dmabuf,
+ 	}
+ 
+ 	fb->num_planes = dmabuf->attributes.n_planes;
+-	for (i = 0; i < dmabuf->attributes.n_planes; i++) {
+-		union gbm_bo_handle handle;
+-
+-	        handle = gbm_bo_get_handle_for_plane(fb->bo, i);
+-		if (handle.s32 == -1) {
+-			*try_view_on_plane_failure_reasons |=
+-				FAILURE_REASONS_GBM_BO_GET_HANDLE_FAILED;
+-			goto err_free;
++	if (fb->bo) {
++		for (i = 0; i < fb->num_planes; i++) {
++			union gbm_bo_handle handle;
++
++		        handle = gbm_bo_get_handle_for_plane(fb->bo, i);
++			if (handle.s32 == -1) {
++				*try_view_on_plane_failure_reasons |=
++					FAILURE_REASONS_GBM_BO_GET_HANDLE_FAILED;
++				goto err_free;
++			}
++			fb->handles[i] = handle.u32;
++		}
++	} else {
++		for (i = 0; i < fb->num_planes; i++) {
++			if (drmPrimeFDToHandle(fb->fd, import_mod.fds[i],
++					       &fb->handles[i])) {
++				*try_view_on_plane_failure_reasons |=
++					FAILURE_REASONS_GBM_BO_IMPORT_FAILED;
++				goto err_free;
++			}
+ 		}
+-		fb->handles[i] = handle.u32;
+ 	}
+ 
+ 	if (drm_fb_addfb(device, fb) != 0) {
+-- 
+2.20.1
+

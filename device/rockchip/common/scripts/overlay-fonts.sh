@@ -1,0 +1,1 @@
+../overlays/rootfs/fonts/install.sh

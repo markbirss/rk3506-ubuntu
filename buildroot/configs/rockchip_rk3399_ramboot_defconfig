@@ -1,0 +1,6 @@
+#include "chips/rk3399_aarch64.config"
+#include "base/kernel.config"
+BR2_PACKAGE_LUKSMETA=y
+BR2_ROOTFS_OVERLAY+="board/rockchip/common/base board/rockchip/common/security-ramdisk-overlay/"
+BR2_TARGET_ROOTFS_CPIO=y
+BR2_TARGET_ROOTFS_CPIO_GZIP=y

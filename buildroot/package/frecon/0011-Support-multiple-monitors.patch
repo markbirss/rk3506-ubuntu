@@ -1,0 +1,1652 @@
+From 027b04dc44b82447ca6c2760e67320831fba726a Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 28 Feb 2024 18:05:41 +0800
+Subject: [PATCH 11/11] Support multiple monitors
+
+Tested on RK3588 EVB with:
+1/ FRECON_OUTPUT_CONFIG=fit:270:1280x800,DSI-1=:90: frecon
+2/ Connect HDMI
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ drm.c  | 703 +++++++++++++++++++++++++++++++++------------------------
+ drm.h  |  66 ++++--
+ fb.c   | 416 ++++++++++++++++++----------------
+ fb.h   |  79 +++----
+ main.c |   3 +-
+ 5 files changed, 726 insertions(+), 541 deletions(-)
+
+diff --git a/drm.c b/drm.c
+index 471210e..1ba6fd9 100644
+--- a/drm.c
++++ b/drm.c
+@@ -16,71 +16,51 @@
+ #include <unistd.h>
+ 
+ #include "drm.h"
+-#include "input.h"
+ #include "util.h"
+ 
+ static drm_t* g_drm = NULL;
+-
+-static int32_t crtc_planes_num(drm_t* drm, int32_t crtc_index)
++drm_t *drm_get()
+ {
+-	drmModePlanePtr plane;
+-	int32_t planes_num = 0;
+-	drmModePlaneResPtr plane_resources = drmModeGetPlaneResources(drm->fd);
+-
+-	if (!plane_resources)
+-		return 1; /* Just pretend there is one plane. */
+-
+-	for (uint32_t p = 0; p < plane_resources->count_planes; p++) {
+-		plane = drmModeGetPlane(drm->fd, plane_resources->planes[p]);
+-
+-		if (plane->possible_crtcs & (1 << crtc_index))
+-			planes_num++;
+-
+-		drmModeFreePlane(plane);
+-	}
+-	drmModeFreePlaneResources(plane_resources);
+-	return planes_num;
++	return g_drm;
+ }
+ 
+-static bool get_connector_path(drm_t* drm, uint32_t connector_id, uint32_t* ret_encoder_id, uint32_t* ret_crtc_id)
++/* Get current CRTC for given connector_id. */
++static bool get_crtc_for_connector(drm_t* drm, uint32_t connector_id, uint32_t* ret_crtc_id)
+ {
+ 	drmModeConnector* connector = drmModeGetConnector(drm->fd, connector_id);
+ 	drmModeEncoder* encoder;
++	uint32_t crtc_id = 0;
+ 
+ 	if (!connector)
+ 		return false; /* Error. */
+ 
+-	if (ret_encoder_id)
+-		*ret_encoder_id = connector->encoder_id;
+ 	if (!connector->encoder_id) {
+ 		drmModeFreeConnector(connector);
+-		if (ret_crtc_id)
+-			*ret_crtc_id = 0;
+-		return true; /* Not connected. */
++		goto out; /* Not connected. */
+ 	}
+ 
+ 	encoder = drmModeGetEncoder(drm->fd, connector->encoder_id);
+ 	if (!encoder) {
+-		if (ret_crtc_id)
+-			*ret_crtc_id = 0;
+ 		drmModeFreeConnector(connector);
+-		return false; /* Error. */
++		goto out; /* Error. */
+ 	}
+ 
+-	if (ret_crtc_id)
+-		*ret_crtc_id = encoder->crtc_id;
++	crtc_id = encoder->crtc_id;
+ 
+ 	drmModeFreeEncoder(encoder);
+ 	drmModeFreeConnector(connector);
+-	return true; /* Connected. */
++out:
++	if (ret_crtc_id)
++		*ret_crtc_id = crtc_id;
++
++	return !!crtc_id; /* Connected. */
+ }
+ 
+-/* Find CRTC with most planes for given connector_id. */
++/* Find CRTC for given connector_id. */
+ static bool find_crtc_for_connector(drm_t* drm, uint32_t connector_id, uint32_t* ret_crtc_id)
+ {
+ 	int enc;
+ 	int32_t crtc_id = -1;
+-	int32_t max_crtc_planes = -1;
+ 	drmModeConnector* connector = drmModeGetConnector(drm->fd, connector_id);
+ 
+ 	if (!connector)
+@@ -92,16 +72,10 @@ static bool find_crtc_for_connector(drm_t* drm, uint32_t connector_id, uint32_t*
+ 
+ 		if (encoder) {
+ 			for (crtc = 0; crtc < drm->resources->count_crtcs; crtc++) {
+-				int32_t crtc_planes;
+-
+ 				if (!(encoder->possible_crtcs & (1 << crtc)))
+ 					continue;
+ 
+-				crtc_planes = crtc_planes_num(drm, crtc);
+-				if (max_crtc_planes < crtc_planes) {
+-					crtc_id = drm->resources->crtcs[crtc];
+-					max_crtc_planes = crtc_planes;
+-				}
++				crtc_id = drm->resources->crtcs[crtc];
+ 			}
+ 
+ 			drmModeFreeEncoder(encoder);
+@@ -150,36 +124,6 @@ static int drm_is_primary_plane(drm_t* drm, uint32_t plane_id)
+ 	return ret;
+ }
+ 
+-/* Disable all planes except for primary on crtc we use. */
+-static void drm_disable_non_primary_planes(drm_t* drm, uint32_t console_crtc_id)
+-{
+-	int ret;
+-
+-	if (!drm->plane_resources)
+-		return;
+-
+-	for (uint32_t p = 0; p < drm->plane_resources->count_planes; p++) {
+-		drmModePlanePtr plane;
+-		plane = drmModeGetPlane(drm->fd,
+-					drm->plane_resources->planes[p]);
+-		if (plane) {
+-			int primary = drm_is_primary_plane(drm, plane->plane_id);
+-			if (!(plane->crtc_id == console_crtc_id && primary != 0)) {
+-				ret = drmModeSetPlane(drm->fd, plane->plane_id, plane->crtc_id,
+-						      0, 0,
+-						      0, 0,
+-						      0, 0,
+-						      0, 0,
+-						      0, 0);
+-				if (ret) {
+-					LOG(WARNING, "Unable to disable plane:%d %m", plane->plane_id);
+-				}
+-			}
+-			drmModeFreePlane(plane);
+-		}
+-	}
+-}
+-
+ static bool drm_is_internal(unsigned type)
+ {
+ 	unsigned t;
+@@ -216,114 +160,330 @@ static drmModeConnector* find_first_connected_connector(drm_t* drm, bool interna
+ 	return NULL;
+ }
+ 
+-static bool find_main_monitor(drm_t* drm)
++static uint32_t find_main_monitor(drm_t* drm)
+ {
+-	int modes;
+-	uint32_t console_crtc_id = 0;
+-	int lid_state = input_check_lid_state();
+-	drmModeConnector* main_monitor_connector = NULL;
+-
+-	drm->console_connector_id = 0;
++	drmModeConnector* connector;
++	uint32_t connector_id = 0;
+ 
+ 	/*
+ 	 * Find the LVDS/eDP/DSI connectors. Those are the main screens.
+ 	 */
+-	if (lid_state <= 0)
+-		main_monitor_connector = find_first_connected_connector(drm, true, false);
++	connector = find_first_connected_connector(drm, true, false);
+ 
+ 	/*
+ 	 * Now try external connectors.
+ 	 */
+-	if (!main_monitor_connector)
+-		main_monitor_connector =
+-				find_first_connected_connector(drm, false, true);
++	if (!connector)
++		connector = find_first_connected_connector(drm, false, true);
+ 
+ 	/*
+ 	 * If we still didn't find a connector, give up and return.
+ 	 */
+-	if (!main_monitor_connector)
++	if (!connector)
++		return 0;
++
++	if (connector->count_modes)
++		connector_id = connector->connector_id;
++
++	drmModeFreeConnector(connector);
++	return connector_id;
++}
++
++static bool drm_is_connected(drm_t* drm, uint32_t connector_id)
++{
++	drmModeConnector* connector = drmModeGetConnector(drm->fd, connector_id);
++	if (!connector)
+ 		return false;
+ 
+-	if (!main_monitor_connector->count_modes)
++	if (connector->connection == DRM_MODE_CONNECTED) {
++		drmModeFreeConnector(connector);
++		return true;
++	}
++	drmModeFreeConnector(connector);
++	return false;
++}
++
++/* based on weston-13: libweston/backend-drm/drm.c */
++static const char *const connector_type_names[] = {
++	[DRM_MODE_CONNECTOR_Unknown]     = "Unknown",
++	[DRM_MODE_CONNECTOR_VGA]         = "VGA",
++	[DRM_MODE_CONNECTOR_DVII]        = "DVI-I",
++	[DRM_MODE_CONNECTOR_DVID]        = "DVI-D",
++	[DRM_MODE_CONNECTOR_DVIA]        = "DVI-A",
++	[DRM_MODE_CONNECTOR_Composite]   = "Composite",
++	[DRM_MODE_CONNECTOR_SVIDEO]      = "SVIDEO",
++	[DRM_MODE_CONNECTOR_LVDS]        = "LVDS",
++	[DRM_MODE_CONNECTOR_Component]   = "Component",
++	[DRM_MODE_CONNECTOR_9PinDIN]     = "DIN",
++	[DRM_MODE_CONNECTOR_DisplayPort] = "DP",
++	[DRM_MODE_CONNECTOR_HDMIA]       = "HDMI-A",
++	[DRM_MODE_CONNECTOR_HDMIB]       = "HDMI-B",
++	[DRM_MODE_CONNECTOR_TV]          = "TV",
++	[DRM_MODE_CONNECTOR_eDP]         = "eDP",
++	[DRM_MODE_CONNECTOR_VIRTUAL]     = "Virtual",
++	[DRM_MODE_CONNECTOR_DSI]         = "DSI",
++	[DRM_MODE_CONNECTOR_DPI]         = "DPI",
++};
++
++static char *drm_make_name(drm_t *drm, uint32_t connector_id)
++{
++	drmModeConnector *connector;
++	char *name;
++	const char *type_name = NULL;
++	int ret;
++
++	connector = drmModeGetConnector(drm->fd, connector_id);
++	if (!connector)
++		return NULL;
++
++	if (connector->connector_type < ARRAY_SIZE(connector_type_names))
++		type_name = connector_type_names[connector->connector_type];
++
++	if (!type_name)
++		type_name = "UNNAMED";
++
++	ret = asprintf(&name, "%s-%d", type_name, connector->connector_type_id);
++	if (ret < 0)
++		name = NULL;
++
++	drmModeFreeConnector(connector);
++	return name;
++}
++
++static bool drm_get_mode(drm_t* drm, drm_output_t *output)
++{
++	drmModeConnector *connector;
++	drmModeModeInfo *preferred = NULL, *mode;
++	int i;
++
++	connector = drmModeGetConnector(drm->fd, output->connector_id);
++	if (!connector)
+ 		return false;
+ 
+-	drm->console_connector_id = main_monitor_connector->connector_id;
++	if (connector->connection != DRM_MODE_CONNECTED ||
++	    !connector->count_modes)
++		goto err;
+ 
+-	for (modes = 0; modes < main_monitor_connector->count_modes; modes++) {
+-		if (main_monitor_connector->modes[modes].type &
+-				DRM_MODE_TYPE_PREFERRED) {
+-			drm->console_mode_info = main_monitor_connector->modes[modes];
++	for (i = 0; i < connector->count_modes; i++) {
++		mode = &connector->modes[i];
++
++		if (!preferred && mode->type & DRM_MODE_TYPE_PREFERRED)
++			preferred = mode;
++
++		if (mode->hdisplay == output->preferred_width &&
++		    mode->vdisplay == output->preferred_height) {
++			preferred = mode;
+ 			break;
+ 		}
+ 	}
+-	/* If there was no preferred mode use first one. */
+-	if (modes == main_monitor_connector->count_modes)
+-		drm->console_mode_info = main_monitor_connector->modes[0];
+-
+-	drmModeFreeConnector(main_monitor_connector);
+ 
+-	get_connector_path(drm, drm->console_connector_id, NULL, &console_crtc_id);
++	if (preferred)
++		output->mode = *preferred;
++	else
++		output->mode = connector->modes[connector->count_modes - 1];
+ 
+-	if (!console_crtc_id)
+-		/* No existing path, find one. */
+-		find_crtc_for_connector(drm, drm->console_connector_id, &console_crtc_id);
++	drmModeFreeConnector(connector);
++	return true;
++err:
++	drmModeFreeConnector(connector);
++	return false;
++}
+ 
+-	if (!console_crtc_id)
+-		/* Cannot find CRTC for connector. We will not be able to use it. */
++static bool drm_remove_output(drm_t* drm, uint32_t connector_id)
++{
++	if (!connector_id)
+ 		return false;
+ 
+-	return true;
++	drm_for_each_output(drm, output) {
++		if (output->connector_id != connector_id)
++			continue;
++
++		LOG(INFO, "Removing output(%s)", output->name);
++
++		drmModeSetCrtc(drm->fd, output->crtc_id, -1, 0, 0,
++			       NULL, -1, NULL);
++
++		free(output->name);
++
++		/* Hacky way to remove entry */
++		do {
++			memcpy(output, output + 1, sizeof(*output));
++			output ++;
++		} while (output->connector_id);
++
++		drm->count_outputs --;
++		return true;
++	}
++
++	return false;
+ }
+ 
+-static void drm_clear_rmfb(drm_t* drm)
++static bool drm_add_output(drm_t* drm, uint32_t connector_id)
+ {
+-	if (drm->delayed_rmfb_fb_id) {
+-		drmModeRmFB(drm->fd, drm->delayed_rmfb_fb_id);
+-		drm->delayed_rmfb_fb_id = 0;
++	drmModePlaneResPtr pres;
++	drm_output_t *output;
++	uint32_t crtc_pipe = 0, count_primaries = 0;
++	const char *env;
++	int i;
++
++	if (!connector_id)
++		return false;
++
++	drm_remove_output(drm, connector_id);
++
++	if (drm->count_outputs >= MAX_OUTPUTS)
++		return false;
++
++	if (!drm_is_connected(drm, connector_id))
++		return false;
++
++	output = &drm->outputs[drm->count_outputs];
++	output->connector_id = connector_id;
++
++	output->name = drm_make_name(drm, connector_id);
++	if (!output->name)
++		goto err;
++
++	if (!drm_get_mode(drm, output))
++		goto err;
++
++	if (!get_crtc_for_connector(drm, connector_id, &output->crtc_id) &&
++	    !find_crtc_for_connector(drm, connector_id, &output->crtc_id))
++		goto err;
++
++	for (i = 0; i < drm->resources->count_crtcs; i++) {
++		if (drm->resources->crtcs[i] == output->crtc_id) {
++			crtc_pipe = i;
++			break;
++		}
+ 	}
++
++	pres = drmModeGetPlaneResources(drm->fd);
++	if (!pres)
++		goto err;
++
++	for (i = 0; i < (int)pres->count_planes; i++) {
++		drmModePlanePtr plane;
++
++		if (!drm_is_primary_plane(drm, pres->planes[i]))
++			continue;
++
++		count_primaries ++;
++
++		if ((count_primaries - 1) != crtc_pipe)
++			continue;
++
++		plane = drmModeGetPlane(drm->fd, pres->planes[i]);
++		if (plane) {
++			if (plane->possible_crtcs & 1 << crtc_pipe)
++				output->plane_id = plane->plane_id;
++			drmModeFreePlane(plane);
++		}
++		break;
++	}
++
++	drmModeFreePlaneResources(pres);
++
++	if (!output->plane_id)
++		goto err;
++
++	/* For example: FRECON_OUTPUT_CONFIG="fit:0,DSI-1=stretch:90:1920x1080" */
++	if ((env = getenv("FRECON_OUTPUT_CONFIG"))) {
++		char fill[64] = "\0";
++		int rotation = 0;
++
++		if (strstr(env, output->name))
++			env = strstr(env, output->name) +
++				strlen(output->name) + 1;
++
++		output->preferred_width = output->preferred_height = 0;
++		sscanf(env, "%[a-z]", fill);
++		sscanf(env, "%*[^0-9,]%d", &rotation);
++		sscanf(env, "%*[^0-9,]%*d:%dx%d",
++		       &output->preferred_width, &output->preferred_height);
++
++		if (!strcmp(fill, "fit"))
++			output->fill = DRM_FILL_FIT;
++		else if (!strcmp(fill, "stretch"))
++			output->fill = DRM_FILL_STRETCH;
++		else if (!strcmp(fill, "none"))
++			output->fill = DRM_FILL_NONE;
++
++		if (rotation == 90)
++			output->rotation = DRM_ROTATION_90;
++		else if (rotation == 180)
++			output->rotation = DRM_ROTATION_180;
++		else if (rotation == 270)
++			output->rotation = DRM_ROTATION_270;
++		else
++			output->rotation = DRM_ROTATION_0;
++	} else if ((env = getenv("FRECON_FB_ROTATE"))) {
++		int rotation = atoi(env);
++
++		if (rotation == 90)
++			output->rotation = DRM_ROTATION_90;
++		else if (rotation == 180)
++			output->rotation = DRM_ROTATION_180;
++		else if (rotation == 270)
++			output->rotation = DRM_ROTATION_270;
++		else
++			output->rotation = DRM_ROTATION_0;
++	}
++
++	drm->count_outputs ++;
++
++	LOG(INFO, "Added output(%s): fill=%s, rotate=%d, %dx%d", output->name,
++	    (output->fill == DRM_FILL_FIT) ? "fit" :
++	    (output->fill == DRM_FILL_STRETCH ? "stretch" : "none"),
++	    output->rotation * 90,
++	    output->preferred_width, output->preferred_height);
++
++	return true;
++err:
++	if (output->name)
++		free(output->name);
++
++	memset(output, 0, sizeof(*output));
++	return false;
+ }
+ 
+ static void drm_fini(drm_t* drm)
+ {
++	drm_output_t *output;
++
+ 	if (!drm)
+ 		return;
+ 
+-	if (drm->fd >= 0) {
+-		drm_clear_rmfb(drm);
++	if (drm->fd < 0) {
++		free(drm);
++		return;
++	}
+ 
+-		if (drm->plane_resources) {
+-			drmModeFreePlaneResources(drm->plane_resources);
+-			drm->plane_resources = NULL;
+-		}
++	output = &drm->outputs[0];
++	while (output->connector_id)
++		drm_remove_output(drm, output->connector_id);
+ 
+-		if (drm->resources) {
+-			drmModeFreeResources(drm->resources);
+-			drm->resources = NULL;
+-		}
++	if (drm->resources)
++		drmModeFreeResources(drm->resources);
+ 
+-		drmClose(drm->fd);
+-		drm->fd = -1;
+-	}
++	drmClose(drm->fd);
+ 
+ 	free(drm);
+ }
+ 
+-static bool drm_equal(drm_t* l, drm_t* r)
++void drm_close(void)
+ {
+-	if (!l && !r)
+-		return true;
+-	if ((!l && r) || (l && !r))
+-		return false;
++	if (!g_drm)
++		return;
+ 
+-	if (l->console_connector_id != r->console_connector_id)
+-		return false;
+-	return true;
++	drm_fini(g_drm);
++	g_drm = NULL;
+ }
+ 
+ /*
+  * Find DRM object to display frecon on.
+  */
+-drm_t* drm_scan(void)
++static drm_t* drm_scan(void)
+ {
+ 	int ret;
+ 	uint64_t atomic = 0;
+@@ -364,15 +524,6 @@ drm_t* drm_scan(void)
+ 		return NULL;
+ 	}
+ 
+-	drm->plane_resources = drmModeGetPlaneResources(drm->fd);
+-
+-	if (!find_main_monitor(drm)) {
+-		drm_fini(drm);
+-		return NULL;
+-	}
+-
+-	drm->refcount = 1;
+-
+ 	version = drmGetVersion(drm->fd);
+ 	if (version) {
+ 		LOG(INFO,
+@@ -388,198 +539,166 @@ drm_t* drm_scan(void)
+ 	return drm;
+ }
+ 
+-void drm_set(drm_t* drm_)
++bool drm_init(void)
+ {
+-	if (g_drm) {
+-		drm_delref(g_drm);
+-		g_drm = NULL;
+-	}
+-	g_drm = drm_;
+-}
++	drm_t *drm;
++	uint32_t connector_id;
++	const char *env;
++	int i;
+ 
+-void drm_close(void)
+-{
+-	if (g_drm) {
+-		drm_delref(g_drm);
+-		g_drm = NULL;
+-	}
+-}
++	drm_close();
+ 
+-void drm_delref(drm_t* drm)
+-{
++	drm = drm_scan();
+ 	if (!drm)
+-		return;
+-	if (drm->refcount) {
+-		drm->refcount--;
+-	} else {
+-		LOG(ERROR, "Imbalanced drm_close()");
+-	}
+-	if (drm->refcount) {
+-		return;
+-	}
+-
+-	drm_fini(drm);
+-}
++		return false;
+ 
+-drm_t* drm_addref(void)
+-{
+-	if (g_drm) {
+-		g_drm->refcount++;
+-		return g_drm;
++	env = getenv("FRECON_SINGLE_HEAD");
++	if (env && !strcmp(env, "1")) {
++		LOG(INFO, "Single head mode.");
++		drm->single_head = true;
+ 	}
+ 
+-	return NULL;
+-}
+-
+-/*
+- * Returns true if connector/crtc/driver have changed and framebuffer object have to be re-created.
+- */
+-bool drm_rescan(void)
+-{
+-	drm_t* ndrm;
+-
+-	ndrm = drm_scan();
+-	if (ndrm) {
+-		if (drm_equal(ndrm, g_drm)) {
+-			drm_fini(ndrm);
+-		} else {
+-			drm_delref(g_drm);
+-			g_drm = ndrm;
+-			return true;
+-		}
++	if (drm->single_head) {
++		connector_id = find_main_monitor(drm);
++		drm_add_output(drm, connector_id);
+ 	} else {
+-		if (g_drm) {
+-			drm_delref(g_drm); /* No usable monitor/drm object. */
+-			g_drm = NULL;
+-			return true;
++		for (i = 0; i < drm->resources->count_connectors; i++) {
++			connector_id = drm->resources->connectors[i];
++			drm_add_output(drm, connector_id);
+ 		}
+ 	}
+-	return false;
+-}
+ 
+-bool drm_valid(drm_t* drm) {
+-	return drm && drm->fd >= 0 && drm->resources && drm->console_connector_id;
+-}
++	LOG(INFO, "Inited with %d outputs", drm->count_outputs);
+ 
+-static int remove_gamma_properties(drm_t* drm, uint32_t crtc_id) {
+-	drmModeObjectPropertiesPtr crtc_props = NULL;
++	g_drm = drm;
++	return true;
++}
+ 
+-	crtc_props = drmModeObjectGetProperties(drm->fd,
+-						crtc_id,
+-						DRM_MODE_OBJECT_CRTC);
+-	if (!crtc_props) {
+-		LOG(ERROR, "Could not query properties for crtc %d %m.", crtc_id);
+-		return -ENOENT;
+-	}
++/* Return true if we already has it and will keep it */
++static bool drm_got_output(drm_t *drm, uint32_t connector_id)
++{
++	drm_for_each_output(drm, output) {
++		drmModeModeInfo mode = output->mode;
+ 
+-	for (uint32_t i = 0; i < crtc_props->count_props; i++) {
+-		drmModePropertyPtr prop;
+-		prop = drmModeGetProperty(drm->fd, crtc_props->props[i]);
+-		if (!prop)
++		if (output->connector_id != connector_id)
+ 			continue;
+ 
+-		// Remove the GAMMA_LUT and DEGAMMA_LUT properties.
+-		if (!strcmp(prop->name, "GAMMA_LUT") ||
+-		    !strcmp(prop->name, "DEGAMMA_LUT")) {
+-			// Ignore the return in case it is not supported.
+-			if (drmModeObjectSetProperty(drm->fd, crtc_id,
+-						     DRM_MODE_OBJECT_CRTC,
+-						     crtc_props->props[i],
+-						     0)) {
+-				LOG(ERROR, "Unable to remove %s from crtc:%d %m", prop->name, crtc_id);
+-			}
++		/* Check connected and the preferred mode is unchanged */
++		if (drm_is_connected(drm, connector_id)) {
++		    if (drm_get_mode(drm, output) &&
++			!strcmp(mode.name, output->mode.name))
++			    return true;
+ 		}
+-		drmModeFreeProperty(prop);
++
++		output->mode = mode;
++		break;
+ 	}
+-	drmModeFreeObjectProperties(crtc_props);
+-	return 0;
+-}
+ 
++	return false;
++}
+ 
+-int32_t drm_setmode(drm_t* drm, uint32_t fb_id)
++/*
++ * Returns true if connector/crtc/driver have changed and framebuffer object have to be re-created.
++ */
++bool drm_rescan(void)
+ {
+-	int conn;
+-	int32_t ret = 0;
+-	uint32_t existing_console_crtc_id = 0;
++	drm_t* drm = g_drm;
++	uint32_t connector_id;
++	bool changed;
++	int i;
+ 
+-	get_connector_path(drm, drm->console_connector_id, NULL, &existing_console_crtc_id);
++	drmModeFreeResources(drm->resources);
+ 
+-	/* Loop through all the connectors, disable ones that are configured and set video mode on console connector. */
+-	for (conn = 0; conn < drm->resources->count_connectors; conn++) {
+-		uint32_t connector_id = drm->resources->connectors[conn];
++	drm->resources = drmModeGetResources(drm->fd);
++	if (!drm->resources)
++		goto err;
+ 
+-		if (connector_id == drm->console_connector_id) {
+-			uint32_t console_crtc_id = 0;
++	if (drm->single_head) {
++		connector_id = find_main_monitor(drm);
++		if (drm_got_output(drm, connector_id))
++			goto out;
+ 
+-			if (existing_console_crtc_id)
+-				console_crtc_id = existing_console_crtc_id;
+-			else {
+-				find_crtc_for_connector(drm, connector_id, &console_crtc_id);
++		if (drm_remove_output(drm, drm->outputs[0].connector_id))
++			changed = true;
+ 
+-				if (!console_crtc_id) {
+-					LOG(ERROR, "Could not get console crtc for connector:%d in modeset.\n", drm->console_connector_id);
+-					return -ENOENT;
+-				}
+-			}
++		if (drm_add_output(drm, connector_id))
++			changed = true;
+ 
+-			ret = drmModeSetCrtc(drm->fd, console_crtc_id,
+-					     fb_id,
+-					     0, 0,  // x,y
+-					     &drm->console_connector_id,
+-					     1,  // connector_count
+-					     &drm->console_mode_info); // mode
++		goto out;
++	}
+ 
+-			if (ret) {
+-				LOG(ERROR, "Unable to set crtc:%d connector:%d %m", console_crtc_id, drm->console_connector_id);
+-				return ret;
+-			}
++	for (i = 0; i < drm->resources->count_connectors; i++) {
++		connector_id = drm->resources->connectors[i];
++
++		if (!drm_is_connected(drm, connector_id)) {
++			if (drm_remove_output(drm, connector_id))
++				changed = true;
++			continue;
++		}
++
++		if (drm_got_output(drm, connector_id))
++			continue;
+ 
+-			ret = drmModeSetCursor(drm->fd, console_crtc_id,
+-						0, 0, 0);
++		drm_add_output(drm, connector_id);
++		changed = true;
++	}
++out:
++	if (changed)
++		LOG(INFO, "Updated with %d outputs", drm->count_outputs);
+ 
+-			if (ret)
+-				LOG(ERROR, "Unable to hide cursor on crtc:%d %m.", console_crtc_id);
++	return changed;
++err:
++	drm_fini(drm);
++	g_drm = NULL;
++	return true;
++}
+ 
+-			ret = remove_gamma_properties(drm, console_crtc_id);
+-			if (ret)
+-				LOG(ERROR, "Unable to remove gamma LUT properties from crtc:%d %m.", console_crtc_id);
++int32_t drm_setmode(drm_t *drm, drm_output_t *output, uint32_t fb_id,
++		    uint32_t src_w, uint32_t src_h)
++{
++	uint32_t dst_x, dst_y, dst_w, dst_h;
++	int32_t ret;
+ 
+-			drm_disable_non_primary_planes(drm, console_crtc_id);
++	if (!output)
++		return 0;
+ 
+-		} else {
+-			uint32_t crtc_id = 0;
++	/* Make sure that all planes and cursor are disabled on the CRTC */
++	drmModeSetCrtc(drm->fd, output->crtc_id, 0, 0, 0, NULL, 0, NULL);
+ 
+-			get_connector_path(drm, connector_id, NULL, &crtc_id);
+-			if (!crtc_id)
+-				/* This connector is not configured, skip. */
+-				continue;
++	if (!fb_id)
++		return 0;
+ 
+-			if (existing_console_crtc_id && existing_console_crtc_id == crtc_id)
+-				/* This connector is mirroring from the same CRTC as console. It will be turned off when console is set. */
+-				continue;
++	LOG(INFO, "Displaying on output(%s)", output->name);
+ 
+-			ret = drmModeSetCrtc(drm->fd, crtc_id, 0, // buffer_id
+-					     0, 0,  // x,y
+-					     NULL,  // connectors
+-					     0,     // connector_count
+-					     NULL); // mode
+-			if (ret)
+-				LOG(ERROR, "Unable to disable crtc %d: %m", crtc_id);
+-		}
++	ret = drmModeSetCrtc(drm->fd, output->crtc_id, fb_id, 0, 0,
++			     &output->connector_id, 1, &output->mode);
++	if (ret) {
++		LOG(ERROR, "Unable to set crtc:%d connector:%d %m",
++		    output->crtc_id, output->connector_id);
++		return ret;
+ 	}
+ 
+-	drm_clear_rmfb(drm);
+-	/* LOG(INFO, "TIMING: Console switch modeset finished."); */
+-	return ret;
+-}
++	dst_x = dst_y = 0;
++	dst_w = output->mode.hdisplay;
++	dst_h = output->mode.vdisplay;
++
++	switch(output->fill) {
++	case DRM_FILL_NONE:
++		dst_w = src_w;
++		dst_h = src_h;
++		break;
++	case DRM_FILL_FIT:
++		if (dst_w * src_h > src_w * dst_h)
++			dst_w = src_w * dst_h / src_h;
++		else
++			dst_h = dst_w * src_h / src_w;
++		break;
++	case DRM_FILL_STRETCH:
++	default:
++		break;
++	}
+ 
+-/*
+- * Delayed rmfb(). We want to keep fb at least till after next modeset
+- * so our transitions are cleaner (e.g. when recreating term after exitin
+- * shell). Also it keeps fb around till Chrome starts.
+- */
+-void drm_rmfb(drm_t* drm, uint32_t fb_id)
+-{
+-	drm_clear_rmfb(drm);
+-	drm->delayed_rmfb_fb_id = fb_id;
++	return drmModeSetPlane(drm->fd, output->plane_id, output->crtc_id,
++                         fb_id, 0, dst_x, dst_y, dst_w, dst_h,
++                         0, 0, src_w << 16, src_h << 16);
+ }
+diff --git a/drm.h b/drm.h
+index ff42efc..4afa343 100644
+--- a/drm.h
++++ b/drm.h
+@@ -7,30 +7,70 @@
+ #ifndef DRM_H
+ #define DRM_H
+ 
+-
+ #include <stdbool.h>
+ #include <stdio.h>
+ #include <xf86drm.h>
+ #include <xf86drmMode.h>
+ 
++#define MAX_OUTPUTS 16
++
++typedef enum {
++	DRM_FILL_NONE,
++	DRM_FILL_FIT,
++	DRM_FILL_STRETCH,
++} drm_fill_t;
++
++typedef enum {
++	DRM_ROTATION_0,
++	DRM_ROTATION_90,
++	DRM_ROTATION_180,
++	DRM_ROTATION_270,
++	DRM_ROTATION_MAX,
++} drm_rotation_t;
++
++typedef struct _output_t {
++	char *name;
++	uint32_t connector_id;
++
++	uint32_t crtc_id;
++	uint32_t plane_id;
++	drmModeModeInfo mode;
++
++	drm_fill_t fill;
++	drm_rotation_t rotation;
++
++	uint32_t preferred_width;
++	uint32_t preferred_height;
++} drm_output_t;
++
+ typedef struct _drm_t {
+-	int refcount;
+ 	int fd;
+ 	drmModeRes* resources;
+-	drmModePlaneResPtr plane_resources;
+-	uint32_t console_connector_id;
+-	drmModeModeInfo console_mode_info;
+-	uint32_t delayed_rmfb_fb_id;
++
++	bool single_head;
++
++	drm_output_t outputs[MAX_OUTPUTS];
++	uint32_t count_outputs;
+ } drm_t;
+ 
+-drm_t* drm_scan(void);
+-void drm_set(drm_t* drm);
++#define drm_output_width(output) \
++	(((output)->rotation == DRM_ROTATION_0 || \
++	  (output)->rotation == DRM_ROTATION_180) ? \
++	  (output)->mode.hdisplay : (output)->mode.vdisplay)
++
++#define drm_output_height(output) \
++	(((output)->rotation == DRM_ROTATION_0 || \
++	  (output)->rotation == DRM_ROTATION_180) ? \
++	  (output)->mode.vdisplay : (output)->mode.hdisplay)
++
++#define drm_for_each_output(drm, output) \
++	for (drm_output_t *output = &(drm)->outputs[0]; output->name; output++)
++
++bool drm_init(void);
+ void drm_close(void);
+-drm_t* drm_addref(void);
+-void drm_delref(drm_t* drm);
++drm_t* drm_get(void);
+ bool drm_rescan(void);
+-bool drm_valid(drm_t* drm);
+-int32_t drm_setmode(drm_t* drm, uint32_t fb_id);
+-void drm_rmfb(drm_t* drm, uint32_t fb_id);
++int32_t drm_setmode(drm_t *drm, drm_output_t *output, uint32_t fb_id,
++		    uint32_t src_w, uint32_t src_h);
+ 
+ #endif
+diff --git a/fb.c b/fb.c
+index 71de475..5d40795 100644
+--- a/fb.c
++++ b/fb.c
+@@ -19,18 +19,73 @@
+ #include "util.h"
+ #include "fb.h"
+ 
+-static int fb_buffer_create(fb_t* fb,
+-			    int* pitch)
++static bool fb_buf_lock(fb_t *fb, fb_buf_t *buf)
++{
++	if (buf->lock.count == 0 && buf->handle > 0) {
++		buf->lock.map =
++			mmap(0, buf->size, PROT_READ | PROT_WRITE,
++			     MAP_SHARED, fb->drm->fd, buf->lock.map_offset);
++		if (buf->lock.map == MAP_FAILED) {
++			LOG(ERROR, "mmap failed");
++			return false;
++		}
++	}
++
++	if (buf->lock.map)
++		buf->lock.count++;
++
++	return true;
++}
++
++static void fb_buf_unlock(fb_t *fb, fb_buf_t *buf)
++{
++	if (buf->lock.count > 0)
++		buf->lock.count--;
++	else
++		LOG(ERROR, "buf locking unbalanced");
++
++	if (buf->lock.count == 0 && buf->handle > 0) {
++		int32_t ret;
++		struct drm_clip_rect clip_rect = {
++			0, 0, buf->width, buf->height
++		};
++		munmap(buf->lock.map, buf->size);
++		ret = drmModeDirtyFB(fb->drm->fd, buf->fb_id, &clip_rect, 1);
++		if (ret) {
++			int loglevel = ERROR;
++			/* Do not print "normal" errors by default. */
++			if (errno == ENOSYS || errno == EACCES)
++				loglevel = DEBUG;
++			LOG(loglevel, "drmModeDirtyFB failed: %d %m", errno);
++		}
++	}
++}
++
++static int fb_buffer_ensure(fb_t *fb, drm_output_t *output)
+ {
+ 	struct drm_mode_create_dumb create_dumb;
+ 	struct drm_mode_destroy_dumb destroy_dumb;
+-	uint32_t* fb_buffer;
++	fb_buf_t *buf;
++	uint32_t fb_id;
+ 	int ret;
+ 
++	fb_for_each_buf(fb, tmp)
++		if (tmp->rotation == output->rotation)
++			return 0;
++
++	buf = &fb->bufs[fb->count_bufs];
++
+ 	memset(&create_dumb, 0, sizeof (create_dumb));
+ 	create_dumb.bpp = 32;
+-	create_dumb.width = fb->drm->console_mode_info.hdisplay;
+-	create_dumb.height = fb->drm->console_mode_info.vdisplay;
++
++	drm_for_each_output(fb->drm, tmp) {
++		if (tmp->rotation != output->rotation)
++			continue;
++
++		create_dumb.width = MAX(create_dumb.width, tmp->mode.hdisplay);
++		create_dumb.height = MAX(create_dumb.height,
++					 tmp->mode.vdisplay);
++	}
+ 
+ 	ret = drmIoctl(fb->drm->fd, DRM_IOCTL_MODE_CREATE_DUMB, &create_dumb);
+ 	if (ret) {
+@@ -38,10 +93,7 @@ static int fb_buffer_create(fb_t* fb,
+ 		return ret;
+ 	}
+ 
+-	fb->buffer_properties.size = create_dumb.size;
+-	fb->buffer_handle = create_dumb.handle;
+-
+-	struct drm_mode_map_dumb map_dumb;
++	struct drm_mode_map_dumb map_dumb = {0};
+ 	map_dumb.handle = create_dumb.handle;
+ 	ret = drmIoctl(fb->drm->fd, DRM_IOCTL_MODE_MAP_DUMB, &map_dumb);
+ 	if (ret) {
+@@ -49,30 +101,91 @@ static int fb_buffer_create(fb_t* fb,
+ 		goto destroy_buffer;
+ 	}
+ 
+-	fb->lock.map_offset = map_dumb.offset;
+-
+ 	uint32_t handles[4] = {0};
+ 	uint32_t pitches[4] = {0};
+ 	uint32_t offsets[4] = {0};
+ 	handles[0] = create_dumb.handle;
+ 	pitches[0] = create_dumb.pitch;
+ 
+-	ret = drmModeAddFB2(fb->drm->fd, fb->drm->console_mode_info.hdisplay, fb->drm->console_mode_info.vdisplay,
++	ret = drmModeAddFB2(fb->drm->fd, create_dumb.width, create_dumb.height,
+ 			    DRM_FORMAT_XRGB8888, handles,
+-			    pitches, offsets, &fb->fb_id, 0);
++			    pitches, offsets, &fb_id, 0);
+ 	if (ret) {
+ 		LOG(ERROR, "drmModeAddFB2 failed");
+ 		goto destroy_buffer;
+ 	}
+ 
+-	*pitch = create_dumb.pitch;
++	buf->rotation = output->rotation;
++	buf->width = create_dumb.width;
++	buf->height = create_dumb.height;
++	buf->pitch = create_dumb.pitch;
++	buf->size = create_dumb.size;
++	buf->handle = create_dumb.handle;
++	buf->fb_id = fb_id;
++	buf->lock.map_offset = map_dumb.offset;
++
++	switch (buf->rotation) {
++		case DRM_ROTATION_90:
++			buf->src_width = fb->height;
++			buf->src_height = fb->width;
++
++			buf->m[0][0] = 0;
++			buf->m[0][1] = -1;
++			buf->m[0][2] = buf->src_width - 1;
++
++			buf->m[1][0] = 1;
++			buf->m[1][1] = 0;
++			buf->m[1][2] = 0;
++			break;
++		case DRM_ROTATION_270:
++			buf->src_width = fb->height;
++			buf->src_height = fb->width;
++
++			buf->m[0][0] = 0;
++			buf->m[0][1] = 1;
++			buf->m[0][2] = 0;
++
++			buf->m[1][0] = -1;
++			buf->m[1][1] = 0;
++			buf->m[1][2] = buf->src_height - 1;
++			break;
++		case DRM_ROTATION_180:
++			buf->src_width = fb->width;
++			buf->src_height = fb->height;
++
++			buf->m[0][0] = -1;
++			buf->m[0][1] = 0;
++			buf->m[0][2] = buf->src_width - 1;
++
++			buf->m[1][0] = 0;
++			buf->m[1][1] = -1;
++			buf->m[1][2] = buf->src_height - 1;
++			break;
++		case DRM_ROTATION_0:
++		default:
++			buf->src_width = fb->width;
++			buf->src_height = fb->height;
++
++			buf->m[0][0] = 1;
++			buf->m[0][1] = 0;
++			buf->m[0][2] = 0;
+ 
+-	fb_buffer = fb_lock(fb);
+-	if (fb_buffer) {
+-		memset(fb_buffer, 0, fb->buffer_properties.size);
+-		fb_unlock(fb);
++			buf->m[1][0] = 0;
++			buf->m[1][1] = 1;
++			buf->m[1][2] = 0;
++			break;
+ 	}
+ 
++	fb->count_bufs ++;
++
++	LOG(INFO, "Created FB buf: %dx%d(%dx%d) for rotate=%d",
++	    buf->width, buf->height, buf->src_width, buf->src_height,
++	    buf->rotation * 90);
++
++	if (fb_buf_lock(fb, buf)) {
++		memset(buf->lock.map, 0, buf->size);
++		fb_buf_unlock(fb, buf);
++	}
+ 	return 0;
+ 
+ destroy_buffer:
+@@ -87,84 +200,59 @@ void fb_buffer_destroy(fb_t* fb)
+ {
+ 	struct drm_mode_destroy_dumb destroy_dumb;
+ 
+-	if (fb->buffer_handle <= 0)
+-		goto unref_drm;
++	fb_for_each_buf(fb, buf) {
++		if (buf->lock.count) {
++			munmap(buf->lock.map, buf->size);
++			buf->lock.map = NULL;
++			buf->lock.count = 0;
++		}
+ 
+-	drm_rmfb(fb->drm, fb->fb_id);
+-	fb->fb_id = 0;
+-	destroy_dumb.handle = fb->buffer_handle;
+-	drmIoctl(fb->drm->fd, DRM_IOCTL_MODE_DESTROY_DUMB, &destroy_dumb);
+-	fb->buffer_handle = 0;
+-	fb->lock.map = NULL;
+-	fb->lock.count = 0;
+-unref_drm:
+-	if (fb->drm) {
+-		drm_delref(fb->drm);
+-		fb->drm = NULL;
++		LOG(INFO, "Destroying FB buf: %dx%d for rotate=%d",
++		    buf->width, buf->height, buf->rotation * 90);
++
++		drmModeRmFB(fb->drm->fd, buf->fb_id);
++		buf->fb_id = 0;
++
++		destroy_dumb.handle = buf->handle;
++		drmIoctl(fb->drm->fd, DRM_IOCTL_MODE_DESTROY_DUMB,
++			 &destroy_dumb);
++		buf->handle = 0;
+ 	}
++
++	fb->count_bufs = 0;
+ }
+ 
+ int fb_buffer_init(fb_t* fb)
+ {
+-	int32_t width, height, pitch = 0;
+ 	const char *buf;
+ 	int r;
+ 
+-	/* reuse the buffer_properties if it was set before */
+-	if (!fb->buffer_properties.width || !fb->buffer_properties.height ||
+-		!fb->buffer_properties.pitch || !fb->buffer_properties.scaling ||
+-		!fb->buffer_properties.rotation) {
+-		/* some reasonable defaults */
+-		fb->buffer_properties.width = 640;
+-		fb->buffer_properties.height = 480;
+-		fb->buffer_properties.pitch = 640 * 4;
+-		fb->buffer_properties.scaling = 1;
+-		fb->buffer_properties.rotation = DRM_MODE_ROTATE_0;
+-	}
+-
+-	fb->drm = drm_addref();
+-
+-	if (!fb->drm) {
+-		LOG(WARNING, "No monitor available, running headless!");
++	fb->drm = drm_get();
++	if (!fb->drm)
+ 		return -ENODEV;
+-	}
+-
+-	width = fb->drm->console_mode_info.hdisplay;
+-	height = fb->drm->console_mode_info.vdisplay;
+ 
+-	r = fb_buffer_create(fb, &pitch);
+-	if (r < 0) {
+-		LOG(ERROR, "fb_buffer_create failed");
+-		return r;
++	fb->width = fb->height = INT32_MAX;
++	drm_for_each_output(fb->drm, output) {
++		fb->width = MIN(fb->width, drm_output_width(output));
++		fb->height = MIN(fb->height, drm_output_height(output));
+ 	}
+ 
+-	fb->buffer_properties.width = width;
+-	fb->buffer_properties.height = height;
+-	fb->buffer_properties.pitch = pitch;
++	LOG(INFO, "Initing FB: %dx%d", fb->width, fb->height);
+ 
+-	buf = getenv("FRECON_FB_ROTATE");
+-	if (buf) {
+-		switch (atoi(buf)) {
+-		case 90:
+-			fb->buffer_properties.rotation = DRM_MODE_ROTATE_90;
+-			break;
+-		case 180:
+-			fb->buffer_properties.rotation = DRM_MODE_ROTATE_180;
+-			break;
+-		case 270:
+-			fb->buffer_properties.rotation = DRM_MODE_ROTATE_270;
+-			break;
+-		default:
+-			fb->buffer_properties.rotation = DRM_MODE_ROTATE_0;
+-			break;
++	drm_for_each_output(fb->drm, output) {
++		r = fb_buffer_ensure(fb, output);
++		if (r < 0) {
++			LOG(ERROR, "failed to create buffer for %s",
++			    output->name);
++			return r;
+ 		}
+ 	}
+ 
+ 	buf = getenv("FRECON_FB_SCALE");
+ 	if (buf) {
+-		fb->buffer_properties.scaling = atoi(buf);
+-		if (fb->buffer_properties.scaling < 1)
+-			fb->buffer_properties.scaling = 1;
++		fb->scaling = atoi(buf);
++		if (fb->scaling < 1)
++			fb->scaling = 1;
+ 	}
+ 
+ 	return 0;
+@@ -195,90 +283,63 @@ void fb_close(fb_t* fb)
+ 
+ int32_t fb_setmode(fb_t* fb)
+ {
+-	/* headless mode */
+-	if (!drm_valid(fb->drm))
++	if (!fb->drm)
+ 		return 0;
+ 
+-	return drm_setmode(fb->drm, fb->fb_id);
+-}
+-
+-uint32_t* fb_lock(fb_t* fb)
+-{
+-	if (fb->lock.count == 0 && fb->buffer_handle > 0) {
+-		fb->lock.map =
+-			mmap(0, fb->buffer_properties.size, PROT_READ | PROT_WRITE,
+-					MAP_SHARED, fb->drm->fd, fb->lock.map_offset);
+-		if (fb->lock.map == MAP_FAILED) {
+-			LOG(ERROR, "mmap failed");
+-			return NULL;
++	drm_for_each_output(fb->drm, output) {
++		fb_for_each_buf(fb, buf) {
++			if (buf->rotation == output->rotation) {
++				int32_t r = drm_setmode(fb->drm, output,
++							buf->fb_id,
++							buf->src_width,
++							buf->src_height);
++				if (r < 0)
++					LOG(ERROR, "Failed to set mode for %s",
++					    output->name);
++				break;
++			}
+ 		}
+ 	}
+ 
+-	if (fb->lock.map)
+-		fb->lock.count++;
+-
+-	return fb->lock.map;
++	return 0;
+ }
+ 
+-void fb_unlock(fb_t* fb)
+-{
+-	if (fb->lock.count > 0)
+-		fb->lock.count--;
+-	else
+-		LOG(ERROR, "fb locking unbalanced");
++bool fb_lock(fb_t* fb) {
++	fb_for_each_buf(fb, buf) {
++		if (fb_buf_lock(fb, buf))
++			continue;
+ 
+-	if (fb->lock.count == 0 && fb->buffer_handle > 0) {
+-		int32_t ret;
+-		struct drm_clip_rect clip_rect = {
+-			0, 0, fb->buffer_properties.width, fb->buffer_properties.height
+-		};
+-		munmap(fb->lock.map, fb->buffer_properties.size);
+-		ret = drmModeDirtyFB(fb->drm->fd, fb->fb_id, &clip_rect, 1);
+-		if (ret) {
+-			int loglevel = ERROR;
+-			/* Do not print "normal" errors by default. */
+-			if (errno == ENOSYS || errno == EACCES)
+-				loglevel = DEBUG;
+-			LOG(loglevel, "drmModeDirtyFB failed: %d %m", errno);
++		fb_for_each_buf(fb, tmp) {
++			if (tmp == buf)
++				break;
++			fb_buf_unlock(fb, tmp);
+ 		}
++		return false;
+ 	}
++	return true;
++}
++
++void fb_unlock(fb_t* fb) {
++	fb_for_each_buf(fb, buf)
++		fb_buf_unlock(fb, buf);
+ }
+ 
+ int32_t fb_getwidth(fb_t* fb)
+ {
+-	switch (fb->buffer_properties.rotation) {
+-		case DRM_MODE_ROTATE_90:
+-		case DRM_MODE_ROTATE_270:
+-			return fb->buffer_properties.height;
+-			break;
+-		case DRM_MODE_ROTATE_0:
+-		case DRM_MODE_ROTATE_180:
+-		default:
+-			return fb->buffer_properties.width;
+-	}
++	return fb->width;
+ }
+ 
+ int32_t fb_getheight(fb_t* fb)
+ {
+-	switch (fb->buffer_properties.rotation) {
+-		case DRM_MODE_ROTATE_90:
+-		case DRM_MODE_ROTATE_270:
+-			return fb->buffer_properties.width;
+-			break;
+-		case DRM_MODE_ROTATE_0:
+-		case DRM_MODE_ROTATE_180:
+-		default:
+-			return fb->buffer_properties.height;
+-	}
++	return fb->height;
+ }
+ 
+ int32_t fb_getscaling(fb_t* fb)
+ {
+-	return fb->buffer_properties.scaling;
++	return fb->scaling;
+ }
+ 
+-bool
+-fb_stepper_init(fb_stepper_t *s, fb_t *fb, int32_t x, int32_t y, uint32_t width, uint32_t height)
++bool fb_stepper_init(fb_stepper_t *s, fb_t *fb, int32_t x, int32_t y, uint32_t width, uint32_t height)
+ {
+ 	s->fb = fb;
+ 	s->start_x = x;
+@@ -287,67 +348,44 @@ fb_stepper_init(fb_stepper_t *s, fb_t *fb, int32_t x, int32_t y, uint32_t width,
+ 	s->h = height;
+ 	s->x = 0;
+ 	s->y = 0;
+-	s->pitch_div_4 = s->fb->buffer_properties.pitch >> 2;
+ 
+ 	/* quick check if whole rect is outside fb */
+ 	if (x + width <= 0 || y + height <= 0)
+ 		return false;
+ 
+-	switch (s->fb->buffer_properties.rotation) {
+-		case DRM_MODE_ROTATE_90:
+-		case DRM_MODE_ROTATE_270:
+-			s->max_x = s->fb->buffer_properties.height;
+-			s->max_y = s->fb->buffer_properties.width;
+-			break;
+-		case DRM_MODE_ROTATE_180:
+-		case DRM_MODE_ROTATE_0:
+-		default:
+-			s->max_x = s->fb->buffer_properties.width;
+-			s->max_y = s->fb->buffer_properties.height;
+-	}
+-
+-	if (x >= s->max_x
+-	    || y >= s->max_y)
++	s->max_x = s->fb->width;
++	s->max_y = s->fb->height;
++	if (x >= s->max_x || y >= s->max_y)
+ 		return false;
+ 
+-	switch (s->fb->buffer_properties.rotation) {
+-		case DRM_MODE_ROTATE_90:
+-			s->m[0][0] = 0;
+-			s->m[0][1] = -1;
+-			s->m[0][2] = s->fb->buffer_properties.width - 1;
+-
+-			s->m[1][0] = 1;
+-			s->m[1][1] = 0;
+-			s->m[1][2] = 0;
+-			break;
+-		case DRM_MODE_ROTATE_270:
+-			s->m[0][0] = 0;
+-			s->m[0][1] = 1;
+-			s->m[0][2] = 0;
+-
+-			s->m[1][0] = -1;
+-			s->m[1][1] = 0;
+-			s->m[1][2] = s->fb->buffer_properties.height - 1;
+-			break;
+-		case DRM_MODE_ROTATE_180:
+-			s->m[0][0] = -1;
+-			s->m[0][1] = 0;
+-			s->m[0][2] = s->fb->buffer_properties.width - 1;
+-
+-			s->m[1][0] = 0;
+-			s->m[1][1] = -1;
+-			s->m[1][2] = s->fb->buffer_properties.height - 1;
+-			break;
+-		case DRM_MODE_ROTATE_0:
+-		default:
+-			s->m[0][0] = 1;
+-			s->m[0][1] = 0;
+-			s->m[0][2] = 0;
++	return true;
++}
+ 
+-			s->m[1][0] = 0;
+-			s->m[1][1] = 1;
+-			s->m[1][2] = 0;
++bool fb_stepper_step_x(fb_stepper_t *s, uint32_t rgba)
++{
++	int32_t x = s->start_x + s->x;
++	int32_t y = s->start_y + s->y;
++	int32_t p;
++
++	if (x >= 0 && x < s->max_x && y >= 0 && y < s->max_y) {
++		fb_for_each_buf(s->fb, buf) {
++			p = (x * buf->m[0][0] + y * buf->m[0][1] + buf->m[0][2])
++				+ (x * buf->m[1][0] + y * buf->m[1][1] +
++				   buf->m[1][2]) * buf->pitch / 4;
++			buf->lock.map[p] = rgba;
++		}
+ 	}
+ 
++	s->x++;
++	if (s->x >= s->w) {
++		s->x = 0;
++		return false;
++	}
+ 	return true;
+ }
++
++bool fb_stepper_step_y(fb_stepper_t *s)
++{
++	s->y++;
++	return s->y < s->h;
++}
+diff --git a/fb.h b/fb.h
+index 8c67e0f..8596e87 100644
+--- a/fb.h
++++ b/fb.h
+@@ -9,15 +9,6 @@
+ 
+ #include "drm.h"
+ 
+-typedef struct {
+-	int32_t width;
+-	int32_t height;
+-	int32_t pitch;
+-	int32_t scaling;
+-	int32_t size;
+-	int32_t rotation; // DRM_MODE_ROTATE_*
+-} buffer_properties_t;
+-
+ typedef struct {
+ 	int32_t count;
+ 	uint64_t map_offset;
+@@ -25,60 +16,58 @@ typedef struct {
+ } fb_lock_t;
+ 
+ typedef struct {
+-	drm_t *drm;
+-	buffer_properties_t buffer_properties;
+-	fb_lock_t lock;
+-	uint32_t buffer_handle;
++	uint32_t handle;
++
++	uint32_t width;
++	uint32_t height;
++	uint32_t pitch;
++	uint32_t size;
++
++	uint32_t src_width;
++	uint32_t src_height;
++
+ 	uint32_t fb_id;
++
++	int32_t m[2][3];
++
++	drm_rotation_t rotation;
++	fb_lock_t lock;
++} fb_buf_t;
++
++typedef struct {
++	drm_t *drm;
++
++	int32_t width;
++	int32_t height;
++
++	int32_t scaling;
++
++	fb_buf_t bufs[DRM_ROTATION_MAX];
++	uint32_t count_bufs;
+ } fb_t;
+ 
+ typedef struct {
+ 	fb_t *fb;
+ 	int32_t start_x, start_y;
+-	uint32_t w, h;
+-	uint32_t x, y;
++	int32_t x, y, w, h;
+ 	int32_t max_x, max_y;
+-	uint32_t pitch_div_4;
+-	int32_t m[2][3];
+ } fb_stepper_t;
+ 
++#define fb_for_each_buf(fb, buf) \
++	for (fb_buf_t *buf = &(fb)->bufs[0]; buf->handle; buf++)
++
+ fb_t* fb_init(void);
+ void fb_close(fb_t* fb);
+ int32_t fb_setmode(fb_t* fb);
+ int fb_buffer_init(fb_t* fb);
+ void fb_buffer_destroy(fb_t* fb);
+-uint32_t* fb_lock(fb_t* fb);
++bool fb_lock(fb_t* fb);
+ void fb_unlock(fb_t* fb);
+ int32_t fb_getwidth(fb_t* fb);
+ int32_t fb_getheight(fb_t* fb);
+ int32_t fb_getscaling(fb_t* fb);
+ bool fb_stepper_init(fb_stepper_t *s, fb_t *fb, int32_t x, int32_t y, uint32_t width, uint32_t height);
+-
+-bool static inline fb_stepper_step_x(fb_stepper_t *s, uint32_t rgba)
+-{
+-	int32_t x = s->start_x + s->x;
+-	int32_t y = s->start_y + s->y;
+-	int32_t p;
+-
+-	if (x >= 0 && x < s->max_x
+-	    && y >= 0 && y < s->max_y) {
+-		p = (x * s->m[0][0] + y * s->m[0][1] + s->m[0][2])
+-		  + (x * s->m[1][0] + y * s->m[1][1] + s->m[1][2]) * s->pitch_div_4;
+-		s->fb->lock.map[p] = rgba;
+-	}
+-
+-	s->x++;
+-	if (s->x >= s->w) {
+-		s->x = 0;
+-		return false;
+-	}
+-	return true;
+-}
+-
+-bool inline fb_stepper_step_y(fb_stepper_t *s)
+-{
+-	s->y++;
+-	return s->y < s->h;
+-}
++bool fb_stepper_step_x(fb_stepper_t *s, uint32_t rgba);
++bool fb_stepper_step_y(fb_stepper_t *s);
+ 
+ #endif
+diff --git a/main.c b/main.c
+index 5187531..e67bb87 100644
+--- a/main.c
++++ b/main.c
+@@ -181,7 +181,6 @@ int main(int argc, char* argv[])
+ 	int ret;
+ 	int c;
+ 	unsigned vt;
+-	drm_t* drm;
+ 
+ 	if (getenv("FRECON_VTS"))
+ 		command_flags.enable_vts = true;
+@@ -271,7 +270,7 @@ int main(int argc, char* argv[])
+ 		return EXIT_FAILURE;
+ 	}
+ 
+-	drm_set(drm = drm_scan());
++	drm_init();
+ 
+ 	if (command_flags.pre_create_vts) {
+ 		for (unsigned vt = 1;
+-- 
+2.20.1
+

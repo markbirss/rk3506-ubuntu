@@ -1,0 +1,18 @@
+config BR2_PACKAGE_UVC_GADGET
+	bool "uvc-gadget"
+	depends on BR2_PACKAGE_JPEG
+	depends on BR2_TOOLCHAIN_HAS_THREADS
+	help
+	  uvcgadget is a pure C library that implements handling of UVC gadget
+	  functions.
+
+	  https://gitlab.freedesktop.org/camera/uvc-gadget
+
+if BR2_PACKAGE_UVC_GADGET
+
+config BR2_PACKAGE_UVC_GADGET_STATIC
+	bool "Enable static"
+	depends on BR2_PACKAGE_JPEG_TURBO_STATIC
+	default y if BR2_STATIC_LIBS
+
+endif

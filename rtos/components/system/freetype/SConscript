@@ -1,0 +1,92 @@
+# RT-Thread building script for bridge
+Import('RTT_ROOT')
+Import('rtconfig')
+from building import *
+
+cwd = GetCurrentDir()
+src = Glob('*.c')
+CPPPATH = [cwd]
+LOCAL_CCFLAGS = ' -DFT2_BUILD_LIBRARY'
+
+############################################################
+# Add source & path here
+CPPPATH += [cwd + '/include']
+CPPPATH += [cwd + '/include/freetype']
+CPPPATH += [cwd + '/include/freetype/config']
+CPPPATH += [cwd + '/include/freetype/internal']
+
+CPPPATH += [cwd + '/src/autofit']
+CPPPATH += [cwd + '/src/base']
+CPPPATH += [cwd + '/src/bdf']
+CPPPATH += [cwd + '/src/bzip2']
+CPPPATH += [cwd + '/src/cache']
+CPPPATH += [cwd + '/src/cff']
+CPPPATH += [cwd + '/src/cid']
+CPPPATH += [cwd + '/src/gzip']
+CPPPATH += [cwd + '/src/lzw']
+CPPPATH += [cwd + '/src/pcf']
+CPPPATH += [cwd + '/src/pfr']
+CPPPATH += [cwd + '/src/psaux']
+CPPPATH += [cwd + '/src/pshinter']
+CPPPATH += [cwd + '/src/psnames']
+CPPPATH += [cwd + '/src/raster']
+CPPPATH += [cwd + '/src/sdf']
+CPPPATH += [cwd + '/src/sfnt']
+CPPPATH += [cwd + '/src/smooth']
+CPPPATH += [cwd + '/src/svg']
+CPPPATH += [cwd + '/src/truetype']
+CPPPATH += [cwd + '/src/type1']
+CPPPATH += [cwd + '/src/type42']
+CPPPATH += [cwd + '/src/winfonts']
+
+src += Glob('src/autofit/autofit.c')
+
+src += Glob('src/base/ftbase.c')
+src += Glob('src/base/ftbbox.c')
+src += Glob('src/base/ftbdf.c')
+src += Glob('src/base/ftbitmap.c')
+src += Glob('src/base/ftcid.c')
+src += Glob('src/base/ftfstype.c')
+src += Glob('src/base/ftgasp.c')
+src += Glob('src/base/ftglyph.c')
+src += Glob('src/base/ftgxval.c')
+src += Glob('src/base/ftinit.c')
+src += Glob('src/base/ftmm.c')
+src += Glob('src/base/ftotval.c')
+src += Glob('src/base/ftpatent.c')
+src += Glob('src/base/ftpfr.c')
+src += Glob('src/base/ftstroke.c')
+src += Glob('src/base/ftsynth.c')
+src += Glob('src/base/fttype1.c')
+src += Glob('src/base/ftwinfnt.c')
+
+src += Glob('src/bdf/bdf.c')
+src += Glob('src/bzip2/ftbzip2.c')
+src += Glob('src/cache/ftcache.c')
+src += Glob('src/cff/cff.c')
+src += Glob('src/cid/type1cid.c')
+src += Glob('src/gzip/ftgzip.c')
+src += Glob('src/lzw/ftlzw.c')
+src += Glob('src/pcf/pcf.c')
+src += Glob('src/pfr/pfr.c')
+src += Glob('src/psaux/psaux.c')
+src += Glob('src/pshinter/pshinter.c')
+src += Glob('src/psnames/psnames.c')
+src += Glob('src/raster/raster.c')
+src += Glob('src/sdf/sdf.c')
+src += Glob('src/sfnt/sfnt.c')
+src += Glob('src/smooth/smooth.c')
+src += Glob('src/svg/svg.c')
+src += Glob('src/truetype/truetype.c')
+src += Glob('src/type1/type1.c')
+src += Glob('src/type42/type42.c')
+src += Glob('src/winfonts/winfnt.c')
+
+src += Glob('src/base/ftsystem.c')
+src += Glob('src/base/ftdebug.c')
+
+############################################################
+
+group = DefineGroup('Freetype', src, depend = ['RT_USING_FREETYPE'], CPPPATH = CPPPATH, LOCAL_CCFLAGS = LOCAL_CCFLAGS)
+
+Return('group')

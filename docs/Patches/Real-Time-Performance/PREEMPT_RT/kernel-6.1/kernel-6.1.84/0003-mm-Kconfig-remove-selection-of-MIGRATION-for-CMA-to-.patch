@@ -1,0 +1,27 @@
+From ac02882d86fa897dd94e67aab71821f48b23a911 Mon Sep 17 00:00:00 2001
+From: Liang Chen <cl@rock-chips.com>
+Date: Thu, 18 Jul 2024 19:35:43 +0800
+Subject: [PATCH 3/5] mm: Kconfig: remove selection of MIGRATION for CMA to
+ disable MIGRATION
+
+Signed-off-by: Liang Chen <cl@rock-chips.com>
+Change-Id: I47ee09c59136730cace52e8706fd47518e566b85
+---
+ mm/Kconfig | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/mm/Kconfig b/mm/Kconfig
+index a7befac41827..de125fa0e918 100644
+--- a/mm/Kconfig
++++ b/mm/Kconfig
+@@ -827,7 +827,6 @@ config FRONTSWAP
+ config CMA
+ 	bool "Contiguous Memory Allocator"
+ 	depends on MMU
+-	select MIGRATION
+ 	select MEMORY_ISOLATION
+ 	help
+ 	  This enables the Contiguous Memory Allocator which allows other
+-- 
+2.34.1
+

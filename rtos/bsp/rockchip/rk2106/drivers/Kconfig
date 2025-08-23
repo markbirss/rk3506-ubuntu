@@ -1,0 +1,74 @@
+source "$BSP_DIR/../common/drivers/Kconfig"
+
+menu "RT-Thread rockchip rk2106 drivers"
+
+source "$BSP_DIR/drivers/Kconfig.audio"
+
+config RT_USING_SYSTICK
+    bool "Use internal timer of CPU for tick"
+    default n
+
+config RT_USING_CRU
+    bool "Enable CRU"
+    default n
+
+config RT_USING_DMA
+    bool "Enable General DMA Framework"
+    default n
+
+config RT_USING_DMA_DWDMA
+    depends on RT_USING_DMA
+    bool "Enable DW DMA Controller"
+
+config RT_USING_DMA_DWDMA_IRQ_SHARED
+    depends on RT_USING_DMA_DWDMA
+    bool "Enable DW DMA IRQ Shared"
+    default y if RKMCU_RK2106
+    help
+      IRQ_SHARED depends on implementation of SoC dwdma irq. please
+      enable this macro if SoC using one shared irq for all dma channel.
+      such as rk2106. otherwise, say NO.
+
+menu "Enable UART"
+    config RT_USING_UART
+        bool "Enable UART"
+        default n
+
+    if RT_USING_UART
+    config RT_USING_UART0
+        bool "Enable UART0"
+        default n
+    config RT_USING_UART1
+        bool "Enable UART1"
+        default n
+    endif
+endmenu
+
+if RT_USING_I2C
+menu "Enable I2C"
+    config RT_USING_I2C0
+        bool "Enable I2C0"
+        default n
+
+    config RT_USING_I2C1
+        bool "Enable I2C1"
+        default n
+
+endmenu
+endif
+
+if RT_USING_SPI
+menu "Enable SPI"
+    config RT_USING_SPI0
+        bool "Enable SPI0"
+        default n
+
+    config RT_USING_SPI1
+        bool "Enable SPI1"
+        default n
+
+endmenu
+endif
+
+endmenu
+

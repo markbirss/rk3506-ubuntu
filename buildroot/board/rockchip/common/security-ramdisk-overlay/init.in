@@ -1,0 +1,156 @@
+#!/bin/sh
+
+# devtmpfs does not get automounted for initramfs
+/bin/mount -t devtmpfs devtmpfs /dev
+/bin/mount -t proc proc /proc
+/bin/mount -t sysfs sysfs /sys
+/bin/mount -t tmpfs tmpfs /tmp
+
+exec 1>/dev/console
+exec 2>/dev/console
+
+export SECURITY_STORAGE=RPMB
+HASH=
+CIPHER=
+ENC_EN=
+FORCE_KEY_WRITE=false
+
+SLOT_SUFIX=
+SYSTEM_NAME=rootfs
+BLOCK_PATH=/sys/class/block
+BLOCK_TYPE_SUPPORTED="
+mmcblk
+flash"
+
+[ "$SECURITY_STORAGE" != "SECURITY" ] || BLOCK_NECESSARY="$BLOCK_NECESSARY security"
+[ "$ENC_EN" != "true" ] || BLOCK_NECESSARY="misc"
+
+MSG_OUTPUT=/dev/null
+DEBUG() {
+	echo $1 > $MSG_OUTPUT
+}
+
+check_device_is_supported() {
+	for i in $BLOCK_TYPE_SUPPORTED
+	do
+		if [ ! -z "$(echo $(basename $1) | grep $i)" ]; then
+			echo $1
+			return 0
+		fi
+	done
+}
+
+link_all_partitions_byname() {
+	local target_dev=
+	local partname=
+
+	for dev in ${BLOCK_PATH}/*
+	do
+		target_dev=$(check_device_is_supported $dev)
+		if [ ! -z "$target_dev" ]; then
+			partname=$(cat $target_dev/uevent | grep PARTNAME | sed "s#.*PARTNAME=##")
+			[ -z "$partname" ] || ln -sf /dev/$(basename $target_dev) /dev/block/by-name/$partname
+		fi
+	done
+}
+
+check_block_ready() {
+	for i in $1
+	do
+		[ -b "/dev/block/by-name/$i" ] || echo fail
+	done
+	return 0
+}
+
+DEBUG "--------------------------"
+DEBUG "Debug For Security Ramboot"
+DEBUG "--------------------------"
+
+# make sure /dev/ has mounted
+while [ ! -e /dev/mapper/control -o ! -e /proc/mounts ]
+do
+	usleep 10000
+	echo .
+done
+
+# check a/b system
+if [ ! -z "$(cat /proc/cmdline | grep "androidboot.slot_suffix")" ]; then
+	SLOT_SUFIX=$(cat /proc/cmdline | sed "s#.*androidboot.slot_suffix=##" | cut -d ' ' -f 1)
+	SYSTEM_NAME=system
+fi
+
+SYSTEM_NAME="${SYSTEM_NAME}${SLOT_SUFIX}"
+DEBUG "system name is ${SYSTEM_NAME}"
+BLOCK_NECESSARY="$BLOCK_NECESSARY ${SYSTEM_NAME}"
+
+mkdir -p /dev/block/by-name
+# link all partitions by name
+while true
+do
+	link_all_partitions_byname
+	[ "$(check_block_ready "$BLOCK_NECESSARY")" ] || break;
+done
+
+OFFSET=
+# encrypto partition should get size from dev
+if [ -z "$OFFSET" ]; then
+	OFFSET=$(cat /sys/class/block/$(basename $(realpath /dev/block/by-name/$SYSTEM_NAME))/size)
+fi
+
+DEBUG "OFFSET is ${OFFSET}"
+
+if [ "${ENC_EN}" = "true" ]; then
+	/usr/bin/tee-supplicant &
+	/usr/bin/keybox_app
+	if [ "$?" != 0 ] || [ "$FORCE_KEY_WRITE" = "true" ]; then
+		DEBUG "BAD KEY FETCH -> try to find misc"
+		/usr/bin/updateEngine --misc_custom read
+		if [ "$?" != 0 ]; then
+			if [ "$FORCE_KEY_WRITE" != "true" ]; then
+				DEBUG "Can't fetch key from misc, reboot !!!"
+				reboot loader &
+				while true
+				do
+					sleep 1
+					killall -15 reboot
+				done
+				exit 0
+			fi
+		else
+			mv /tmp/custom_cmdline /tmp/syspw
+			/usr/bin/updateEngine --misc_custom clean
+			/usr/bin/keybox_app write
+			echo None > /tmp/syspw
+		fi
+		/usr/bin/keybox_app
+	fi
+	KEY=`cat /tmp/syspw`
+	DEBUG "key=$KEY"
+	dmsetup create vroot --table "0 ${OFFSET} crypt ${CIPHER} ${KEY} 0 /dev/block/by-name/$SYSTEM_NAME 0 1 allow_discards"
+	echo None > /tmp/syspw
+	killall tee-supplicant
+else
+	/usr/sbin/veritysetup --hash-offset=${OFFSET} create vroot /dev/block/by-name/$SYSTEM_NAME  /dev/block/by-name/$SYSTEM_NAME ${HASH} > /dev/null 2>&1
+fi
+
+mount /dev/mapper/vroot /mnt
+
+LABLE=$(dumpe2fs -h /dev/mapper/vroot | grep name | xargs -n 1 | tail -1)
+
+if [ "$LABLE" != "rootfs" ]; then
+	mount -o remount,rw /mnt
+	resize2fs /dev/mapper/vroot && tune2fs /dev/mapper/vroot -L rootfs
+fi
+
+if [ -e "/mnt/init" ]; then
+	INIT=/init
+else
+	INIT=/sbin/init
+fi
+# exec /sbin/init "$@"
+
+unset SECURITY_STORAGE
+# echo "exec busybox switch_root /mnt ${INIT}"
+# exec busybox switch_root /mnt ${INIT}
+exec 0</dev/console
+exec /sbin/init "$@"

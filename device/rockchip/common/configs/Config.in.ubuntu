@@ -1,0 +1,21 @@
+#
+
+menuconfig RK_UBUNTU
+	bool "Ubuntu"
+	default n
+
+if RK_UBUNTU
+
+choice
+	prompt "git repository"
+
+config RK_UBUNTU_GITHUB
+	bool "github"
+
+config RK_UBUNTU_GITEE
+	bool "gitee"
+
+endchoice # git
+
+endif # Ubuntu
+endmenuconfig # Ubuntu

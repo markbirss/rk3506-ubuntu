@@ -1,0 +1,274 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright (c) 2024 Rockchip Electronics Co., Ltd.
+ */
+
+/dts-v1/;
+
+#include "rk3506-luckfox-lyra-ultra.dtsi"
+
+/ {
+	model = "Luckfox Lyra Pi W";
+	compatible = "rockchip,rk3506g-demo-display-control", "rockchip,rk3506";
+
+	chosen {
+		bootargs = "earlycon=uart8250,mmio32,0xff0a0000 console=tty1 console=ttyFIQ0 storagemedia=sd root=/dev/mmcblk0p3 rootfstype=ext4 rootwait snd_aloop.index=7 snd_aloop.use_raw_jiffies=1";
+	};
+
+	es8311_sound: es8311-sound {
+		status = "okay";
+		compatible = "simple-audio-card";
+		simple-audio-card,format = "i2s";
+		simple-audio-card,mclk-fs = <256>;
+		simple-audio-card,name = "rockchip,es8311-sound";
+		simple-audio-card,cpu {
+			sound-dai = <&sai1>;
+		};
+		simple-audio-card,codec {
+			sound-dai = <&es8311>;
+		};
+
+	};
+
+	wireless_bluetooth: wireless-bluetooth {
+		compatible = "bluetooth-platdata";
+		BT,power_gpio = <&gpio1 RK_PC5 GPIO_ACTIVE_HIGH>;
+		status = "okay";
+	};
+
+	vcc3v3_lcd: vcc3v3-lcd {
+		status = "okay";
+		compatible = "regulator-fixed";
+		pinctrl-names = "default";
+		pinctrl-0 = <&lcd_pwren_h>;
+		regulator-name = "vcc3v3_lcd";
+		regulator-always-on;
+	};
+};
+
+/**********media**********/
+&mmc{
+	/* For Sdmmc */
+	max-frequency = <52000000>;
+	bus-width = <4>;
+	no-sdio;
+	no-mmc;
+	cap-mmc-highspeed;
+	cap-sd-highspeed;
+	cd-gpios = <&gpio1 RK_PB6 GPIO_ACTIVE_LOW>; //det
+	disable-wp;
+	//sd-uhs-sdr104;
+	pinctrl-names = "default";
+	pinctrl-0 = <&sdmmc_clk_pins &sdmmc_cmd_pins &sdmmc_bus4_pins &sdmmc_det &sdmmc_pwren>;
+	vqmmc-supply = <&vcc_3v3>;
+	vmmc-supply = <&vcc_3v3>;
+	status = "okay";
+};
+
+&fspi {
+	status = "okay";
+
+	flash@0 {
+		compatible = "spi-nand";
+		reg = <0>;
+		spi-max-frequency = <80000000>;
+		spi-rx-bus-width = <4>;
+		spi-tx-bus-width = <1>;
+	};
+};
+
+/**********display**********/
+&cma {
+	size = <0x2000000>;
+};
+
+&dsi {
+	status = "okay";
+};
+
+&dsi_dphy {
+	status = "okay";
+};
+
+&dsi_in_vop {
+	status = "okay";
+};
+
+&route_dsi {
+	status = "okay";
+};
+
+&dsi_panel {
+	power-supply = <&vcc3v3_lcd>;
+};
+
+/**********ethernet**********/
+&gmac0 {
+	phy-mode = "rmii";
+	clock_in_out = "output";
+
+	assigned-clocks = <&cru CLK_MAC_OUT>;
+	assigned-clock-rates = <25000000>;
+
+	snps,reset-gpio = <&gpio1 RK_PC0 GPIO_ACTIVE_LOW>;
+	snps,reset-active-low;
+	snps,reset-delays-us = <0 20000 100000>;
+
+	pinctrl-names = "default";
+	pinctrl-0 = <&eth_clk0_25m_out_pins
+			 &eth_rmii0_miim_pins
+			 &eth_rmii0_tx_bus2_pins
+			 &eth_rmii0_rx_bus2_pins
+			 &eth_rmii0_clk_pins
+			 &rmii0_rstn>;
+
+	phy-handle = <&rmii_phy0>;
+	status = "okay";
+};
+
+&gmac1 {
+	phy-mode = "rmii";
+	clock_in_out = "output";
+
+	snps,reset-gpio = <&gpio1 RK_PC1 GPIO_ACTIVE_LOW>;
+	snps,reset-active-low;
+	snps,reset-delays-us = <0 20000 100000>;
+
+	pinctrl-names = "default";
+	pinctrl-0 = <&eth_clk1_25m_out_pins
+			 &eth_rmii1_miim_pins
+			 &eth_rmii1_tx_bus2_pins
+			 &eth_rmii1_rx_bus2_pins
+			 &eth_rmii1_clk_pins
+			 &rmii1_rstn>;
+
+	phy-handle = <&rmii_phy1>;
+	status = "okay";
+};
+
+&mdio0 {
+	rmii_phy0: phy@1 {
+		compatible = "ethernet-phy-ieee802.3-c22";
+		reg = <0x1>;
+		clocks = <&cru CLK_MAC_OUT>;
+		assigned-clocks = <&cru CLK_MAC_OUT>;
+		assigned-clock-rates = <12500000>;
+	};
+};
+
+&mdio1 {
+	rmii_phy1: phy@1 {
+		compatible = "ethernet-phy-ieee802.3-c22";
+		reg = <0x1>;
+		clocks = <&cru CLK_MAC_OUT>;
+		assigned-clocks = <&cru CLK_MAC_OUT>;
+		assigned-clock-rates = <25000000>;
+	};
+};
+
+/**********usb**********/
+&usb20_otg0 {
+	dr_mode = "peripheral";
+	status = "okay";
+};
+
+&usb20_otg1 {
+	dr_mode = "otg";
+	status = "okay";
+};
+
+/**********audio**********/
+&sai4 {
+	status = "okay";
+};
+
+&audio_codec {
+	status = "okay";
+};
+
+&i2c2 {
+	status = "okay";
+
+	es8311: es8311@18 {
+		compatible = "everest,es8311";
+		reg = <0x18>;
+		clocks = <&mclkout_sai1>;
+		clock-names = "mclk";
+		assigned-clocks = <&mclkout_sai1>;
+		assigned-clock-rates = <12288000>;
+
+		#sound-dai-cells = <0>;
+		adc-pga-gain = <6>; /* 18dB */
+		adc-volume = <0xbf>; /* 0dB */
+		dac-volume = <0xbf>; /* 0dB */
+		aec-mode = "adc left, adc right";
+	};
+};
+
+&sai1 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&rm_io16_sai1_mclk
+			 &rm_io17_sai1_sclk
+			 &rm_io18_sai1_lrck
+			 &rm_io28_sai1_sdi
+			 &rm_io29_sai1_sdo0>;
+};
+
+/**********pinctrl**********/
+&pinctrl {
+	ethernet {
+		rmii0_rstn: rmii0-rstn {
+			rockchip,pins = <1 RK_PC0 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+
+		rmii1_rstn: rmii1-rstn {
+			rockchip,pins = <1 RK_PC1 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+	};
+
+	lcd {
+		lcd_pwren_h: lcd-pwren-h {
+			rockchip,pins = <1 RK_PC4 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+	};
+
+	acodec-dsm {
+		/omit-if-no-ref/
+		dsm_spk_ctrl: dsm-spk-ctrl {
+			rockchip,pins = <1 RK_PC6 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
+
+	dsm_aud {
+		/omit-if-no-ref/
+		dsm_audm1_pins: dsm-audm1-pins {
+			rockchip,pins =
+				/* dsm_aud_rn_m1 */
+				<2 RK_PB4 2 &pcfg_pull_none>,
+				/* dsm_aud_rp_m1 */
+				<2 RK_PB5 2 &pcfg_pull_none>;
+		};
+
+		/omit-if-no-ref/
+		dsm_audm1_iodown_pins: dsm-audm1-iodown-pins {
+			rockchip,pins =
+				/* dsm_aud_rn_m1 */
+				<2 RK_PB4 RK_FUNC_GPIO &pcfg_pull_down>,
+				/* dsm_aud_rp_m1 */
+				<2 RK_PB5 RK_FUNC_GPIO &pcfg_pull_down>;
+		};
+	};
+
+	sdmmc {
+		/omit-if-no-ref/
+		sdmmc_pwren: sdmmc-pwren {
+			rockchip,pins = <1 RK_PB7 RK_FUNC_GPIO &pcfg_pull_down>;
+		};
+
+		sdmmc_det: sdmmc-det {
+			rockchip,pins = <1 RK_PB6 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+	};
+
+};

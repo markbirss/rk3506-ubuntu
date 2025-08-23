@@ -1,0 +1,18 @@
+config BR2_PACKAGE_RKNPU2
+	bool "rknpu2"
+	help
+	  "rknpu runtime lib and server"
+
+config BR2_PACKAGE_RKNPU2_ARCH
+	string
+	depends on BR2_ARCH = "arm" || BR2_ARCH = "aarch64"
+	default "armhf" if BR2_ARCH="arm"
+	default BR2_ARCH
+
+if BR2_PACKAGE_RKNPU2
+
+config BR2_PACKAGE_RKNPU2_EXAMPLE
+	bool "rknpu2 example"
+	default y
+
+endif

@@ -1,0 +1,18 @@
+config BR2_PACKAGE_LIBTELNET
+	bool "libtelnet"
+	help
+	  libtelnet provides safe and correct handling of the core
+	  TELNET protocol.  In addition to the base TELNET protocol,
+	  libtelnet also implements the Q method of TELNET option
+	  negotiation.  libtelnet can be used for writing servers,
+	  clients, or proxies.
+
+	  https://github.com/seanmiddleditch/libtelnet
+
+if BR2_PACKAGE_LIBTELNET
+
+config BR2_PACKAGE_LIBTELNET_STATIC
+	bool "Enable static"
+	default y if BR2_STATIC_LIBS
+
+endif

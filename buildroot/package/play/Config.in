@@ -1,0 +1,13 @@
+config BR2_PACKAGE_PLAY
+	bool "Play!"
+	depends on BR2_PACKAGE_HAS_LIBGLES
+	depends on BR2_PACKAGE_OPENAL
+	depends on BR2_PACKAGE_QT5BASE
+	depends on BR2_INSTALL_LIBSTDCPP
+	help
+	  Play! - PlayStation2 Emulator.
+
+	  https://github.com/jpd002/Play-
+
+comment "Play! needs a toolchain w/ C++"
+	depends on !BR2_INSTALL_LIBSTDCPP

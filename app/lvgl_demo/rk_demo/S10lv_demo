@@ -1,0 +1,21 @@
+#! /bin/sh
+
+start() {
+	set -a
+	export LV_DRIVERS_SET_PLANE=CURSOR
+	ulimit -n 1024
+	set +a
+	rk_demo &
+	sleep 1 # All processer help rk_demo output first UI.
+}
+
+case "$1" in
+	start)
+	start
+	;;
+	*)
+	echo "Usage: $0 {start}"
+	exit 1
+esac
+
+exit $?

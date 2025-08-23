@@ -1,0 +1,183 @@
+#!/bin/bash
+
+[ -z "$DEBUG" ] || set -x
+
+# Make sure that we are sourced and called inside of RK build scripts.
+if [ "$BASH_SOURCE" = "$0" -o -z "$RK_SESSION" ];then
+	echo "$(realpath "$0") is not supposed to be executed directly"
+	exit 1
+fi
+
+err_handler()
+{
+	ret=${1:-$?}
+	[ "$ret" -eq 0 ] && return
+
+	fatal "ERROR: Running $0 - ${2:-${FUNCNAME[1]}} failed!"
+	fatal "ERROR: exit code $ret from line ${BASH_LINENO[0]}:"
+	fatal "    ${3:-$BASH_COMMAND}"
+	fatal "ERROR: call stack:"
+	for i in $(seq 1 $((${#FUNCNAME[@]} - 1))); do
+		SOURCE="${BASH_SOURCE[$i]}"
+		LINE=${BASH_LINENO[$(( $i - 1 ))]}
+		fatal "    $(basename "$SOURCE"): ${FUNCNAME[$i]}($LINE)"
+	done
+	exit $ret
+}
+trap 'err_handler' ERR
+set -eE
+
+run_command()
+{
+	if [ "$DRY_RUN" ]; then
+		notice "$@"
+	else
+		notice "+ $@"
+		$@
+	fi
+}
+
+try_func()
+{
+	type $1 >/dev/null 2>/dev/null || return 0
+
+	# Don't log these hooks
+	case "${1%_hook}" in
+		init | pre_build)
+			$@
+			return 0
+			;;
+	esac
+
+	if [ "$DRY_RUN" ]; then
+		DRY_FUNC=$1_dry
+		type $DRY_FUNC >/dev/null 2>/dev/null || return 0
+
+		shift
+		$DRY_FUNC $@
+		return 0
+	fi
+
+	LOG_FILE="$(start_log ${LOG_FILE_NAME%%_*} $LOG_FILE_NAME)"
+	echo -e "# run func: $@\n" >> "$LOG_FILE"
+	$@ 2>&1 | tee -a "$LOG_FILE"
+
+	FUNC_RET=${PIPESTATUS[0]}
+	if [ $FUNC_RET -ne 0 ]; then
+		err_handler $FUNC_RET "${FUNCNAME[0]} $*" "$@"
+		exit $FUNC_RET
+	fi
+}
+
+try_hook()
+{
+	FUNC=$1
+	shift
+	CMDS="$1"
+	shift
+
+	if echo "$CMDS" | grep -qE "^default( |$)"; then
+		OPTS="default $@"
+	else
+		OPTS="$@ default"
+	fi
+
+	type $FUNC >/dev/null 2>/dev/null || return 0
+
+	for opt in $OPTS; do
+		for cmd in $CMDS; do
+			# NOTE: There might be patterns in commands
+			ARGS="$(echo $opt | grep -E "^$cmd(:|$)" | tr ':' ' ')"
+			[ "$ARGS" ] || continue
+
+			if echo $ARGS | grep -wq "dry-run"; then
+				DRY_RUN=1 try_func $FUNC ${ARGS//dry-run/}
+			else
+				try_func $FUNC $ARGS
+			fi
+		done
+	done
+}
+
+make_usage()
+{
+	usage_hook | grep -v "^ " | sed "s/\[.*\]//" | grep -v "^[^:]*:" | \
+	while read LINE; do
+		usage_makefile_oneline $LINE
+	done
+}
+
+normalized_usage()
+{
+	usage_hook | sed -e 's/\[:/ \[/g' -e 's/:/ /g'
+}
+
+usage()
+{
+	echo "Usage: $0 [OPTIONS]"
+	normalized_usage
+	usage_oneline "clean" "cleanup"
+	usage_oneline "help" "display this information"
+	exit 1
+}
+
+cd "$RK_SDK_DIR"
+
+LOG_FILE_NAME="$(basename "${0%.sh}")-$1_$(date +"%F_%H-%M-%S")"
+
+case "$1" in
+	help | h | -h | --help | \?) usage ;;
+	make-usage) make_usage; exit 0 ;;
+	usage) usage_hook; exit 0 ;;
+	parse-cmds)
+		shift
+		{
+			SCRIPT="$(realpath "$0" --relative-to "$RK_SDK_DIR")"
+			echo -e "\n# Parsed from $SCRIPT."
+
+			[ -z "$INIT_CMDS" ] || \
+				echo "RK_INIT_CMDS=\"\$RK_INIT_CMDS $(echo $INIT_CMDS | sort)\" # $SCRIPT"
+			[ -z "$PRE_BUILD_CMDS" ] || \
+				echo "RK_PRE_BUILD_CMDS=\"\$RK_PRE_BUILD_CMDS $(echo $PRE_BUILD_CMDS | sort)\" # $SCRIPT"
+			[ -z "$BUILD_CMDS" ] || \
+				echo "RK_BUILD_CMDS=\"\$RK_BUILD_CMDS $(echo $BUILD_CMDS | sort)\" # $SCRIPT"
+			[ -z "$POST_BUILD_CMDS" ] || \
+				echo "RK_POST_BUILD_CMDS=\"\$RK_POST_BUILD_CMDS $(echo $POST_BUILD_CMDS | sort)\" # $SCRIPT"
+		}
+		exit 0
+		;;
+	clean)
+		try_func clean_hook
+		exit 0
+		;;
+	init)
+		shift
+		try_hook init_hook "$INIT_CMDS" $@
+		exit 0
+		;;
+	pre-build)
+		shift
+		try_hook pre_build_hook "$PRE_BUILD_CMDS" $@
+		exit 0
+		;;
+	build)
+		shift
+		try_hook build_hook "$BUILD_CMDS" $@
+		exit 0
+		;;
+	post-build)
+		shift
+		try_hook post_build_hook "$POST_BUILD_CMDS" $@
+		exit 0
+		;;
+esac
+
+if [ "$DRY_RUN" ]; then
+	warning "Environment 'DRY_RUN' ignored!"
+	unset DRY_RUN
+fi
+
+if [ "$2" = "dry-run" ]; then
+	export DRY_RUN=1
+	set -- "$1" "${@:3}"
+fi

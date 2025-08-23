@@ -1,0 +1,43 @@
+mainmenu "RT-Thread Configuration"
+
+config BSP_DIR
+    string
+    option env="BSP_ROOT"
+    default "."
+
+config RTT_DIR
+    string
+    option env="RTT_ROOT"
+    default "../../.."
+
+config PKGS_DIR
+    string
+    option env="PKGS_ROOT"
+    default "packages"
+
+config BSP_RK3588
+    bool
+    default y
+
+choice
+    prompt "RK3588 MCU"
+    default HAL_PMU_MCU_CORE
+
+    config HAL_PMU_MCU_CORE
+        select ARCH_ARM_CORTEX_M0
+        bool "RK3588 MCU of PMU"
+
+    config HAL_NPU_MCU_CORE
+        select ARCH_ARM_CORTEX_M0
+        bool "RK3588 MCU of NPU"
+
+    config HAL_DDR_MCU_CORE
+        select ARCH_ARM_CORTEX_M0
+        bool "RK3588 MCU of DDR(no cache)"
+endchoice
+
+source "$RTT_DIR/Kconfig"
+source "$BSP_DIR/drivers/Kconfig"
+source "$BSP_DIR/board/Kconfig"
+#source "$PKGS_DIR/Kconfig"
+source "$BSP_DIR/../common/tests/Kconfig"

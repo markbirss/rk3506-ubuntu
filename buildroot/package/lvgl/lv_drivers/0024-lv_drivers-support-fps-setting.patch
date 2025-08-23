@@ -1,0 +1,115 @@
+From 0b6cf129ca6c1b7718baec968a380b83de5f03ce Mon Sep 17 00:00:00 2001
+From: Eddy Zhang <eddy.zhang@rock-chips.com>
+Date: Sun, 3 Nov 2024 15:39:39 +0800
+Subject: [PATCH] lv_drivers: support fps setting
+
+---
+ display/drm.c | 67 +++++++++++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 65 insertions(+), 2 deletions(-)
+
+diff --git a/display/drm.c b/display/drm.c
+index 4af300b..8696086 100644
+--- a/display/drm.c
++++ b/display/drm.c
+@@ -88,6 +88,7 @@ struct device {
+ 
+ static int lcd_w;
+ static int lcd_h;
++static int lcd_fps = 0;
+ static int lcd_sw;
+ static char* drm_buff;
+ static lv_color_t *buf_1;
+@@ -605,6 +606,65 @@ drm_find_best_mode(struct device *dev, drmModeConnectorPtr conn)
+     return mode;
+ }
+ 
++static int drm_crtc_mode_frame_rate_adjust(struct device *dev, int format, uint32_t target_fps)
++{
++        int ret,connector_id;
++        struct drm_bo *temp_bo;
++        drmModeModeInfoPtr mode;
++        drmModeConnector *conn;
++
++        if (dev == NULL) {
++                ret = -1;
++                goto err_1;
++        }
++
++        if (!target_fps) {
++                printf("skip frame rate adjust\n");
++                return 0;
++        }
++
++        connector_id= dev->connector_id;
++
++        conn = drmModeGetConnector(dev->fd, dev->connector_id);
++        if (!conn) {
++                printf("drmModeGetConnector failed\n");
++                ret = -1;
++                goto err_1;
++        }
++
++        mode = drm_find_best_mode(dev, conn);
++        if (!mode) {
++                printf("drm find mode failed\n");
++                ret = -1;
++                goto err_2;
++        }
++
++        mode->clock = mode->clock / mode->vrefresh * target_fps;
++        mode->vrefresh = target_fps;
++
++        temp_bo = malloc_drm_bo(mode->hdisplay, mode->vdisplay, format);
++        if (temp_bo == NULL) {
++                ret = -1;
++                goto err_2;
++        }
++
++
++        ret = drmModeSetCrtc(dev->fd, dev->crtc_id, temp_bo->fb_id,
++                        0, 0, &connector_id, 1, mode);
++        if (ret)
++        {
++                printf("%s drmModeSetCrtc failed %s crtc %d fb:%d connector %d mode %dx%d-%d\n",
++                                __func__, strerror(errno), dev->crtc_id, temp_bo->fb_id, dev->connector_id,
++                                mode->hdisplay, mode->vdisplay, mode->vrefresh);
++        }
++
++        free_drm_bo(temp_bo);
++err_2:
++        drmModeFreeConnector(conn);
++err_1:
++        return ret;
++}
++
+ static int drm_get_preferred_fb_mode(int *width, int *height)
+ {
+     char *buf;
+@@ -1064,11 +1124,12 @@ void disp_init(void)
+ 
+     lv_env_get_u32("lv_disp_witdh", &lcd_w, 0);
+     lv_env_get_u32("lv_disp_height", &lcd_h, 0);
++    lv_env_get_u32("lv_disp_fps", &lcd_fps, 60);
+ 
+     if(lcd_w == 0 || lcd_h == 0)
+         getdrmresolve(&lcd_w, &lcd_h);
+ 
+-    printf("%s res1:[%d x %d] bit depth %d\n", __func__, lcd_w, lcd_h, LV_COLOR_DEPTH);
++    printf("%s res1:[%d x %d@%dfps] bit depth %d\n", __func__, lcd_w, lcd_h, lcd_fps, LV_COLOR_DEPTH);
+     if (LV_COLOR_DEPTH == 16) {
+         format = DRM_FORMAT_RGB565;
+     } else {
+@@ -1096,7 +1157,9 @@ void disp_init(void)
+     vop_buf[0] = malloc_drm_bo(lcd_w, lcd_h, format);
+     vop_buf[1] = malloc_drm_bo(lcd_w, lcd_h, format);
+ 
+-    printf("DRM subsystem and buffer mapped successfully\n");
++    drm_crtc_mode_frame_rate_adjust(pdev, format, lcd_fps);
++
++    printf("DRM subsystem and buffer mapped successfully lcd_fps:%d\n", lcd_fps);
+ }
+ 
+ void disp_deinit(void)
+-- 
+2.25.1
+

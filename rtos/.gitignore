@@ -1,0 +1,77 @@
+*.pyc
+*.map
+*.dblite
+*.elf
+*.hex
+*.axf
+*.exe
+*.pdb
+*.idb
+*.ilk
+*.old
+*.crf
+build
+Debug
+documentation/html
+*~
+*.o
+*.obj
+*.bak
+*.dep
+*.lib
+*.i
+*.d
+*.patch
+*.swo
+*.swp
+*.dfinish
+*.su
+#source insight 4 project files
+*.si4project 
+*.patch
+*.swo
+*.swp
+tools/kconfig-frontends/kconfig-mconf
+packages
+dist
+dist_ide_project
+cconfig.h
+GPUCache
+
+# Ignore rockchip output file
+bsp/rockchip/*/documents/html
+bsp/rockchip/*/documents/latex
+bsp/rockchip/*/auto_version.h
+bsp/rockchip/*/Image/Firmware.*
+bsp/rockchip/*/Image/rtthread.img
+bsp/rockchip/tools/log
+bsp/rockchip/swallow
+bsp/rockchip/pisces
+components/hifi3
+components/rknpu
+third_party/audio/audio_server/source
+applications/wearable
+.repo
+
+# Ignore apps
+applications/rtthread-apps
+
+# Ignore documents
+Rockchip-docs*
+
+# Ignore OS X Desktop Services Store files
+.DS_Store
+._.DS_Store
+
+#cscope files
+cscope.*
+ncscope.*
+
+#ctag files
+tags
+
+.idea
+.vscode
+.history
+CMakeLists.txt
+cmake-build-debug

@@ -1,0 +1,14 @@
+config BR2_PACKAGE_STRESSAPPTEST
+	bool "stressapptest"
+	help
+	  Stressful Application Test - userspace memory and IO test.
+
+	  https://github.com/stressapptest/stressapptest
+
+if BR2_PACKAGE_STRESSAPPTEST
+
+config BR2_PACKAGE_STRESSAPPTEST_STATIC
+	bool "Enable static"
+	default y if BR2_STATIC_LIBS
+
+endif

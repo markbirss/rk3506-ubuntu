@@ -1,0 +1,45 @@
+import os
+import sys
+import rtconfig
+
+if os.getenv('RTT_ROOT'):
+    RTT_ROOT = os.getenv('RTT_ROOT')
+else:
+    RTT_ROOT = os.path.normpath(os.getcwd() + '/../../..')
+
+sys.path = sys.path + [os.path.join(RTT_ROOT, 'tools'), os.path.join(os.getcwd(), '../tools')]
+from building import *
+from buildutil import *
+
+TARGET = 'rtthread.' + rtconfig.TARGET_EXT
+
+os_start = ParsePartitionStart('.', 'OSA')
+print('os_start %d' % os_start)
+ld_dst = 'gcc_link.ld'
+cmd = '{cppcmd} -P -C -E -I. -D__ASSEMBLY__ -DFIRMWARE_MAGIC_LEN={os_start} {ld_src} -o {ld_dst}'.format(
+                  cppcmd = os.path.join(rtconfig.EXEC_PATH, 'arm-none-eabi-gcc'),
+                  os_start = os_start,
+                  ld_src = rtconfig.LINK_SCRIPT,
+                  ld_dst = ld_dst)
+rtconfig.LFLAGS += '-T %s ' % ld_dst
+if os.system(cmd) != 0:
+        print('failed to generate linker script %s' % ld_dst)
+        sys.exit(255)
+# if the linker script changed, relink the target
+Depends(TARGET, ld_dst)
+
+env = Environment(tools = ['mingw'],
+    AS = rtconfig.AS, ASFLAGS = rtconfig.AFLAGS,
+    CC = rtconfig.CC, CCFLAGS = rtconfig.CFLAGS,
+    AR = rtconfig.AR, ARFLAGS = '-rc',
+    LINK = rtconfig.LINK, LINKFLAGS = rtconfig.LFLAGS)
+env.PrependENVPath('PATH', rtconfig.EXEC_PATH)
+
+Export('RTT_ROOT')
+Export('rtconfig')
+
+# prepare building environment
+objs = PrepareBuilding(env, RTT_ROOT, has_libcpu=False)
+
+# make a building
+DoBuilding(TARGET, objs)

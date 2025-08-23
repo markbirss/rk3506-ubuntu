@@ -1,0 +1,48 @@
+From e4889e20bd4314fbf09c0f388aa5861772aacbdc Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Mon, 1 Apr 2024 10:49:42 +0800
+Subject: [PATCH] HACK: drm: Bypass auth APIs by default
+
+There're hacks in Rockchip's BSP kernels to ignore drm auth, so we can
+bypass the related drm auth APIs here.
+
+Bypass these auth APIs:
+drmSetMaster, drmDropMaster.
+
+Set these environments to enable:
+"DRM_SET_MASTER", "DRM_DROP_MASTER".
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ common/drm.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/common/drm.c b/common/drm.c
+index 06d6720..25315d3 100644
+--- a/common/drm.c
++++ b/common/drm.c
+@@ -1,3 +1,4 @@
++#include <stdlib.h>
+ #include <string.h>
+ #include <sys/ioctl.h>
+ #include <sys/types.h>
+@@ -14,10 +15,16 @@
+ #define STR_HAS_PREFIX(prefix, s) (strncmp(prefix, s, STRLEN(prefix)) == 0)
+ 
+ int drm_set_master(int fd) {
++	if (!getenv("DRM_SET_MASTER"))
++		return 0;
++
+ 	return ioctl(fd, DRM_IOCTL_SET_MASTER, 0);
+ }
+ 
+ int drm_drop_master(int fd) {
++	if (!getenv("DRM_DROP_MASTER"))
++		return 0;
++
+ 	return ioctl(fd, DRM_IOCTL_DROP_MASTER, 0);
+ }
+ 
+-- 
+2.20.1
+

@@ -1,0 +1,44 @@
+/* SPDX-License-Identifier: BSD-3-Clause */
+/*
+ * Copyright (c) 2020-2021 Rockchip Electronics Co., Ltd.
+ */
+
+#include "hal_conf.h"
+
+#if defined(HAL_PCD_MODULE_ENABLED) || defined(HAL_HCD_MODULE_ENABLED)
+
+/** @addtogroup RK_HAL_Driver
+ *  @{
+ */
+
+/** @addtogroup USB_PHY
+ *  @{
+ */
+
+#ifndef _HAL_USB_PHY_H_
+#define _HAL_USB_PHY_H_
+
+#include "hal_def.h"
+
+/***************************** Structure Definition **************************/
+/***************************** Function Declare ******************************/
+/** @defgroup USB_PHY_Public_Function_Declare Public Function Declare
+ *  @{
+ */
+HAL_Status HAL_USB_PhySuspend(uint8_t id);
+HAL_Status HAL_USB_PhyResume(uint8_t id);
+HAL_Status HAL_USB_PhyInit(void);
+HAL_Status HAL_USB_PhyBvalidIrqEnable(uint8_t enable);
+uint8_t HAL_USB_PhyBvalidIrqRise_Status(void);
+uint8_t HAL_USB_PhyBvalidIrqFall_Status(void);
+void HAL_USB_PhyBvalidIrqRise_Clear(void);
+void HAL_USB_PhyBvalidIrqFall_Clear(void);
+/** @} */
+
+#endif /* _HAL_USB_PHY_H_ */
+
+/** @} */
+
+/** @} */
+
+#endif /* HAL_PCD_MODULE_ENABLED || HAL_HCD_MODULE_ENABLED */

@@ -1,0 +1,545 @@
+From 854f78c337d31a3b5535a04f6f24e0bcbf4440b4 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 5 Jan 2024 12:29:02 +0800
+Subject: [PATCH 77/95] client: Add simple-pointer
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ clients/meson.build      |   9 +
+ clients/simple-pointer.c | 504 +++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 513 insertions(+)
+ create mode 100644 clients/simple-pointer.c
+
+diff --git a/clients/meson.build b/clients/meson.build
+index 1de68ec..5b34df2 100644
+--- a/clients/meson.build
++++ b/clients/meson.build
+@@ -170,6 +170,15 @@ simple_clients = [
+ 		],
+ 		'dep_objs': [ dep_wayland_client, dep_libshared ]
+ 	},
++	{
++		'name': 'pointer',
++		'sources': [
++			'simple-pointer.c',
++			xdg_shell_client_protocol_h,
++			xdg_shell_protocol_c,
++		],
++		'dep_objs': [ dep_wayland_client, dep_libshared ]
++	},
+ ]
+ 
+ foreach t : simple_clients
+diff --git a/clients/simple-pointer.c b/clients/simple-pointer.c
+new file mode 100644
+index 0000000..592b2a7
+--- /dev/null
++++ b/clients/simple-pointer.c
+@@ -0,0 +1,504 @@
++/*
++ * Copyright © 2011 Benjamin Franzke
++ * Copyright © 2011 Intel Corporation
++ * Copyright © 2021 Collabora, Ltd.
++ *
++ * Permission is hereby granted, free of charge, to any person obtaining a
++ * copy of this software and associated documentation files (the "Software"),
++ * to deal in the Software without restriction, including without limitation
++ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
++ * and/or sell copies of the Software, and to permit persons to whom the
++ * Software is furnished to do so, subject to the following conditions:
++ *
++ * The above copyright notice and this permission notice (including the next
++ * paragraph) shall be included in all copies or substantial portions of the
++ * Software.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
++ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
++ * DEALINGS IN THE SOFTWARE.
++ */
++
++#include "config.h"
++
++#include <stdint.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <stdbool.h>
++#include <assert.h>
++#include <unistd.h>
++#include <errno.h>
++#include <sys/mman.h>
++#include <sys/time.h>
++
++#include <wayland-client.h>
++#include "shared/helpers.h"
++#include "shared/xalloc.h"
++#include "shared/os-compatibility.h"
++
++#include "xdg-shell-client-protocol.h"
++
++struct seat {
++	struct pointer *pointer;
++	struct wl_seat *seat;
++	struct wl_pointer *wl_pointer;
++};
++
++struct buffer {
++	struct wl_buffer *buffer;
++	void *data;
++};
++
++struct pointer {
++	struct wl_display *display;
++	struct wl_registry *registry;
++	struct wl_compositor *compositor;
++	struct xdg_wm_base *wm_base;
++	struct wl_shm *shm;
++	struct wl_surface *surface;
++	struct xdg_surface *xdg_surface;
++	struct xdg_toplevel *xdg_toplevel;
++	struct buffer *buffer;
++	int width, height;
++	int init_width, init_height;
++	bool running;
++	bool wait_for_configure;
++	bool needs_buffer_update;
++	bool has_argb;
++	bool maximized;
++	bool fullscreen;
++
++	uint32_t frames;
++	uint32_t initial_frame_time;
++	uint32_t benchmark_time;
++};
++
++static struct buffer *
++create_shm_buffer(struct pointer *pointer)
++{
++	struct wl_shm_pool *pool;
++	int fd, size, stride;
++	void *data;
++	struct buffer *buffer;
++
++	buffer = xzalloc(sizeof(*buffer));
++
++	stride = pointer->width * 4;
++	size = stride * pointer->height;
++
++	fd = os_create_anonymous_file(size);
++	if (fd < 0) {
++		fprintf(stderr, "creating a buffer file for %d B failed: %s\n",
++			size, strerror(errno));
++		exit(1);
++	}
++
++	data = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
++	if (data == MAP_FAILED) {
++		fprintf(stderr, "mmap failed: %s\n", strerror(errno));
++		close(fd);
++		return NULL;
++	}
++
++	pool = wl_shm_create_pool(pointer->shm, fd, size);
++	buffer->buffer =
++		wl_shm_pool_create_buffer(pool, 0,
++					  pointer->width, pointer->height, stride,
++					  WL_SHM_FORMAT_ARGB8888);
++
++	wl_shm_pool_destroy(pool);
++
++	buffer->data = data;
++	close(fd);
++
++	return buffer;
++}
++
++static void
++redraw(void *data)
++{
++	struct pointer *pointer = data;
++	struct buffer *buffer = NULL;
++
++	buffer = create_shm_buffer(pointer);
++	assert(buffer);
++
++	if (pointer->buffer)
++		free(pointer->buffer);
++
++	pointer->buffer = buffer;
++
++	/* paint the "work-area" */
++	memset(buffer->data, 64, pointer->width * pointer->height * 4);
++
++	wl_surface_attach(pointer->surface, buffer->buffer, 0, 0);
++	wl_surface_damage(pointer->surface, 0, 0, pointer->width, pointer->height);
++	wl_surface_commit(pointer->surface);
++}
++
++static void
++shm_format(void *data, struct wl_shm *wl_shm, uint32_t format)
++{
++	struct pointer *pointer = data;
++
++	if (format == WL_SHM_FORMAT_ARGB8888)
++		pointer->has_argb = true;
++}
++
++struct wl_shm_listener shm_listener = {
++	shm_format
++};
++
++static void
++pointer_paint(struct pointer *pointer, int32_t x, int32_t y)
++{
++	static const uint32_t benchmark_interval = 1;
++	struct timeval tv;
++
++	gettimeofday(&tv, NULL);
++	uint32_t time = tv.tv_sec * 1000 + tv.tv_usec / 1000;
++
++	uint32_t *p, c;
++	c = 0xffffffff;
++
++	if (x < 2 || x >= pointer->width - 2 ||
++	    y < 2 || y >= pointer->height - 2)
++		return;
++
++	p = ((uint32_t *) pointer->buffer->data) + (x - 2) + (y - 2) * pointer->width;
++	p[2] = c;
++	p += pointer->width;
++	p[1] = c;
++	p[2] = c;
++	p[3] = c;
++	p += pointer->width;
++	p[0] = c;
++	p[1] = c;
++	p[2] = c;
++	p[3] = c;
++	p[4] = c;
++	p += pointer->width;
++	p[1] = c;
++	p[2] = c;
++	p[3] = c;
++	p += pointer->width;
++	p[2] = c;
++
++	wl_surface_attach(pointer->surface, pointer->buffer->buffer, 0, 0);
++	wl_surface_damage(pointer->surface, x - 2, y - 2, 5, 5);
++	/* todo: We could queue up more damage before committing, if there
++	 * are more input events to handle.
++	 */
++	wl_surface_commit(pointer->surface);
++
++	if (pointer->frames == 0) {
++		pointer->initial_frame_time = time;
++		pointer->benchmark_time = time;
++	}
++	if (time - pointer->benchmark_time > (benchmark_interval * 1000)) {
++		printf("%d frames in %d seconds: %f fps\n",
++		       pointer->frames,
++		       benchmark_interval,
++		       (float) pointer->frames / benchmark_interval);
++		pointer->benchmark_time = time;
++		pointer->frames = 0;
++	}
++
++	pointer->frames++;
++}
++
++static void
++pointer_handle_enter(void *data, struct wl_pointer *pointer,
++		     uint32_t serial, struct wl_surface *surface,
++		     wl_fixed_t sx, wl_fixed_t sy)
++{
++	float x = wl_fixed_to_double(sx);
++	float y = wl_fixed_to_double(sy);
++
++	pointer_paint(data, x, y);
++}
++
++static void
++pointer_handle_leave(void *data, struct wl_pointer *pointer,
++		     uint32_t serial, struct wl_surface *surface)
++{
++}
++
++static void
++pointer_handle_motion(void *data, struct wl_pointer *pointer,
++		      uint32_t time, wl_fixed_t sx, wl_fixed_t sy)
++{
++	float x = wl_fixed_to_double(sx);
++	float y = wl_fixed_to_double(sy);
++
++	pointer_paint(data, x, y);
++}
++
++static void
++pointer_handle_button(void *data, struct wl_pointer *wl_pointer,
++		      uint32_t serial, uint32_t time, uint32_t button,
++		      uint32_t state)
++{
++}
++
++static void
++pointer_handle_axis(void *data, struct wl_pointer *wl_pointer,
++		    uint32_t time, uint32_t axis, wl_fixed_t value)
++{
++}
++
++static const struct wl_pointer_listener pointer_listener = {
++	pointer_handle_enter,
++	pointer_handle_leave,
++	pointer_handle_motion,
++	pointer_handle_button,
++	pointer_handle_axis,
++};
++
++static void
++seat_handle_capabilities(void *data, struct wl_seat *wl_seat,
++			 enum wl_seat_capability caps)
++{
++	struct seat *seat = data;
++	struct pointer *pointer = seat->pointer;
++
++	if ((caps & WL_SEAT_CAPABILITY_POINTER) && !seat->wl_pointer) {
++		seat->wl_pointer = wl_seat_get_pointer(wl_seat);
++		wl_pointer_set_user_data(seat->wl_pointer, pointer);
++		wl_pointer_add_listener(seat->wl_pointer, &pointer_listener, pointer);
++	} else if (!(caps & WL_SEAT_CAPABILITY_POINTER) && seat->wl_pointer) {
++		wl_pointer_destroy(seat->wl_pointer);
++		seat->wl_pointer = NULL;
++	}
++}
++
++static const struct wl_seat_listener seat_listener = {
++	seat_handle_capabilities,
++};
++
++static void
++add_seat(struct pointer *pointer, uint32_t name, uint32_t version)
++{
++	struct seat *seat;
++
++	seat = malloc(sizeof *seat);
++	assert(seat);
++
++	seat->pointer = pointer;
++	seat->wl_pointer = NULL;
++	seat->seat = wl_registry_bind(pointer->registry, name,
++				      &wl_seat_interface, 1);
++	wl_seat_add_listener(seat->seat, &seat_listener, seat);
++}
++
++static void
++handle_xdg_surface_configure(void *data, struct xdg_surface *surface,
++			     uint32_t serial)
++{
++	struct pointer *pointer = data;
++
++	xdg_surface_ack_configure(surface, serial);
++
++	if (pointer->wait_for_configure || pointer->needs_buffer_update) {
++		redraw(pointer);
++		pointer->wait_for_configure = false;
++		pointer->needs_buffer_update = false;
++	}
++}
++
++static const struct xdg_surface_listener xdg_surface_listener = {
++	handle_xdg_surface_configure,
++};
++
++static void
++xdg_wm_base_ping(void *data, struct xdg_wm_base *shell, uint32_t serial)
++{
++	xdg_wm_base_pong(shell, serial);
++}
++
++static const struct xdg_wm_base_listener wm_base_listener = {
++	xdg_wm_base_ping,
++};
++
++static void
++handle_global(void *data, struct wl_registry *registry,
++	      uint32_t name, const char *interface, uint32_t version)
++{
++	struct pointer *pointer = data;
++
++	if (strcmp(interface, "wl_compositor") == 0) {
++		pointer->compositor =
++			wl_registry_bind(registry, name,
++					 &wl_compositor_interface, 1);
++	} else if (strcmp(interface, "xdg_wm_base") == 0) {
++		pointer->wm_base =
++			wl_registry_bind(registry, name,
++					 &xdg_wm_base_interface, 1);
++		xdg_wm_base_add_listener(pointer->wm_base,
++					 &wm_base_listener, pointer);
++	} else if (strcmp(interface, "wl_shm") == 0) {
++		pointer->shm = wl_registry_bind(registry, name,
++					      &wl_shm_interface, 1);
++		wl_shm_add_listener(pointer->shm, &shm_listener, pointer);
++	} else if (strcmp(interface, "wl_seat") == 0) {
++		add_seat(pointer, name, version);
++	}
++}
++
++static void
++handle_global_remove(void *data, struct wl_registry *registry, uint32_t name)
++{
++}
++
++static const struct wl_registry_listener registry_listener = {
++	handle_global,
++	handle_global_remove
++};
++
++static void
++handle_toplevel_configure(void *data, struct xdg_toplevel *xdg_toplevel,
++		          int32_t width, int32_t height, struct wl_array *states)
++{
++	struct pointer *pointer = data;
++	uint32_t *p;
++
++	pointer->fullscreen = false;
++	pointer->maximized = false;
++
++	wl_array_for_each(p, states) {
++		uint32_t state = *p;
++		switch (state) {
++		case XDG_TOPLEVEL_STATE_FULLSCREEN:
++			pointer->fullscreen = true;
++			break;
++		case XDG_TOPLEVEL_STATE_MAXIMIZED:
++			pointer->maximized = true;
++			break;
++		}
++	}
++
++	if (width > 0 && height > 0) {
++		if (!pointer->fullscreen && !pointer->maximized) {
++			pointer->init_width = width;
++			pointer->init_width = height;
++		}
++		pointer->width = width;
++		pointer->height = height;
++	} else if (!pointer->fullscreen && !pointer->maximized) {
++		pointer->width = pointer->init_width;
++		pointer->height = pointer->init_height;
++
++	}
++
++	pointer->needs_buffer_update = true;
++}
++
++static void
++handle_toplevel_close(void *data, struct xdg_toplevel *xdg_toplevel)
++{
++	struct pointer *pointer = data;
++	pointer->running = false;
++}
++
++static const struct xdg_toplevel_listener xdg_toplevel_listener = {
++	handle_toplevel_configure,
++	handle_toplevel_close,
++};
++
++static struct pointer *
++pointer_create(int width, int height)
++{
++	struct pointer *pointer;
++
++	pointer = malloc(sizeof *pointer);
++	if (pointer == NULL) {
++		fprintf(stderr, "out of memory\n");
++		exit(1);
++	}
++	pointer->display = wl_display_connect(NULL);
++	assert(pointer->display);
++
++	pointer->has_argb = false;
++	pointer->buffer = NULL;
++	pointer->registry = wl_display_get_registry(pointer->display);
++	wl_registry_add_listener(pointer->registry, &registry_listener, pointer);
++	wl_display_dispatch(pointer->display);
++	wl_display_roundtrip(pointer->display);
++
++	if (!pointer->has_argb) {
++		fprintf(stderr, "WL_SHM_FORMAT_ARGB32 not available\n");
++		exit(1);
++	}
++
++	if (!pointer->wm_base) {
++		fprintf(stderr, "xdg-shell required!\n");
++		exit(1);
++	}
++
++	pointer->init_width = width;
++	pointer->init_height = height;
++	pointer->surface = wl_compositor_create_surface(pointer->compositor);
++
++	pointer->xdg_surface =
++		xdg_wm_base_get_xdg_surface(pointer->wm_base, pointer->surface);
++	assert(pointer->xdg_surface);
++
++	xdg_surface_add_listener(pointer->xdg_surface, &xdg_surface_listener, pointer);
++
++	pointer->xdg_toplevel = xdg_surface_get_toplevel(pointer->xdg_surface);
++	assert(pointer->xdg_toplevel);
++	xdg_toplevel_add_listener(pointer->xdg_toplevel,
++				  &xdg_toplevel_listener, pointer);
++	xdg_toplevel_set_title(pointer->xdg_toplevel, "simple-pointer");
++	xdg_toplevel_set_app_id(pointer->xdg_toplevel, "simple-pointer");
++	pointer->wait_for_configure = true;
++	pointer->needs_buffer_update = false;
++	wl_surface_commit(pointer->surface);
++
++	pointer->running = true;
++
++	return pointer;
++}
++
++static void
++destroy_pointer(struct pointer *pointer)
++{
++	if (pointer->buffer->buffer)
++		wl_buffer_destroy(pointer->buffer->buffer);
++
++	if (pointer->xdg_toplevel)
++		xdg_toplevel_destroy(pointer->xdg_toplevel);
++	if (pointer->xdg_surface)
++		xdg_surface_destroy(pointer->xdg_surface);
++	if (pointer->wm_base)
++		xdg_wm_base_destroy(pointer->wm_base);
++	if (pointer->shm)
++		wl_shm_destroy(pointer->shm);
++	if (pointer->compositor)
++		wl_compositor_destroy(pointer->compositor);
++
++
++	wl_surface_destroy(pointer->surface);
++	free(pointer->buffer);
++	free(pointer);
++}
++
++int
++main(int argc, char **argv)
++{
++	struct pointer *pointer;
++	int ret = 0;
++
++	pointer = pointer_create(600, 500);
++
++	while (ret != -1 && pointer->running)
++		ret = wl_display_dispatch(pointer->display);
++
++	destroy_pointer(pointer);
++	return 0;
++}
+-- 
+2.20.1
+

@@ -1,0 +1,54 @@
+From 0a7a6d7c817fe730f0171214b34c8e650ac6b6a6 Mon Sep 17 00:00:00 2001
+From: Liang Chen <cl@rock-chips.com>
+Date: Thu, 18 Jul 2024 19:48:34 +0800
+Subject: [PATCH 4/5] ARM: configs: add rockchip_rt.config for PREEMPT_RT
+
+Signed-off-by: Liang Chen <cl@rock-chips.com>
+Change-Id: If4b3ed245a4f0f4a207409fcb42d3430cbe26dbe
+---
+ arch/arm/configs/rockchip_rt.config | 33 +++++++++++++++++++++++++++++
+ 1 file changed, 33 insertions(+)
+ create mode 100644 arch/arm/configs/rockchip_rt.config
+
+diff --git a/arch/arm/configs/rockchip_rt.config b/arch/arm/configs/rockchip_rt.config
+new file mode 100644
+index 000000000000..eb7c880ec5ee
+--- /dev/null
++++ b/arch/arm/configs/rockchip_rt.config
+@@ -0,0 +1,33 @@
++# CONFIG_ARM_PSCI_CPUIDLE is not set
++# CONFIG_ARM_ROCKCHIP_DMC_DEVFREQ is not set
++# CONFIG_CGROUP_CPUACCT is not set
++# CONFIG_CGROUP_SCHED is not set
++# CONFIG_CPU_FREQ_TIMES is not set
++# CONFIG_NO_HZ_FULL=y
++# CONFIG_CPU_FREQ_THERMAL is not set
++# CONFIG_DEBUG_SPINLOCK is not set
++# CONFIG_FTRACE is not set
++# CONFIG_IRQ_TIME_ACCOUNTING is not set
++# CONFIG_MALI_BIFROST_ENABLE_TRACE is not set
++# CONFIG_MALI_BIFROST_SYSTEM_TRACE is not set
++# CONFIG_PSI is not set
++# CONFIG_PERF_EVENTS is not set
++# CONFIG_PROFILING is not set
++# CONFIG_SCHED_DEBUG is not set
++# CONFIG_SCHED_INFO is not set
++# CONFIG_SWAP is not set
++# CONFIG_TASKSTATS is not set
++# CONFIG_ZRAM is not set
++# CONFIG_ARM_PATCH_PHYS_VIRT is not set
++# CONFIG_ARCH_MULTIPLATFORM is not set
++# CONFIG_VMAP_STACK is not set
++# CONFIG_HARDEN_BRANCH_PREDICTOR is not set
++# CONFIG_HARDEN_BRANCH_HISTORY is not set
++# CONFIG_COMPACTION is not set
++# CONFIG_MIGRATION is not set
++# CONFIG_LD_DEAD_CODE_DATA_ELIMINATION is not set
++CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE=y
++CONFIG_HZ_PERIODIC=y
++CONFIG_HZ_1000=y
++CONFIG_PREEMPT_RT=y
++CONFIG_VDSO=y
+-- 
+2.34.1
+

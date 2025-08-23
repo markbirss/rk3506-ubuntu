@@ -1,0 +1,296 @@
+From 7140993f9c67fdf9a5927eeb01178c8e110008c2 Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Wed, 6 Sep 2023 15:56:30 +0800
+Subject: [PATCH 27/35] src: extra: New widgets stiker_matrix
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ src/extra/themes/default/lv_theme_default.c   |   8 +
+ src/extra/widgets/lv_widgets.h                |   1 +
+ .../widgets/stiker_matrix/lv_stiker_matrix.c  | 164 ++++++++++++++++++
+ .../widgets/stiker_matrix/lv_stiker_matrix.h  |  71 ++++++++
+ 4 files changed, 244 insertions(+)
+ create mode 100644 src/extra/widgets/stiker_matrix/lv_stiker_matrix.c
+ create mode 100644 src/extra/widgets/stiker_matrix/lv_stiker_matrix.h
+
+diff --git a/src/extra/themes/default/lv_theme_default.c b/src/extra/themes/default/lv_theme_default.c
+index bd85b9b06..ab7a09d6e 100644
+--- a/src/extra/themes/default/lv_theme_default.c
++++ b/src/extra/themes/default/lv_theme_default.c
+@@ -746,6 +746,14 @@ static void theme_apply(lv_theme_t * th, lv_obj_t * obj)
+         lv_obj_add_style(obj, &styles->scrollbar, LV_PART_SCROLLBAR);
+         lv_obj_add_style(obj, &styles->scrollbar_scrolled, LV_PART_SCROLLBAR | LV_STATE_SCROLLED);
+     }
++
++#if LV_USE_STIKER_MATRIX
++    else if(lv_obj_check_type(obj, &lv_stiker_matrix_item_class)) {
++            lv_obj_add_style(obj, &styles->card, 0);
++            return;
++    }
++#endif
++
+ #if LV_USE_BTN
+     else if(lv_obj_check_type(obj, &lv_btn_class)) {
+         lv_obj_add_style(obj, &styles->btn, 0);
+diff --git a/src/extra/widgets/lv_widgets.h b/src/extra/widgets/lv_widgets.h
+index af401c6e7..1443f0ce5 100644
+--- a/src/extra/widgets/lv_widgets.h
++++ b/src/extra/widgets/lv_widgets.h
+@@ -26,6 +26,7 @@ extern "C" {
+ #include "meter/lv_meter.h"
+ #include "spinbox/lv_spinbox.h"
+ #include "spinner/lv_spinner.h"
++#include "stiker_matrix/lv_stiker_matrix.h"
+ #include "tabview/lv_tabview.h"
+ #include "tileview/lv_tileview.h"
+ #include "win/lv_win.h"
+diff --git a/src/extra/widgets/stiker_matrix/lv_stiker_matrix.c b/src/extra/widgets/stiker_matrix/lv_stiker_matrix.c
+new file mode 100644
+index 000000000..93577fa8f
+--- /dev/null
++++ b/src/extra/widgets/stiker_matrix/lv_stiker_matrix.c
+@@ -0,0 +1,164 @@
++/**
++ * @file lv_stiker_matrix.c
++ *
++ */
++
++/*********************
++ *      INCLUDES
++ *********************/
++#include "lv_stiker_matrix.h"
++#if LV_USE_STIKER_MATRIX
++
++#include "../../../misc/lv_assert.h"
++
++/*********************
++ *      DEFINES
++ *********************/
++#define ITEM_CLASS  &lv_stiker_matrix_item_class
++#define MY_CLASS    &lv_stiker_matrix_class
++
++/**********************
++ *      TYPEDEFS
++ **********************/
++
++/**********************
++ *  STATIC PROTOTYPES
++ **********************/
++
++/**********************
++ *  STATIC VARIABLES
++ **********************/
++const lv_obj_class_t lv_stiker_matrix_item_class = {
++    .base_class = &lv_obj_class,
++    .width_def = 200,
++    .height_def = 200,
++    .instance_size = sizeof(lv_stiker_matrix_item_t)
++};
++
++const lv_obj_class_t lv_stiker_matrix_class = {
++    .base_class = &lv_obj_class,
++    .width_def = LV_DPI_DEF * 2,
++    .height_def = LV_SIZE_CONTENT,
++    .instance_size = sizeof(lv_stiker_matrix_t)
++};
++
++/**********************
++ *      MACROS
++ **********************/
++
++/**********************
++ *   GLOBAL FUNCTIONS
++ **********************/
++
++lv_obj_t * lv_stiker_matrix_create(lv_obj_t * parent)
++{
++    LV_LOG_INFO("begin");
++
++    lv_obj_t * obj = lv_obj_class_create_obj(MY_CLASS, parent);
++    LV_ASSERT_MALLOC(obj);
++    if(obj == NULL) return NULL;
++    lv_obj_class_init_obj(obj);
++    lv_stiker_matrix_t * stiker = (lv_stiker_matrix_t *)obj;
++
++    stiker->fixed_width = 200;
++    stiker->fixed_height = 200;
++    lv_obj_set_size(obj, stiker->fixed_width, stiker->fixed_height);
++    lv_obj_set_flex_flow(obj, LV_FLEX_FLOW_ROW_WRAP);
++    lv_obj_set_style_width(obj, 0, LV_PART_SCROLLBAR);
++
++    return obj;
++}
++
++void lv_stiker_matrix_set_size(lv_obj_t * obj, lv_coord_t w, lv_coord_t h)
++{
++    lv_stiker_matrix_t * stiker = (lv_stiker_matrix_t *)obj;
++
++    if ((w == LV_SIZE_CONTENT) && (h == LV_SIZE_CONTENT))
++    {
++        LV_LOG_ERROR("w and h cannot all be LV_SIZE_CONTENT");
++        return;
++    }
++    lv_obj_set_size(obj, w, h);
++    lv_obj_refr_size(obj);
++
++    if (w != LV_SIZE_CONTENT)
++        stiker->fixed_width = lv_obj_get_width(obj);
++    else
++        stiker->fixed_width = LV_SIZE_CONTENT;
++    if (h != LV_SIZE_CONTENT)
++        stiker->fixed_height = lv_obj_get_height(obj);
++    else
++        stiker->fixed_height = LV_SIZE_CONTENT;
++}
++
++static void lv_stiker_matrix_update_items(lv_stiker_matrix_t * obj, lv_coord_t max_w, lv_coord_t max_h)
++{
++    lv_stiker_matrix_item_t * item;
++    uint32_t max;
++
++    max = lv_obj_get_child_cnt(&obj->obj);
++    for (int i = 0; i < max; i++)
++    {
++        item = (lv_stiker_matrix_item_t *)lv_obj_get_child(&obj->obj, i);
++        lv_obj_set_size(&item->lv_obj,
++                        (lv_coord_t)(max_w * item->pct_w / 100.0),
++                        (lv_coord_t)(max_h * item->pct_h / 100.0));
++    }
++}
++
++lv_obj_t * lv_stiker_matrix_item_create(lv_obj_t * parent)
++{
++    LV_LOG_INFO("begin");
++    lv_obj_t * obj = lv_obj_class_create_obj(ITEM_CLASS, parent);
++    lv_obj_class_init_obj(obj);
++    return obj;
++}
++
++lv_obj_t * lv_stiker_matrix_new_item(lv_obj_t * obj, lv_coord_t pct_w, lv_coord_t pct_h)
++{
++    lv_stiker_matrix_t * stiker = (lv_stiker_matrix_t *)obj;
++    lv_stiker_matrix_item_t * _item;
++    lv_obj_t * item;
++    lv_coord_t max_w;
++    lv_coord_t max_h;
++    lv_coord_t parent_w;
++    lv_coord_t parent_h;
++
++    if ((pct_w == 100) || ((pct_w + stiker->wfill > 100)))
++    {
++        stiker->cnt = 0;
++        stiker->line++;
++        stiker->wfill = pct_w;
++    }
++    else
++    {
++        stiker->wfill += pct_w;
++    }
++
++    item = lv_stiker_matrix_item_create(obj);
++    _item = (lv_stiker_matrix_item_t *)item;
++    _item->pct_w = pct_w;
++    _item->pct_h = pct_h;
++    stiker->items[stiker->cnt] = item;
++    stiker->cnt++;
++
++    parent_w = stiker->fixed_width == LV_SIZE_CONTENT ? stiker->fixed_height : stiker->fixed_width;
++    parent_h = stiker->fixed_height == LV_SIZE_CONTENT ? stiker->fixed_width : stiker->fixed_height;
++
++    max_w = parent_w
++            - lv_obj_get_style_pad_left(obj, LV_PART_MAIN)
++            - lv_obj_get_style_pad_right(obj, LV_PART_MAIN)
++            - lv_obj_get_style_pad_row(obj, LV_PART_MAIN) * (stiker->cnt - 1)
++            - lv_obj_get_style_width(item, LV_PART_SCROLLBAR);
++    max_h = parent_h
++            - lv_obj_get_style_pad_top(obj, LV_PART_MAIN)
++            - lv_obj_get_style_pad_bottom(obj, LV_PART_MAIN);
++    if (stiker->fixed_height != LV_SIZE_CONTENT)
++        max_h -= lv_obj_get_style_pad_column(obj, LV_PART_MAIN) * (stiker->line - 1);
++
++    lv_stiker_matrix_update_items(stiker, max_w, max_h);
++
++    return item;
++}
++
++#endif /*LV_USE_STIKER_MATRIX*/
+diff --git a/src/extra/widgets/stiker_matrix/lv_stiker_matrix.h b/src/extra/widgets/stiker_matrix/lv_stiker_matrix.h
+new file mode 100644
+index 000000000..c1a6c7379
+--- /dev/null
++++ b/src/extra/widgets/stiker_matrix/lv_stiker_matrix.h
+@@ -0,0 +1,71 @@
++/**
++ * @file lv_stiker_matrix.h
++ *
++ */
++
++#ifndef LV_STIKER_MATRIX_H
++#define LV_STIKER_MATRIX_H
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++/*********************
++ *      INCLUDES
++ *********************/
++#include "../../../lvgl.h"
++
++#if LV_USE_STIKER_MATRIX
++
++/*********************
++ *      DEFINES
++ *********************/
++
++/**********************
++ *      TYPEDEFS
++ **********************/
++
++typedef struct
++{
++    lv_obj_t lv_obj;
++    lv_coord_t pct_w;
++    lv_coord_t pct_h;
++} lv_stiker_matrix_item_t;
++
++typedef struct
++{
++    lv_obj_t obj;
++    lv_obj_t * items[5];
++    lv_coord_t fixed_width;
++    lv_coord_t fixed_height;
++    lv_coord_t wfill;
++    lv_coord_t cnt;
++    lv_coord_t line;
++} lv_stiker_matrix_t;
++
++extern const lv_obj_class_t lv_stiker_matrix_class;
++extern const lv_obj_class_t lv_stiker_matrix_item_class;
++
++/**********************
++ * GLOBAL PROTOTYPES
++ **********************/
++
++lv_obj_t * lv_stiker_matrix_create(lv_obj_t * parent);
++
++void lv_stiker_matrix_set_size(lv_obj_t * obj, lv_coord_t w, lv_coord_t h);
++
++void lv_stiker_matrix_set_size(lv_obj_t * obj, lv_coord_t w, lv_coord_t h);
++
++lv_obj_t * lv_stiker_matrix_new_item(lv_obj_t * obj, lv_coord_t pct_w, lv_coord_t pct_h);
++
++/**********************
++ *      MACROS
++ **********************/
++
++#endif /*LV_USE_STIKER_MATRIX*/
++
++#ifdef __cplusplus
++} /*extern "C"*/
++#endif
++
++#endif /*LV_INPUTBOX_H*/
+-- 
+2.25.1
+

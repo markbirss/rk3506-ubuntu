@@ -1,0 +1,31 @@
+mainmenu "RT-Thread Project Configuration"
+
+config BSP_DIR
+    string
+    option env="BSP_ROOT"
+    default "."
+
+config RTT_DIR
+    string
+    option env="RTT_ROOT"
+    default "../../.."
+
+source "$RTT_DIR/Kconfig"
+
+config BSP_RK3506
+    bool
+    select ARCH_ARM_CORTEX_A
+    select RT_USING_GIC_V2
+    select RT_USING_COMPONENTS_INIT
+    select RT_USING_USER_MAIN
+    select RT_USING_FPU
+    select RT_USING_CPU_FFS
+    default y
+
+config RT_USING_FPU
+    bool
+
+source "$BSP_DIR/board/Kconfig"
+source "$BSP_DIR/driver/Kconfig"
+source "$BSP_DIR/tests/Kconfig"
+source "$RTT_DIR/applications/Kconfig"

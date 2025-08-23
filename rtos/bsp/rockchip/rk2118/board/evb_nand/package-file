@@ -1,0 +1,26 @@
+# NAME		Relative path
+#
+#HWDEF		HWDEF
+parameter       parameter.txt
+package-file	package-file
+cpu0_secure_a   ../../Image/tfm_s.img
+cpu1_secure_a   ../../Image/cpu1_loader.img
+cpu0_secure_b   ../../Image/tfm_s.img
+cpu1_secure_b   ../../Image/cpu1_loader.img
+recovery        ../../Image/recovery.img
+misc            ../../Image/misc.img
+cpu0_os_a       ../../Image/rtt0.img
+cpu1_os_a       ../../Image/rtt1.img
+cpu0_os_b       ../../Image/rtt0.img
+cpu1_os_b       ../../Image/rtt1.img
+dsp0_a          ../../../../../components/hifi4/rtt/dsp_fw/evb_soundbar_demo/dsp0.bin
+dsp1_a          ../../../../../components/hifi4/rtt/dsp_fw/evb_soundbar_demo/dsp1.bin
+dsp2_a          ../../../../../components/hifi4/rtt/dsp_fw/evb_soundbar_demo/dsp2.bin
+dsp0_b          ../../../../../components/hifi4/rtt/dsp_fw/evb_soundbar_demo/dsp0.bin
+dsp1_b          ../../../../../components/hifi4/rtt/dsp_fw/evb_soundbar_demo/dsp1.bin
+dsp2_b          ../../../../../components/hifi4/rtt/dsp_fw/evb_soundbar_demo/dsp2.bin
+root_a          ../../Image/root.img
+root_b          ../../Image/root.img
+rkstudio_a      ../../../../../components/hifi4/rtt/rkstudio_bin/evb_soundbar_demo.bin
+rkstudio_b      ../../../../../components/hifi4/rtt/rkstudio_bin/evb_soundbar_demo.bin
+#userdata       ../../Image/userdata.img

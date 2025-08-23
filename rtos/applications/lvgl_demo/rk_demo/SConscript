@@ -1,0 +1,36 @@
+Import('RTT_ROOT')
+Import('rtconfig')
+from building import *
+
+cwd     = GetCurrentDir()
+src  = Glob('*.c')
+CPPPATH = [cwd]
+
+src += Glob('home/*.c')
+CPPPATH += [cwd + '/home']
+
+src += Glob('layout/*.c')
+CPPPATH += [cwd + '/layout']
+
+src += Glob('rockit/*.c')
+CPPPATH += [cwd + '/rockit']
+
+src += Glob('intercom_homepage/*.c')
+CPPPATH += [cwd + '/intercom_homepage']
+src += Glob('intercom_homepage/intercom_call/*.c')
+CPPPATH += [cwd + '/intercom_homepage/intercom_call']
+src += Glob('intercom_homepage/video_monitor/*.c')
+CPPPATH += [cwd + '/intercom_homepage/video_monitor']
+
+src += Glob('smart_home/*.c')
+CPPPATH += [cwd + '/smart_home']
+
+src += Glob('furniture_control/*.c')
+CPPPATH += [cwd + '/furniture_control']
+
+src += Glob('setting/*.c')
+CPPPATH += [cwd + '/setting']
+
+group = DefineGroup('Applications', src, depend = ['RT_LV_RK_DEMO'], CPPPATH = CPPPATH)
+
+Return('group')

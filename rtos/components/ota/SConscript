@@ -1,0 +1,25 @@
+# RT-Thread building script for bridge
+
+import os
+from building import *
+
+cwd = GetCurrentDir()
+objs = []
+list = os.listdir(cwd)
+src = Glob('*.c')
+CPPPATH = [cwd]
+
+LOCAL_CCFLAGS = ' -Wno-unused-variable -Wno-unused-function'
+
+for d in list:
+    path = os.path.join(cwd, d)
+    if os.path.isfile(os.path.join(path, 'SConscript')):
+        objs = objs + SConscript(os.path.join(d, 'SConscript'))
+
+if GetDepend('RT_USING_NEW_OTA'):
+    group = DefineGroup('OTA', src, depend = ['RT_USING_NEW_OTA'], CPPPATH = CPPPATH, LOCAL_CCFLAGS = LOCAL_CCFLAGS)
+else:
+    group = DefineGroup('OTA', src, depend = ['RT_USING_OTA'], CPPPATH = CPPPATH)
+objs = objs + group
+
+Return('objs')

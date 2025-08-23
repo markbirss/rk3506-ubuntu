@@ -1,0 +1,707 @@
+From cd1c41313bd852feba00e2c362910e4a4d073915 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Mon, 22 Apr 2024 11:20:01 +0800
+Subject: [PATCH 4/5] render: gles2: Support EGL_WL_bind_wayland_display
+ extension
+
+See:
+https://registry.khronos.org/EGL/extensions/WL/EGL_WL_bind_wayland_display.txt
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ include/render/egl.h                |  58 ++++++++++
+ include/wlr/interfaces/wlr_buffer.h |   5 +-
+ include/wlr/render/interface.h      |   2 +
+ render/egl.c                        | 164 ++++++++++++++++++++++++++++
+ render/gles2/renderer.c             |   7 ++
+ render/gles2/texture.c              | 103 ++++++++++-------
+ render/wlr_renderer.c               |   6 +
+ types/buffer/resource.c             |   4 +-
+ types/wlr_drm.c                     |   6 +-
+ types/wlr_linux_dmabuf_v1.c         |   6 +-
+ types/wlr_shm.c                     |   6 +-
+ types/wlr_single_pixel_buffer_v1.c  |   6 +-
+ 12 files changed, 320 insertions(+), 53 deletions(-)
+
+diff --git a/include/render/egl.h b/include/render/egl.h
+index e8b8596..3c049d0 100644
+--- a/include/render/egl.h
++++ b/include/render/egl.h
+@@ -3,11 +3,36 @@
+ 
+ #include <wlr/render/egl.h>
+ 
++/**
++ * Part of mesa3d's EGL/eglmesaext.h
++ */
++#ifndef EGL_WL_bind_wayland_display
++#define EGL_WL_bind_wayland_display 1
++
++#define EGL_WAYLAND_BUFFER_WL           0x31D5 /* eglCreateImageKHR target */
++#define EGL_WAYLAND_PLANE_WL            0x31D6 /* eglCreateImageKHR target */
++
++#define EGL_TEXTURE_EXTERNAL_WL         0x31DA
++
++struct wl_display;
++struct wl_resource;
++#ifdef EGL_EGLEXT_PROTOTYPES
++EGLAPI EGLBoolean EGLAPIENTRY eglBindWaylandDisplayWL(EGLDisplay dpy, struct wl_display *display);
++EGLAPI EGLBoolean EGLAPIENTRY eglUnbindWaylandDisplayWL(EGLDisplay dpy, struct wl_display *display);
++EGLAPI EGLBoolean EGLAPIENTRY eglQueryWaylandBufferWL(EGLDisplay dpy, struct wl_resource *buffer, EGLint attribute, EGLint *value);
++#endif
++typedef EGLBoolean (EGLAPIENTRYP PFNEGLBINDWAYLANDDISPLAYWL) (EGLDisplay dpy, struct wl_display *display);
++typedef EGLBoolean (EGLAPIENTRYP PFNEGLUNBINDWAYLANDDISPLAYWL) (EGLDisplay dpy, struct wl_display *display);
++typedef EGLBoolean (EGLAPIENTRYP PFNEGLQUERYWAYLANDBUFFERWL) (EGLDisplay dpy, struct wl_resource *buffer, EGLint attribute, EGLint *value);
++
++#endif
++
+ struct wlr_egl {
+ 	EGLDisplay display;
+ 	EGLContext context;
+ 	EGLDeviceEXT device; // may be EGL_NO_DEVICE_EXT
+ 	struct gbm_device *gbm_device;
++	struct wl_display *wl_display;
+ 
+ 	struct {
+ 		// Display extensions
+@@ -16,6 +41,7 @@ struct wlr_egl {
+ 		bool EXT_image_dma_buf_import_modifiers;
+ 		bool IMG_context_priority;
+ 		bool EXT_create_context_robustness;
++		bool WL_bind_wayland_display;
+ 
+ 		// Device extensions
+ 		bool EXT_device_drm;
+@@ -32,6 +58,9 @@ struct wlr_egl {
+ 		PFNEGLGETPLATFORMDISPLAYEXTPROC eglGetPlatformDisplayEXT;
+ 		PFNEGLCREATEIMAGEKHRPROC eglCreateImageKHR;
+ 		PFNEGLDESTROYIMAGEKHRPROC eglDestroyImageKHR;
++		PFNEGLBINDWAYLANDDISPLAYWL eglBindWaylandDisplayWL;
++		PFNEGLUNBINDWAYLANDDISPLAYWL eglUnbindWaylandDisplayWL;
++ 		PFNEGLQUERYWAYLANDBUFFERWL eglQueryWaylandBufferWL;
+ 		PFNEGLQUERYDMABUFFORMATSEXTPROC eglQueryDmaBufFormatsEXT;
+ 		PFNEGLQUERYDMABUFMODIFIERSEXTPROC eglQueryDmaBufModifiersEXT;
+ 		PFNEGLDEBUGMESSAGECONTROLKHRPROC eglDebugMessageControlKHR;
+@@ -52,6 +81,18 @@ struct wlr_egl_context {
+ 	EGLSurface read_surface;
+ };
+ 
++struct wlr_egl_buffer {
++	struct wlr_buffer base;
++	struct wlr_egl *egl;
++	bool has_alpha;
++
++	struct wl_resource *resource;
++	struct wl_listener resource_destroy;
++	struct wl_listener release;
++};
++
++struct wlr_egl_buffer *wlr_buffer_to_egl(struct wlr_buffer *buffer);
++
+ /**
+  * Initializes an EGL context for the given DRM FD.
+  *
+@@ -65,6 +106,23 @@ struct wlr_egl *wlr_egl_create_with_drm_fd(int drm_fd);
+  */
+ void wlr_egl_destroy(struct wlr_egl *egl);
+ 
++/**
++ * Bind the wl_display of a Wayland compositor to an EGLDisplay.
++ *
++ * See:
++ * https://registry.khronos.org/EGL/extensions/WL/EGL_WL_bind_wayland_display.txt
++ */
++bool wlr_egl_bind_wl_display(struct wlr_egl *egl, struct wl_display *wl_display);
++
++/**
++ * Creates an EGL image from the given EGL wl_buffer.
++ *
++ * See:
++ * https://registry.khronos.org/EGL/extensions/WL/EGL_WL_bind_wayland_display.txt
++ */
++EGLImageKHR wlr_egl_create_image_from_eglbuf(struct wlr_egl *egl,
++		struct wlr_egl_buffer *buffer);
++
+ /**
+  * Creates an EGL image from the given dmabuf attributes. Check usability
+  * of the dmabuf with wlr_egl_check_import_dmabuf once first.
+diff --git a/include/wlr/interfaces/wlr_buffer.h b/include/wlr/interfaces/wlr_buffer.h
+index 820300f..e32d54c 100644
+--- a/include/wlr/interfaces/wlr_buffer.h
++++ b/include/wlr/interfaces/wlr_buffer.h
+@@ -24,8 +24,9 @@ struct wlr_buffer_impl {
+ 
+ struct wlr_buffer_resource_interface {
+ 	const char *name;
+-	bool (*is_instance)(struct wl_resource *resource);
+-	struct wlr_buffer *(*from_resource)(struct wl_resource *resource);
++	void *data;
++	bool (*is_instance)(struct wl_resource *resource, void *data);
++	struct wlr_buffer *(*from_resource)(struct wl_resource *resource, void *data);
+ };
+ 
+ /**
+diff --git a/include/wlr/render/interface.h b/include/wlr/render/interface.h
+index 06f4083..2fd7f3d 100644
+--- a/include/wlr/render/interface.h
++++ b/include/wlr/render/interface.h
+@@ -20,6 +20,8 @@ struct wlr_box;
+ struct wlr_fbox;
+ 
+ struct wlr_renderer_impl {
++	bool (*bind_wl_display)(struct wlr_renderer *renderer,
++		struct wl_display *wl_display);
+ 	bool (*bind_buffer)(struct wlr_renderer *renderer,
+ 		struct wlr_buffer *buffer);
+ 	bool (*begin)(struct wlr_renderer *renderer, uint32_t width,
+diff --git a/render/egl.c b/render/egl.c
+index 651525a..27a26b5 100644
+--- a/render/egl.c
++++ b/render/egl.c
+@@ -6,6 +6,7 @@
+ #include <stdlib.h>
+ #include <unistd.h>
+ #include <gbm.h>
++#include <wlr/interfaces/wlr_buffer.h>
+ #include <wlr/render/egl.h>
+ #include <wlr/util/log.h>
+ #include <wlr/util/region.h>
+@@ -293,6 +294,16 @@ static bool egl_init_display(struct wlr_egl *egl, EGLDisplay display) {
+ 			"eglQueryDmaBufModifiersEXT");
+ 	}
+ 
++	if (check_egl_ext(display_exts_str, "EGL_WL_bind_wayland_display")) {
++		egl->exts.WL_bind_wayland_display = true;
++		load_egl_proc(&egl->procs.eglBindWaylandDisplayWL,
++			"eglBindWaylandDisplayWL");
++		load_egl_proc(&egl->procs.eglUnbindWaylandDisplayWL,
++			"eglUnbindWaylandDisplayWL");
++		load_egl_proc(&egl->procs.eglQueryWaylandBufferWL,
++			"eglQueryWaylandBufferWL");
++	}
++
+ 	egl->exts.EXT_create_context_robustness =
+ 		check_egl_ext(display_exts_str, "EGL_EXT_create_context_robustness");
+ 
+@@ -367,6 +378,126 @@ static bool egl_init_display(struct wlr_egl *egl, EGLDisplay display) {
+ 	return true;
+ }
+ 
++static void egl_buffer_destroy(struct wlr_buffer *wlr_buffer) {
++	struct wlr_egl_buffer *buffer =
++		wl_container_of(wlr_buffer, buffer, base);
++	wl_list_remove(&buffer->resource_destroy.link);
++	wl_list_remove(&buffer->release.link);
++	free(buffer);
++}
++
++static const struct wlr_buffer_impl egl_buffer_impl = {
++	.destroy = egl_buffer_destroy,
++};
++
++struct wlr_egl_buffer *wlr_buffer_to_egl(struct wlr_buffer *buffer) {
++	if (buffer->impl != &egl_buffer_impl)
++		return NULL;
++
++	return (struct wlr_egl_buffer *)buffer;
++}
++
++static void egl_buffer_resource_handle_destroy(
++		struct wl_listener *listener, void *data) {
++	struct wlr_egl_buffer *buffer =
++		wl_container_of(listener, buffer, resource_destroy);
++
++	buffer->resource = NULL;
++	wl_list_remove(&buffer->resource_destroy.link);
++	wl_list_init(&buffer->resource_destroy.link);
++
++	wlr_buffer_drop(&buffer->base);
++}
++
++static void egl_buffer_handle_release(struct wl_listener *listener,
++		void *data) {
++	struct wlr_egl_buffer *buffer =
++		wl_container_of(listener, buffer, release);
++	if (buffer->resource != NULL) {
++		wl_buffer_send_release(buffer->resource);
++	}
++}
++
++static bool egl_buffer_resource_is_instance(struct wl_resource *resource,
++		void *data) {
++	struct wlr_egl *egl = data;
++	if (!egl || !egl->exts.WL_bind_wayland_display)
++		return false;
++
++	EGLint fmt;
++	return egl->procs.eglQueryWaylandBufferWL(egl->display,
++		resource, EGL_TEXTURE_FORMAT, &fmt);
++}
++
++static struct wlr_buffer *egl_buffer_from_resource(struct wl_resource *resource,
++		void *data) {
++	struct wlr_egl *egl = data;
++	if (!egl || !egl->exts.WL_bind_wayland_display)
++		return NULL;
++
++	struct wl_listener *resource_destroy_listener =
++		wl_resource_get_destroy_listener(resource,
++		egl_buffer_resource_handle_destroy);
++	if (resource_destroy_listener != NULL) {
++		struct wlr_egl_buffer *buffer =
++			wl_container_of(resource_destroy_listener, buffer, resource_destroy);
++		return &buffer->base;
++	}
++
++	EGLint fmt;
++	int width, height;
++
++	if (!egl->procs.eglQueryWaylandBufferWL(egl->display,
++		resource, EGL_TEXTURE_FORMAT, &fmt))
++		return NULL;
++
++	if (!egl->procs.eglQueryWaylandBufferWL(egl->display,
++		resource, EGL_WIDTH, &width))
++		return NULL;
++
++	if (!egl->procs.eglQueryWaylandBufferWL(egl->display,
++		resource, EGL_HEIGHT, &height))
++		return NULL;
++
++	struct wlr_egl_buffer *buffer = calloc(1, sizeof(*buffer));
++	if (!buffer)
++		return NULL;
++
++	wlr_buffer_init(&buffer->base, &egl_buffer_impl, width, height);
++
++	buffer->resource = resource;
++
++	buffer->resource_destroy.notify = egl_buffer_resource_handle_destroy;
++	wl_resource_add_destroy_listener(resource, &buffer->resource_destroy);
++
++	buffer->release.notify = egl_buffer_handle_release;
++	wl_signal_add(&buffer->base.events.release, &buffer->release);
++
++	switch (fmt) {
++	case EGL_TEXTURE_RGB:
++		buffer->has_alpha = false;
++		break;
++	case EGL_TEXTURE_RGBA:
++	case EGL_TEXTURE_EXTERNAL_WL:
++		buffer->has_alpha = true;
++		break;
++	default:
++		wlr_log(WLR_ERROR, "Invalid or unsupported EGL buffer format");
++		goto error;
++	}
++
++	return &buffer->base;
++error:
++	wlr_buffer_drop(&buffer->base);
++	return NULL;
++}
++
++static struct wlr_buffer_resource_interface egl_buffer_resource_interface = {
++	.name = "wlr_egl_buffer",
++	.is_instance = egl_buffer_resource_is_instance,
++	.from_resource = egl_buffer_from_resource,
++};
++
+ static bool egl_init(struct wlr_egl *egl, EGLenum platform,
+ 		void *remote_display) {
+ 	EGLint display_attribs[3] = {0};
+@@ -436,6 +567,9 @@ static bool egl_init(struct wlr_egl *egl, EGLenum platform,
+ 		}
+ 	}
+ 
++	egl_buffer_resource_interface.data = egl;
++	wlr_buffer_register_resource_interface(&egl_buffer_resource_interface);
++
+ 	return true;
+ }
+ 
+@@ -614,6 +748,9 @@ void wlr_egl_destroy(struct wlr_egl *egl) {
+ 	wlr_drm_format_set_finish(&egl->dmabuf_render_formats);
+ 	wlr_drm_format_set_finish(&egl->dmabuf_texture_formats);
+ 
++	if (egl->exts.WL_bind_wayland_display && egl->wl_display)
++		egl->procs.eglUnbindWaylandDisplayWL(egl->display, egl->wl_display);
++
+ 	eglMakeCurrent(egl->display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+ 	eglDestroyContext(egl->display, egl->context);
+ 
+@@ -632,6 +769,17 @@ void wlr_egl_destroy(struct wlr_egl *egl) {
+ 	free(egl);
+ }
+ 
++bool wlr_egl_bind_wl_display(struct wlr_egl *egl, struct wl_display *wl_display) {
++	if (!egl->exts.WL_bind_wayland_display)
++		return true;
++
++	if (!egl->procs.eglBindWaylandDisplayWL(egl->display, wl_display))
++		return false;
++
++	egl->wl_display = wl_display;
++	return true;
++}
++
+ EGLDisplay wlr_egl_get_display(struct wlr_egl *egl) {
+ 	return egl->display;
+ }
+@@ -697,6 +845,22 @@ bool wlr_egl_restore_context(struct wlr_egl_context *context) {
+ 			context->read_surface, context->context);
+ }
+ 
++EGLImageKHR wlr_egl_create_image_from_eglbuf(struct wlr_egl *egl,
++		struct wlr_egl_buffer *buffer) {
++	const EGLint attribs[] = {
++		EGL_WAYLAND_PLANE_WL, 0,
++		EGL_IMAGE_PRESERVED_KHR, EGL_TRUE,
++		EGL_NONE
++	};
++
++	EGLImageKHR image = egl->procs.eglCreateImageKHR(egl->display, EGL_NO_CONTEXT,
++		EGL_WAYLAND_BUFFER_WL, buffer->resource, attribs);
++	if (image == EGL_NO_IMAGE_KHR) {
++		wlr_log(WLR_ERROR, "eglCreateImageKHR failed");
++	}
++	return image;
++}
++
+ EGLImageKHR wlr_egl_create_image_from_dmabuf(struct wlr_egl *egl,
+ 		struct wlr_dmabuf_attributes *attributes, bool *external_only) {
+ 	if (!egl->exts.KHR_image_base || !egl->exts.EXT_image_dma_buf_import) {
+diff --git a/render/gles2/renderer.c b/render/gles2/renderer.c
+index 215a5e4..2b60523 100644
+--- a/render/gles2/renderer.c
++++ b/render/gles2/renderer.c
+@@ -646,8 +646,15 @@ static void gles2_render_timer_destroy(struct wlr_render_timer *wlr_timer) {
+ 	free(timer);
+ }
+ 
++static bool gles2_bind_wl_display(struct wlr_renderer *wlr_renderer,
++				  struct wl_display *wl_display) {
++	struct wlr_gles2_renderer *renderer = gles2_get_renderer(wlr_renderer);
++	return wlr_egl_bind_wl_display(renderer->egl, wl_display);
++}
++
+ static const struct wlr_renderer_impl renderer_impl = {
+ 	.destroy = gles2_destroy,
++	.bind_wl_display = gles2_bind_wl_display,
+ 	.bind_buffer = gles2_bind_buffer,
+ 	.begin = gles2_begin,
+ 	.end = gles2_end,
+diff --git a/render/gles2/texture.c b/render/gles2/texture.c
+index b444745..f68cdbd 100644
+--- a/render/gles2/texture.c
++++ b/render/gles2/texture.c
+@@ -250,46 +250,26 @@ static struct wlr_texture *gles2_texture_from_pixels(
+ 	return &texture->wlr_texture;
+ }
+ 
+-static struct wlr_texture *gles2_texture_from_dmabuf(
+-		struct wlr_renderer *wlr_renderer,
+-		struct wlr_dmabuf_attributes *attribs) {
+-	struct wlr_gles2_renderer *renderer = gles2_get_renderer(wlr_renderer);
+-
++static struct wlr_texture *gles2_texture_from_egl_image(
++		struct wlr_gles2_renderer *renderer, EGLImageKHR image,
++		int width, int height, bool has_alpha, bool external_only) {
+ 	if (!renderer->procs.glEGLImageTargetTexture2DOES) {
+ 		return NULL;
+ 	}
+ 
+ 	struct wlr_gles2_texture *texture =
+-		gles2_texture_create(renderer, attribs->width, attribs->height);
++		gles2_texture_create(renderer, width, height);
+ 	if (texture == NULL) {
+ 		return NULL;
+ 	}
+ 	texture->drm_format = DRM_FORMAT_INVALID; // texture can't be written anyways
+ 
+-	const struct wlr_pixel_format_info *drm_fmt =
+-		drm_get_pixel_format_info(attribs->format);
+-	if (drm_fmt != NULL) {
+-		texture->has_alpha = drm_fmt->has_alpha;
+-	} else {
+-		// We don't know, assume the texture has an alpha channel
+-		texture->has_alpha = true;
+-	}
+-
+ 	struct wlr_egl_context prev_ctx;
+ 	wlr_egl_save_context(&prev_ctx);
+ 	wlr_egl_make_current(renderer->egl);
+ 
+-	bool external_only;
+-	texture->image =
+-		wlr_egl_create_image_from_dmabuf(renderer->egl, attribs, &external_only);
+-	if (texture->image == EGL_NO_IMAGE_KHR) {
+-		wlr_log(WLR_ERROR, "Failed to create EGL image from DMA-BUF");
+-		wlr_egl_restore_context(&prev_ctx);
+-		wl_list_remove(&texture->link);
+-		free(texture);
+-		return NULL;
+-	}
+-
++	texture->has_alpha = has_alpha;
++	texture->image = image;
+ 	texture->target = external_only ? GL_TEXTURE_EXTERNAL_OES : GL_TEXTURE_2D;
+ 
+ 	push_gles2_debug(renderer);
+@@ -308,6 +288,44 @@ static struct wlr_texture *gles2_texture_from_dmabuf(
+ 	return &texture->wlr_texture;
+ }
+ 
++static struct wlr_texture *gles2_texture_from_dmabuf(
++		struct wlr_gles2_renderer *renderer,
++		struct wlr_dmabuf_attributes *attribs) {
++	bool has_alpha;
++	const struct wlr_pixel_format_info *drm_fmt =
++		drm_get_pixel_format_info(attribs->format);
++	if (drm_fmt != NULL) {
++		has_alpha = drm_fmt->has_alpha;
++	} else {
++		// We don't know, assume the texture has an alpha channel
++		has_alpha = true;
++	}
++
++	bool external_only;
++	EGLImageKHR image = wlr_egl_create_image_from_dmabuf(renderer->egl,
++		attribs, &external_only);
++	if (image == EGL_NO_IMAGE_KHR) {
++		wlr_log(WLR_ERROR, "Failed to create EGL image from DMA-BUF");
++		return NULL;
++	}
++
++	return gles2_texture_from_egl_image(renderer,
++		image, attribs->width, attribs->height, has_alpha, external_only);
++}
++
++static struct wlr_texture *gles2_texture_from_eglbuf(
++		struct wlr_gles2_renderer *renderer,
++		struct wlr_egl_buffer *buffer) {
++	EGLImageKHR image = wlr_egl_create_image_from_eglbuf(renderer->egl, buffer);
++	if (image == EGL_NO_IMAGE_KHR) {
++		wlr_log(WLR_ERROR, "Failed to create EGL image from wl_buffer resource");
++		return NULL;
++	}
++
++	return gles2_texture_from_egl_image(renderer, image,
++		buffer->base.width, buffer->base.height, buffer->has_alpha, true);
++}
++
+ static void texture_handle_buffer_destroy(struct wlr_addon *addon) {
+ 	struct wlr_gles2_texture *texture =
+ 		wl_container_of(addon, texture, buffer_addon);
+@@ -319,9 +337,8 @@ static const struct wlr_addon_interface texture_addon_impl = {
+ 	.destroy = texture_handle_buffer_destroy,
+ };
+ 
+-static struct wlr_texture *gles2_texture_from_dmabuf_buffer(
+-		struct wlr_gles2_renderer *renderer, struct wlr_buffer *buffer,
+-		struct wlr_dmabuf_attributes *dmabuf) {
++static struct wlr_texture *gles2_texture_from_native_buffer(
++		struct wlr_gles2_renderer *renderer, struct wlr_buffer *buffer) {
+ 	struct wlr_addon *addon =
+ 		wlr_addon_find(&buffer->addons, renderer, &texture_addon_impl);
+ 	if (addon != NULL) {
+@@ -335,12 +352,22 @@ static struct wlr_texture *gles2_texture_from_dmabuf_buffer(
+ 		return &texture->wlr_texture;
+ 	}
+ 
+-	struct wlr_texture *wlr_texture =
+-		gles2_texture_from_dmabuf(&renderer->wlr_renderer, dmabuf);
+-	if (wlr_texture == NULL) {
+-		return false;
++	struct wlr_texture *wlr_texture;
++
++	struct wlr_dmabuf_attributes dmabuf;
++	struct wlr_egl_buffer *eglbuf;
++
++	if (wlr_buffer_get_dmabuf(buffer, &dmabuf)) {
++		wlr_texture = gles2_texture_from_dmabuf(renderer, &dmabuf);
++	} else if ((eglbuf = wlr_buffer_to_egl(buffer))) {
++		wlr_texture = gles2_texture_from_eglbuf(renderer, eglbuf);
++	} else {
++		return NULL;
+ 	}
+ 
++	if (wlr_texture == NULL)
++		return NULL;
++
+ 	struct wlr_gles2_texture *texture = gles2_get_texture(wlr_texture);
+ 	texture->buffer = wlr_buffer_lock(buffer);
+ 	wlr_addon_init(&texture->buffer_addon, &buffer->addons,
+@@ -356,12 +383,14 @@ struct wlr_texture *gles2_texture_from_buffer(struct wlr_renderer *wlr_renderer,
+ 	void *data;
+ 	uint32_t format;
+ 	size_t stride;
+-	struct wlr_dmabuf_attributes dmabuf;
+-	if (wlr_buffer_get_dmabuf(buffer, &dmabuf)) {
+-		return gles2_texture_from_dmabuf_buffer(renderer, buffer, &dmabuf);
++
++	struct wlr_texture *tex =
++		gles2_texture_from_native_buffer(renderer, buffer);
++	if (tex) {
++		return tex;
+ 	} else if (wlr_buffer_begin_data_ptr_access(buffer,
+ 			WLR_BUFFER_DATA_PTR_ACCESS_READ, &data, &format, &stride)) {
+-		struct wlr_texture *tex = gles2_texture_from_pixels(wlr_renderer,
++		tex = gles2_texture_from_pixels(wlr_renderer,
+ 			format, stride, buffer->width, buffer->height, data);
+ 		wlr_buffer_end_data_ptr_access(buffer);
+ 		return tex;
+diff --git a/render/wlr_renderer.c b/render/wlr_renderer.c
+index 2bdcff5..dd12424 100644
+--- a/render/wlr_renderer.c
++++ b/render/wlr_renderer.c
+@@ -219,6 +219,12 @@ bool wlr_renderer_read_pixels(struct wlr_renderer *r, uint32_t fmt,
+ 
+ bool wlr_renderer_init_wl_shm(struct wlr_renderer *r,
+ 		struct wl_display *wl_display) {
++	// The sway would call us directly instead of wlr_renderer_init_wl_display
++	if (r->impl->bind_wl_display &&
++	    !r->impl->bind_wl_display(r, wl_display)) {
++		return false;
++	}
++
+ 	return wlr_shm_create_with_renderer(wl_display, 1, r) != NULL;
+ }
+ 
+diff --git a/types/buffer/resource.c b/types/buffer/resource.c
+index 294bac1..4b18195 100644
+--- a/types/buffer/resource.c
++++ b/types/buffer/resource.c
+@@ -31,7 +31,7 @@ static const struct wlr_buffer_resource_interface *get_buffer_resource_iface(
+ 		struct wl_resource *resource) {
+ 	struct wlr_buffer_resource_interface **iface_ptr;
+ 	wl_array_for_each(iface_ptr, &buffer_resource_interfaces) {
+-		if ((*iface_ptr)->is_instance(resource)) {
++		if ((*iface_ptr)->is_instance(resource, (*iface_ptr)->data)) {
+ 			return *iface_ptr;
+ 		}
+ 	}
+@@ -51,7 +51,7 @@ struct wlr_buffer *wlr_buffer_try_from_resource(struct wl_resource *resource) {
+ 		return NULL;
+ 	}
+ 
+-	struct wlr_buffer *buffer = iface->from_resource(resource);
++	struct wlr_buffer *buffer = iface->from_resource(resource, iface->data);
+ 	if (!buffer) {
+ 		wlr_log(WLR_ERROR, "Failed to create %s buffer", iface->name);
+ 		return NULL;
+diff --git a/types/wlr_drm.c b/types/wlr_drm.c
+index a75f304..ca867a5 100644
+--- a/types/wlr_drm.c
++++ b/types/wlr_drm.c
+@@ -55,14 +55,14 @@ static const struct wlr_buffer_impl buffer_impl = {
+ 	.get_dmabuf = buffer_get_dmabuf,
+ };
+ 
+-static bool buffer_resource_is_instance(struct wl_resource *resource) {
++static bool buffer_resource_is_instance(struct wl_resource *resource, void *) {
+ 	return wl_resource_instance_of(resource, &wl_buffer_interface,
+ 		&wl_buffer_impl);
+ }
+ 
+ struct wlr_drm_buffer *wlr_drm_buffer_try_from_resource(
+ 		struct wl_resource *resource) {
+-	if (!buffer_resource_is_instance(resource)) {
++	if (!buffer_resource_is_instance(resource, NULL)) {
+ 		return NULL;
+ 	}
+ 	return wl_resource_get_user_data(resource);
+@@ -172,7 +172,7 @@ static void drm_bind(struct wl_client *client, void *data,
+ 	}
+ }
+ 
+-static struct wlr_buffer *buffer_from_resource(struct wl_resource *resource) {
++static struct wlr_buffer *buffer_from_resource(struct wl_resource *resource, void *) {
+ 	struct wlr_drm_buffer *buffer = wlr_drm_buffer_try_from_resource(resource);
+ 	assert(buffer != NULL);
+ 	return &buffer->base;
+diff --git a/types/wlr_linux_dmabuf_v1.c b/types/wlr_linux_dmabuf_v1.c
+index d018d77..e8a8cab 100644
+--- a/types/wlr_linux_dmabuf_v1.c
++++ b/types/wlr_linux_dmabuf_v1.c
+@@ -72,14 +72,14 @@ static const struct wl_buffer_interface wl_buffer_impl = {
+ 	.destroy = buffer_handle_destroy,
+ };
+ 
+-static bool buffer_resource_is_instance(struct wl_resource *resource) {
++static bool buffer_resource_is_instance(struct wl_resource *resource, void *) {
+ 	return wl_resource_instance_of(resource, &wl_buffer_interface,
+ 		&wl_buffer_impl);
+ }
+ 
+ struct wlr_dmabuf_v1_buffer *wlr_dmabuf_v1_buffer_try_from_buffer_resource(
+ 		struct wl_resource *resource) {
+-	if (!buffer_resource_is_instance(resource) ||
++	if (!buffer_resource_is_instance(resource, NULL) ||
+ 				wl_resource_get_user_data(resource) == NULL) {
+ 		return NULL;
+ 	}
+@@ -838,7 +838,7 @@ static void linux_dmabuf_bind(struct wl_client *client, void *data,
+ 	}
+ }
+ 
+-static struct wlr_buffer *buffer_from_resource(struct wl_resource *resource) {
++static struct wlr_buffer *buffer_from_resource(struct wl_resource *resource, void *) {
+ 	struct wlr_dmabuf_v1_buffer *buffer =
+ 		wlr_dmabuf_v1_buffer_try_from_buffer_resource(resource);
+ 	assert(buffer != NULL);
+diff --git a/types/wlr_shm.c b/types/wlr_shm.c
+index ac41e87..680a189 100644
+--- a/types/wlr_shm.c
++++ b/types/wlr_shm.c
+@@ -79,17 +79,17 @@ static const struct wl_buffer_interface wl_buffer_impl;
+ static const struct wl_shm_pool_interface pool_impl;
+ static const struct wl_shm_interface shm_impl;
+ 
+-static bool buffer_resource_is_instance(struct wl_resource *resource) {
++static bool buffer_resource_is_instance(struct wl_resource *resource, void *) {
+ 	return wl_resource_instance_of(resource, &wl_buffer_interface,
+ 		&wl_buffer_impl);
+ }
+ 
+ static struct wlr_shm_buffer *buffer_from_resource(struct wl_resource *resource) {
+-	assert(buffer_resource_is_instance(resource));
++	assert(buffer_resource_is_instance(resource, NULL));
+ 	return wl_resource_get_user_data(resource);
+ }
+ 
+-static struct wlr_buffer *buffer_base_from_resource(struct wl_resource *resource) {
++static struct wlr_buffer *buffer_base_from_resource(struct wl_resource *resource, void *) {
+ 	return &buffer_from_resource(resource)->base;
+ }
+ 
+diff --git a/types/wlr_single_pixel_buffer_v1.c b/types/wlr_single_pixel_buffer_v1.c
+index e4dac82..e561ae1 100644
+--- a/types/wlr_single_pixel_buffer_v1.c
++++ b/types/wlr_single_pixel_buffer_v1.c
+@@ -32,19 +32,19 @@ static const struct wl_buffer_interface wl_buffer_impl = {
+ 
+ static const struct wlr_buffer_impl buffer_impl;
+ 
+-static bool buffer_resource_is_instance(struct wl_resource *resource) {
++static bool buffer_resource_is_instance(struct wl_resource *resource, void *data) {
+ 	return wl_resource_instance_of(resource, &wl_buffer_interface,
+ 		&wl_buffer_impl);
+ }
+ 
+ static struct wlr_single_pixel_buffer_v1 *single_pixel_buffer_v1_from_resource(
+ 		struct wl_resource *resource) {
+-	assert(buffer_resource_is_instance(resource));
++	assert(buffer_resource_is_instance(resource, NULL));
+ 	return wl_resource_get_user_data(resource);
+ }
+ 
+ static struct wlr_buffer *buffer_from_resource(
+-		struct wl_resource *resource) {
++		struct wl_resource *resource, void *data) {
+ 	return &single_pixel_buffer_v1_from_resource(resource)->base;
+ }
+ 
+-- 
+2.20.1
+

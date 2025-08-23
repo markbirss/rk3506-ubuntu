@@ -1,0 +1,58 @@
+From 53cd7d56bd95fee85afbdd36d34cc460dc9bd932 Mon Sep 17 00:00:00 2001
+From: Liam <30486941+liamHowatt@users.noreply.github.com>
+Date: Thu, 29 Aug 2024 13:04:15 -0400
+Subject: [PATCH 10/35] fix(png): use color rounding like img conv tool (#6626)
+
+---
+ src/extra/libs/png/lv_png.c | 16 ++++++++++++++--
+ 1 file changed, 14 insertions(+), 2 deletions(-)
+
+diff --git a/src/extra/libs/png/lv_png.c b/src/extra/libs/png/lv_png.c
+index a8171f2c4..75b196c1c 100644
+--- a/src/extra/libs/png/lv_png.c
++++ b/src/extra/libs/png/lv_png.c
+@@ -28,6 +28,7 @@ static lv_res_t decoder_info(struct _lv_img_decoder_t * decoder, const void * sr
+ static lv_res_t decoder_open(lv_img_decoder_t * dec, lv_img_decoder_dsc_t * dsc);
+ static void decoder_close(lv_img_decoder_t * dec, lv_img_decoder_dsc_t * dsc);
+ static void convert_color_depth(uint8_t * img, uint32_t px_cnt);
++static inline lv_color_t lv_color_make_rounding(uint8_t r, uint8_t g, uint8_t b);
+ 
+ /**********************
+  *  STATIC VARIABLES
+@@ -246,7 +247,7 @@ static void convert_color_depth(uint8_t * img, uint32_t px_cnt)
+     lv_color_t c;
+     uint32_t i;
+     for(i = 0; i < px_cnt; i++) {
+-        c = lv_color_make(img_argb[i].ch.blue, img_argb[i].ch.green, img_argb[i].ch.red);
++        c = lv_color_make_rounding(img_argb[i].ch.blue, img_argb[i].ch.green, img_argb[i].ch.red);
+         img[i * 3 + 2] = img_argb[i].ch.alpha;
+         img[i * 3 + 1] = c.full >> 8;
+         img[i * 3 + 0] = c.full & 0xFF;
+@@ -256,7 +257,7 @@ static void convert_color_depth(uint8_t * img, uint32_t px_cnt)
+     lv_color_t c;
+     uint32_t i;
+     for(i = 0; i < px_cnt; i++) {
+-        c = lv_color_make(img_argb[i].ch.red, img_argb[i].ch.green, img_argb[i].ch.blue);
++        c = lv_color_make_rounding(img_argb[i].ch.red, img_argb[i].ch.green, img_argb[i].ch.blue);
+         img[i * 2 + 1] = img_argb[i].ch.alpha;
+         img[i * 2 + 0] = c.full;
+     }
+@@ -272,4 +273,15 @@ static void convert_color_depth(uint8_t * img, uint32_t px_cnt)
+ #endif
+ }
+ 
++static inline lv_color_t lv_color_make_rounding(uint8_t r, uint8_t g, uint8_t b)
++{
++#if LV_COLOR_DEPTH == 16
++    if(r <= 251) r += 4;
++    if(g <= 253) g += 2;
++    if(b <= 251) b += 4;
++#endif
++
++    return lv_color_make(r, g, b);
++}
++
+ #endif /*LV_USE_PNG*/
+-- 
+2.25.1
+

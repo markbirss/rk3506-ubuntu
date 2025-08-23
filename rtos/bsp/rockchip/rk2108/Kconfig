@@ -1,0 +1,42 @@
+mainmenu "RT-Thread Project Configuration"
+
+config BSP_DIR
+    string
+    option env="BSP_ROOT"
+    default "."
+
+config RTT_DIR
+    string
+    option env="RTT_ROOT"
+    default "../../.."
+
+config PKGS_DIR
+    string
+    option env="PKGS_ROOT"
+    default "packages"
+
+config RKMCU_RK2108
+    bool
+    select ARCH_ARM_CORTEX_M4
+    default y
+
+config PM_HAS_CUSTOM_CONFIG
+    bool
+    depends on RT_USING_PM
+    default y
+
+source "$RTT_DIR/Kconfig"
+source "$RTT_DIR/third_party/Kconfig"
+
+menuconfig RT_USING_PKGS
+    bool "Enable RT-Thread online packages"
+
+if RT_USING_PKGS
+source "$PKGS_DIR/Kconfig"
+endif
+
+source "$BSP_DIR/board/Kconfig"
+source "$BSP_DIR/drivers/Kconfig"
+source "$RTT_DIR/applications/Kconfig"
+source "$BSP_DIR/tests/Kconfig"
+source "$BSP_DIR/../common/fwmgr/Kconfig"

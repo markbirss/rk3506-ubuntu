@@ -1,0 +1,64 @@
+From f2d0abd95498de82bb6fc10b7b9ac61e9c813e81 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Tue, 22 Oct 2024 08:31:44 +0800
+Subject: [PATCH 10/10] usbmount: Lock umount as well
+
+There might be a race between mount and umount.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ usbmount | 25 ++++++++++++-------------
+ 1 file changed, 12 insertions(+), 13 deletions(-)
+
+diff --git a/usbmount b/usbmount
+index b464362..a5e83bd 100755
+--- a/usbmount
++++ b/usbmount
+@@ -78,15 +78,15 @@ case "$2" in
+ 	;;
+ esac
+ 
+-if [ "$1" = add ]; then
++# Acquire lock.
++log debug "trying to acquire lock /var/run/usbmount/.lock"
++mkdir -p /var/run/usbmount/
++touch /var/run/usbmount/.lock
++exec 3</var/run/usbmount/.lock
++flock -x 3
++log debug "acquired lock /var/run/usbmount/.lock"
+ 
+-    # Acquire lock.
+-    log debug "trying to acquire lock /var/run/usbmount/.mount.lock"
+-    mkdir -p /var/run/usbmount/
+-    touch /var/run/usbmount/.mount.lock
+-    exec 3</var/run/usbmount/.mount.lock
+-    flock -x 3
+-    log debug "acquired lock /var/run/usbmount/.mount.lock"
++if [ "$1" = add ]; then
+ 
+     if ! echo $ID_FS_USAGE | egrep -q "(filesystem|disklabel)"; then
+ 	log info "$DEVNAME does not contain a filesystem or disklabel"
+@@ -178,11 +178,6 @@ if [ "$1" = add ]; then
+ 	    fi
+ 	fi
+     fi
+-
+-    # Release lock.
+-    log debug "release lock /var/run/usbmount/.mount.lock"
+-    flock -u 3
+-
+ elif [ "$1" = remove ]; then
+ 
+     # A block or partition device has been removed.
+@@ -210,4 +205,8 @@ else
+     exit 1
+ fi
+ 
++# Release lock.
++log debug "release lock /var/run/usbmount/.lock"
++flock -u 3
++
+ log debug "usbmount execution finished"
+-- 
+2.20.1
+

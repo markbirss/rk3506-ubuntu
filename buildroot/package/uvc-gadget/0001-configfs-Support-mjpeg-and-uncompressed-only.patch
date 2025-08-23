@@ -1,0 +1,28 @@
+From d92c93860b8303fb2c5aa53d69490f5962c57a29 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 21 Jun 2024 16:14:15 +0800
+Subject: [PATCH 1/2] configfs: Support mjpeg and uncompressed only
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ lib/configfs.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/lib/configfs.c b/lib/configfs.c
+index a29e576..5601527 100644
+--- a/lib/configfs.c
++++ b/lib/configfs.c
+@@ -729,6 +729,10 @@ static int format_filter(const struct dirent *ent)
+ 	if (ent->d_type != DT_LNK)
+ 		return 0;
+ 
++	/* HACK: Support mjpeg and uncompressed only */
++	if (strcmp(ent->d_name, "m") && strcmp(ent->d_name, "u"))
++		return 0;
++
+ 	path = path_join(ent->d_name, "bFormatIndex");
+ 	if (!path)
+ 		return 0;
+-- 
+2.20.1
+

@@ -1,0 +1,42 @@
+#!/bin/sh
+# Log some extra information at the beginning of a suspend/resume cycle.
+# TODO: Make this hook only run when PM_DEBUG is true?
+
+. "${PM_FUNCTIONS}"
+
+suspend_interfaces() {
+    for intf in "$@"; do
+        if [ -d "/sys/class/net/$intf" ]; then
+            ifconfig "$intf" down
+        fi
+    done
+}
+
+resume_interfaces() {
+    for intf in "$@"; do
+        if [ -d "/sys/class/net/$intf" ]; then
+            ifconfig "$intf" up
+        fi
+    done
+}
+
+suspend_hci() {
+    for intf in "$@"; do
+        if hciconfig "$intf" > /dev/null 2>&1; then
+            hciconfig "$intf" down
+        fi
+    done
+}
+
+case "$1" in
+    hibernate|suspend)
+        suspend_hci hci0 hci1
+        suspend_interfaces wlan0 wlan1
+        ;;
+    thaw|resume)
+        resume_interfaces wlan0 wlan1
+        wifibt-init.sh
+        ;;
+    *) exit $NA
+        ;;
+esac

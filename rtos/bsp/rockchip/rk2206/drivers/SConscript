@@ -1,0 +1,19 @@
+Import('RTT_ROOT')
+Import('rtconfig')
+from building import *
+
+cwd     = os.path.join(str(Dir('#')), 'drivers')
+
+src	= Glob('*.c')
+if rtconfig.CROSS_TOOL == 'gcc':
+    src += Glob(RTT_ROOT + '/bsp/rockchip/common/drivers/drv_cache_gcc.S')
+elif rtconfig.CROSS_TOOL == 'keil':
+    src += Glob(RTT_ROOT + '/bsp/rockchip/common/drivers/drv_cache_arm.s')
+elif rtconfig.CROSS_TOOL == 'iar':
+    src += Glob(RTT_ROOT + '/bsp/rockchip/common/drivers/drv_cache_iar.s')
+
+CPPPATH = [cwd]
+
+group = DefineGroup('PrivateDrivers', src, depend = [''], CPPPATH = CPPPATH)
+
+Return('group')

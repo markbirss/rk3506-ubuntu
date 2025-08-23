@@ -1,0 +1,61 @@
+From e7a11cd184513637b9322ae91449849e609224f2 Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Tue, 12 Nov 2024 17:27:30 +0800
+Subject: [PATCH 12/12] feat(msgbox): support create textarea
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ src/widgets/msgbox/lv_msgbox.c | 11 +++++++++++
+ src/widgets/msgbox/lv_msgbox.h |  7 +++++++
+ 2 files changed, 18 insertions(+)
+
+diff --git a/src/widgets/msgbox/lv_msgbox.c b/src/widgets/msgbox/lv_msgbox.c
+index 6f9d4a7..89789c9 100644
+--- a/src/widgets/msgbox/lv_msgbox.c
++++ b/src/widgets/msgbox/lv_msgbox.c
+@@ -12,6 +12,7 @@
+ #include "../label/lv_label.h"
+ #include "../button/lv_button.h"
+ #include "../image/lv_image.h"
++#include "../textarea/lv_textarea.h"
+ #include "../../misc/lv_assert.h"
+ #include "../../display/lv_display.h"
+ #include "../../layouts/flex/lv_flex.h"
+@@ -190,6 +191,16 @@ lv_obj_t * lv_msgbox_add_text(lv_obj_t * obj, const char * text)
+     return label;
+ }
+ 
++lv_obj_t * lv_msgbox_add_textarea(lv_obj_t * obj)
++{
++    lv_msgbox_t * mbox = (lv_msgbox_t *)obj;
++
++    lv_obj_t * label = lv_textarea_create(mbox->content);
++    lv_obj_set_width(label, lv_pct(100));
++
++    return label;
++}
++
+ lv_obj_t * lv_msgbox_add_footer_button(lv_obj_t * obj, const char * text)
+ {
+     lv_msgbox_t * mbox = (lv_msgbox_t *)obj;
+diff --git a/src/widgets/msgbox/lv_msgbox.h b/src/widgets/msgbox/lv_msgbox.h
+index b7413ee..760ea04 100644
+--- a/src/widgets/msgbox/lv_msgbox.h
++++ b/src/widgets/msgbox/lv_msgbox.h
+@@ -85,6 +85,13 @@ lv_obj_t * lv_msgbox_add_header_button(lv_obj_t * obj, const void * icon);
+  */
+ lv_obj_t * lv_msgbox_add_text(lv_obj_t * obj, const char * text);
+ 
++/**
++ * Add a textarea to the content area of message box.
++ * @param obj           pointer to a message box
++ * @return              the created button
++ */
++lv_obj_t * lv_msgbox_add_textarea(lv_obj_t * obj);
++
+ /**
+  * Add a button to the footer of to the message box. It also creates a footer.
+  * @param obj           pointer to a message box
+-- 
+2.25.1
+

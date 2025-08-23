@@ -1,0 +1,369 @@
+From c059da177bf549cc212c08bc4d1c526320ff9175 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 10 Jun 2022 12:16:21 +0800
+Subject: [PATCH 04/11] HACK: Simplify for Rockchip Platform
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ drm.c  | 177 +++++++++++++++------------------------------------------
+ drm.h  |   3 -
+ main.c |  27 ---------
+ main.h |   1 -
+ term.c |  12 +---
+ 5 files changed, 47 insertions(+), 173 deletions(-)
+
+diff --git a/drm.c b/drm.c
+index 4748415..471210e 100644
+--- a/drm.c
++++ b/drm.c
+@@ -248,7 +248,6 @@ static bool find_main_monitor(drm_t* drm)
+ 		return false;
+ 
+ 	drm->console_connector_id = main_monitor_connector->connector_id;
+-	drm->console_connector_internal = drm_is_internal(main_monitor_connector->connector_type);
+ 
+ 	for (modes = 0; modes < main_monitor_connector->count_modes; modes++) {
+ 		if (main_monitor_connector->modes[modes].type &
+@@ -321,130 +320,72 @@ static bool drm_equal(drm_t* l, drm_t* r)
+ 	return true;
+ }
+ 
+-static int drm_score(drm_t* drm)
+-{
+-	drmVersionPtr version;
+-	int score = 0;
+-
+-	if (!drm)
+-		return -1000000000;
+-
+-	if (!drm->console_connector_id)
+-		return -1000000000;
+-
+-	if (drm->console_connector_internal)
+-		score++;
+-
+-	version = drmGetVersion(drm->fd);
+-	if (version) {
+-		/* We would rather use any driver besides UDL. */
+-		if (strcmp("udl", version->name) == 0)
+-			score--;
+-		if (strcmp("evdi", version->name) == 0)
+-			score--;
+-		/* VGEM should be ignored because it has no displays, but lets make sure. */
+-		if (strcmp("vgem", version->name) == 0)
+-			score -= 1000000;
+-		drmFreeVersion(version);
+-	}
+-	return score;
+-}
+-
+ /*
+- * Scan and find best DRM object to display frecon on.
+- * This object should be created with DRM master, and we will keep master till
+- * first mode set or explicit drop master.
++ * Find DRM object to display frecon on.
+  */
+ drm_t* drm_scan(void)
+ {
+-	unsigned i;
+-	char* dev_name;
+ 	int ret;
+-	drm_t *best_drm = NULL;
+-
+-	for (i = 0; i < DRM_MAX_MINOR; i++) {
+-		uint64_t atomic = 0;
+-		drm_t* drm = calloc(1, sizeof(drm_t));
++	uint64_t atomic = 0;
++	drmVersionPtr version;
++	drm_t* drm = calloc(1, sizeof(drm_t));
+ 
+-		if (!drm)
+-			return NULL;
++	if (!drm)
++		return NULL;
+ 
+-try_open_again:
+-		ret = asprintf(&dev_name, DRM_DEV_NAME, DRM_DIR_NAME, i);
+-		if (ret < 0) {
+-			drm_fini(drm);
+-			continue;
+-		}
+-		drm->fd = open(dev_name, O_RDWR, 0);
+-		free(dev_name);
++	drm->fd = drmOpen("rockchip", NULL);
++	if (drm->fd < 0) {
++		drm->fd = open("/dev/dri/card0", O_RDWR | O_CLOEXEC, 0);
+ 		if (drm->fd < 0) {
+ 			drm_fini(drm);
+-			continue;
+-		}
+-		/* if we have master this should succeed */
+-		ret = drmSetMaster(drm->fd);
+-		if (ret != 0) {
+-			drmClose(drm->fd);
+-			drm->fd = -1;
+-			usleep(100*1000);
+-			goto try_open_again;
+-		}
+-
+-		/* Set universal planes cap if possible. Ignore any errors. */
+-		drmSetClientCap(drm->fd, DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1);
+-
+-		ret = drmGetCap(drm->fd, DRM_CLIENT_CAP_ATOMIC, &atomic);
+-		if (!ret && atomic) {
+-			ret = drmSetClientCap(drm->fd, DRM_CLIENT_CAP_ATOMIC, 1);
+-			if (ret < 0)
+-				LOG(ERROR, "Failed to set atomic cap.");
++			return NULL;
+ 		}
++	}
+ 
+-		drm->resources = drmModeGetResources(drm->fd);
+-		if (!drm->resources) {
+-			drm_fini(drm);
+-			continue;
+-		}
++	/* Set universal planes cap if possible. Ignore any errors. */
++	drmSetClientCap(drm->fd, DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1);
+ 
+-		/* Expect at least one crtc so we do not try to run on VGEM. */
+-		if (drm->resources->count_crtcs == 0 || drm->resources->count_connectors == 0) {
+-			drm_fini(drm);
+-			continue;
+-		}
++	ret = drmGetCap(drm->fd, DRM_CLIENT_CAP_ATOMIC, &atomic);
++	if (!ret && atomic) {
++		ret = drmSetClientCap(drm->fd, DRM_CLIENT_CAP_ATOMIC, 1);
++		if (ret < 0)
++			LOG(ERROR, "Failed to set atomic cap.");
++	}
+ 
+-		drm->plane_resources = drmModeGetPlaneResources(drm->fd);
++	drm->resources = drmModeGetResources(drm->fd);
++	if (!drm->resources) {
++		drm_fini(drm);
++		return NULL;
++	}
+ 
+-		if (!find_main_monitor(drm)) {
+-			drm_fini(drm);
+-			continue;
+-		}
++	/* Expect at least one crtc so we do not try to run on VGEM. */
++	if (drm->resources->count_crtcs == 0 || drm->resources->count_connectors == 0) {
++		drm_fini(drm);
++		return NULL;
++	}
+ 
+-		drm->refcount = 1;
++	drm->plane_resources = drmModeGetPlaneResources(drm->fd);
+ 
+-		if (drm_score(drm) > drm_score(best_drm)) {
+-			drm_fini(best_drm);
+-			best_drm = drm;
+-		} else {
+-			drm_fini(drm);
+-		}
++	if (!find_main_monitor(drm)) {
++		drm_fini(drm);
++		return NULL;
+ 	}
+ 
+-	if (best_drm) {
+-		drmVersionPtr version;
+-		version = drmGetVersion(best_drm->fd);
+-		if (version) {
+-			LOG(INFO,
+-			    "Frecon using drm driver %s, version %d.%d, date(%s), desc(%s)",
+-			    version->name,
+-			    version->version_major,
+-			    version->version_minor,
+-			    version->date,
+-			    version->desc);
+-			drmFreeVersion(version);
+-		}
++	drm->refcount = 1;
++
++	version = drmGetVersion(drm->fd);
++	if (version) {
++		LOG(INFO,
++		    "Frecon using drm driver %s, version %d.%d, date(%s), desc(%s)",
++		    version->name,
++		    version->version_major,
++		    version->version_minor,
++		    version->date,
++		    version->desc);
++		drmFreeVersion(version);
+ 	}
+ 
+-	return best_drm;
++	return drm;
+ }
+ 
+ void drm_set(drm_t* drm_)
+@@ -490,28 +431,6 @@ drm_t* drm_addref(void)
+ 	return NULL;
+ }
+ 
+-int drm_dropmaster(drm_t* drm)
+-{
+-	int ret = 0;
+-
+-	if (!drm)
+-		drm = g_drm;
+-	if (drm)
+-		ret = drmDropMaster(drm->fd);
+-	return ret;
+-}
+-
+-int drm_setmaster(drm_t* drm)
+-{
+-	int ret = 0;
+-
+-	if (!drm)
+-		drm = g_drm;
+-	if (drm)
+-		ret = drmSetMaster(drm->fd);
+-	return ret;
+-}
+-
+ /*
+  * Returns true if connector/crtc/driver have changed and framebuffer object have to be re-created.
+  */
+@@ -519,14 +438,10 @@ bool drm_rescan(void)
+ {
+ 	drm_t* ndrm;
+ 
+-	/* In case we had master, drop master so the newly created object could have it. */
+-	drm_dropmaster(g_drm);
+ 	ndrm = drm_scan();
+ 	if (ndrm) {
+ 		if (drm_equal(ndrm, g_drm)) {
+ 			drm_fini(ndrm);
+-			/* Regain master we dropped. */
+-			drm_setmaster(g_drm);
+ 		} else {
+ 			drm_delref(g_drm);
+ 			g_drm = ndrm;
+diff --git a/drm.h b/drm.h
+index 09720f8..ff42efc 100644
+--- a/drm.h
++++ b/drm.h
+@@ -19,7 +19,6 @@ typedef struct _drm_t {
+ 	drmModeRes* resources;
+ 	drmModePlaneResPtr plane_resources;
+ 	uint32_t console_connector_id;
+-	bool console_connector_internal;
+ 	drmModeModeInfo console_mode_info;
+ 	uint32_t delayed_rmfb_fb_id;
+ } drm_t;
+@@ -29,8 +28,6 @@ void drm_set(drm_t* drm);
+ void drm_close(void);
+ drm_t* drm_addref(void);
+ void drm_delref(drm_t* drm);
+-int drm_dropmaster(drm_t* drm);
+-int drm_setmaster(drm_t* drm);
+ bool drm_rescan(void);
+ bool drm_valid(drm_t* drm);
+ int32_t drm_setmode(drm_t* drm, uint32_t fb_id);
+diff --git a/main.c b/main.c
+index 6df2379..313f9d4 100644
+--- a/main.c
++++ b/main.c
+@@ -176,30 +176,6 @@ int main_loop(void)
+ 	return 0;
+ }
+ 
+-bool set_drm_master_relax(void)
+-{
+-	int fd;
+-	int num_written;
+-
+-	/*
+-	 * Setting drm_master_relax flag in kernel allows us to transfer DRM master
+-	 * between Chrome and frecon.
+-	 */
+-	fd = open("/sys/kernel/debug/dri/drm_master_relax", O_WRONLY);
+-	if (fd != -1) {
+-		num_written = write(fd, "Y", 1);
+-		close(fd);
+-		if (num_written != 1) {
+-			LOG(ERROR, "Unable to set drm_master_relax.");
+-			return false;
+-		}
+-	} else {
+-		LOG(ERROR, "Unable to open drm_master_relax.");
+-		return false;
+-	}
+-	return true;
+-}
+-
+ int main(int argc, char* argv[])
+ {
+ 	int ret;
+@@ -306,12 +282,9 @@ int main(int argc, char* argv[])
+ 		daemon_exit_code(EXIT_SUCCESS);
+ 
+ 	if (command_flags.daemon) {
+-		if (command_flags.enable_vts)
+-			set_drm_master_relax();
+ 		term_background(true);
+ 	} else {
+ 		/* Create and switch to first term in interactve mode. */
+-		set_drm_master_relax();
+ 		term_switch_to(1);
+ 	}
+ 
+diff --git a/main.h b/main.h
+index 079b6de..a98bd3c 100644
+--- a/main.h
++++ b/main.h
+@@ -11,7 +11,6 @@
+ #define FRECON_PID_FILE FRECON_RUN_DIR "/pid"
+ 
+ int main_process_events(uint32_t usec);
+-bool set_drm_master_relax(void);
+ 
+ typedef struct {
+ 	bool    daemon;
+diff --git a/term.c b/term.c
+index 56f4da5..e5ee1c6 100644
+--- a/term.c
++++ b/term.c
+@@ -738,7 +738,7 @@ void term_zoom(bool zoom_in)
+ }
+ 
+ /*
+- * Put frecon in background. Give up DRM master.
++ * Put frecon in background.
+  * onetry - if true, do not retry to notify Chrome multiple times. For use at
+  * time when Chrome may be not around yet to receive the message.
+  */
+@@ -747,24 +747,14 @@ void term_background(bool onetry)
+ 	if (in_background)
+ 		return;
+ 	in_background = true;
+-	drm_dropmaster(NULL);
+ }
+ 
+ void term_foreground(void)
+ {
+-	int ret;
+-
+ 	if (!in_background)
+ 		return;
+ 	in_background = false;
+ 
+-	/* LOG(INFO, "TIMING: Console switch time start."); */ /* Keep around for timing it in the future. */
+-
+-	/* LOG(INFO, "TIMING: Console switch setmaster."); */
+-	ret = drm_setmaster(NULL);
+-	if (ret < 0)
+-		LOG(ERROR, "Could not set master when switching to foreground %m.");
+-
+ 	if (hotplug_occured) {
+ 		hotplug_occured = false;
+ 		term_monitor_hotplug();
+-- 
+2.20.1
+

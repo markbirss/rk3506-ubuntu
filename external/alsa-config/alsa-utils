@@ -1,0 +1,16 @@
+#!/bin/sh
+#
+# alsa-utils initscript
+#
+
+[ -x /usr/sbin/alsactl ] || exit 0
+
+case "$1" in
+	start|restart)
+		alsactl init
+		;;
+	*)
+		exit 0
+		;;
+esac
+

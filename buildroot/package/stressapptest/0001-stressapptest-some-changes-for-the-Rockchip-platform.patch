@@ -1,0 +1,632 @@
+From 5db1dfd84fd9e5891e68256dd94cf4bad82486e1 Mon Sep 17 00:00:00 2001
+From: YouMin Chen <cym@rock-chips.com>
+Date: Sun, 22 Oct 2023 19:16:17 +0800
+Subject: [PATCH] stressapptest: some changes for the Rockchip platform
+ 20231020
+
+base on master:
+commit 6714c57d0d67f5a2a7a9987791af6729289bf64e
+merge from rockchip develop branch:
+commit c36eaf2b8b005d020c63d30e861fcf82e8aa00e0
+
+Signed-off-by: YouMin Chen <cym@rock-chips.com>
+---
+ configure      |   6 ++
+ src/pattern.cc | 145 ++++++++++++++++++++++++++++++++++++++++++++++++-
+ src/sat.cc     |   2 +-
+ src/worker.cc  |  97 ++++++++++++++++++++++-----------
+ src/worker.h   |  11 ++--
+ 5 files changed, 224 insertions(+), 37 deletions(-)
+
+diff --git a/configure b/configure
+index f77b10d..2898529 100755
+--- a/configure
++++ b/configure
+@@ -2514,6 +2514,12 @@ $as_echo "#define STRESSAPPTEST_CPU_PPC /**/" >>confdefs.h
+   *armv7a*) :
+ 
+ 
++$as_echo "#define STRESSAPPTEST_CPU_ARMV7A /**/" >>confdefs.h
++
++     ;; #(
++  *arm*) :
++
++
+ $as_echo "#define STRESSAPPTEST_CPU_ARMV7A /**/" >>confdefs.h
+ 
+      ;; #(
+diff --git a/src/pattern.cc b/src/pattern.cc
+index ba8f4d4..b0bb03e 100644
+--- a/src/pattern.cc
++++ b/src/pattern.cc
+@@ -48,6 +48,38 @@ static const struct PatternData walkingOnes = {
+   {1, 1, 2, 1}  // Weight for choosing 32/64/128/256 bit wide of this pattern
+ };
+ 
++static unsigned int walkingOnesX16_data[] =   {
++  0x00020001, 0x00080004, 0x00200010, 0x00800040,
++  0x02000100, 0x08000400, 0x20001000, 0x80004000,
++  0x20004000, 0x08001000, 0x02000400, 0x00800100,
++  0x00200040, 0x00080010, 0x00020004, 0x00000001
++};
++static const struct PatternData walkingOnesX16 = {
++  "walkingOnesX16",
++  walkingOnesX16_data,
++  (sizeof walkingOnesX16_data / sizeof walkingOnesX16_data[0]) - 1,
++  {2, 0, 0, 0}  // Weight for choosing 32/64/128/256 bit wide of this pattern
++  // Reuse for walkingZerosX16, because of invert
++};
++
++static unsigned int walkingOnesX16Repeat_data[] =   {
++  0x00010001, 0x00020002, 0x00040004, 0x00080008,
++  0x00100010, 0x00200020, 0x00400040, 0x00800080,
++  0x01000100, 0x02000200, 0x04000400, 0x08000800,
++  0x10001000, 0x20002000, 0x40004000, 0x80008000,
++  0x40004000, 0x20002000, 0x10001000, 0x08000800,
++  0x04000400, 0x02000200, 0x01000100, 0x00800080,
++  0x00400040, 0x00200020, 0x00100010, 0x00080008,
++  0x00040004, 0x00020002, 0x00010001, 0x00000000
++};
++static const struct PatternData walkingOnesX16Repeat = {
++  "walkingOnesX16Repeat",
++  walkingOnesX16Repeat_data,
++  (sizeof walkingOnesX16Repeat_data / sizeof walkingOnesX16Repeat_data[0]) - 1,
++  {2, 4, 2, 0}  // Weight for choosing 32/64/128/256 bit wide of this pattern
++  // Reuse for walkingZerosX16Repeat, because of invert
++};
++
+ static unsigned int walkingInvOnes_data[] =   {
+   0x00000001, 0xfffffffe, 0x00000002, 0xfffffffd,
+   0x00000004, 0xfffffffb, 0x00000008, 0xfffffff7,
+@@ -89,6 +121,48 @@ static const struct PatternData walkingInvOnes = {
+   {2, 2, 5, 5}
+ };
+ 
++static unsigned int walkingInvOnesX16_data[] =   {
++  0xfffe0001, 0xfffd0002, 0xfffb0004, 0xfff70008,
++  0xffef0010, 0xffdf0020, 0xffbf0040, 0xff7f0080,
++  0xfeff0100, 0xfdff0200, 0xfbff0400, 0xf7ff0800,
++  0xefff1000, 0xdfff2000, 0xbfff4000, 0x7fff8000,
++  0xbfff4000, 0xdfff2000, 0xefff1000, 0xf7ff0800,
++  0xfbff0400, 0xfdff0200, 0xfeff0100, 0xff7f0080,
++  0xffbf0040, 0xffdf0020, 0xffef0010, 0xfff70008,
++  0xfffb0004, 0xfffd0002, 0xfffe0001, 0xffff0000
++};
++static const struct PatternData walkingInvOnesX16 = {
++  "walkingInvOnesX16",
++  walkingInvOnesX16_data,
++  (sizeof walkingInvOnesX16_data / sizeof walkingInvOnesX16_data[0]) - 1,
++  {2, 0, 0, 0}
++};
++
++static unsigned int walkingInvOnesX16Repeat_data[] =   {
++  0x00010001, 0xfffefffe, 0x00020002, 0xfffdfffd,
++  0x00040004, 0xfffbfffb, 0x00080008, 0xfff7fff7,
++  0x00100010, 0xffefffef, 0x00200020, 0xffdfffdf,
++  0x00400040, 0xffbfffbf, 0x00800080, 0xff7fff7f,
++  0x01000100, 0xfefffeff, 0x02000200, 0xfdfffdff,
++  0x04000400, 0xfbfffbff, 0x08000800, 0xf7fff7ff,
++  0x10001000, 0xefffefff, 0x20002000, 0xdfffdfff,
++  0x40004000, 0xbfffbfff, 0x80008000, 0x7fff7fff,
++  0x40004000, 0xbfffbfff, 0x20002000, 0xdfffdfff,
++  0x10001000, 0xefffefff, 0x08000800, 0xf7fff7ff,
++  0x04000400, 0xfbfffbff, 0x02000200, 0xfdfffdff,
++  0x01000100, 0xfefffeff, 0x00800080, 0xff7fff7f,
++  0x00400040, 0xffbfffbf, 0x00200020, 0xffdfffdf,
++  0x00100010, 0xffefffef, 0x00080008, 0xfff7fff7,
++  0x00040004, 0xfffbfffb, 0x00020002, 0xfffdfffd,
++  0x00010001, 0xfffefffe, 0x00000000, 0xffffffff
++};
++static const struct PatternData walkingInvOnesX16Repeat = {
++  "walkingInvOnesX16Repeat",
++  walkingInvOnesX16Repeat_data,
++  (sizeof walkingInvOnesX16Repeat_data / sizeof walkingInvOnesX16Repeat_data[0]) - 1,
++  {2, 5, 5, 0}
++};
++
+ static unsigned int walkingZeros_data[] =   {
+   0xfffffffe, 0xfffffffd, 0xfffffffb, 0xfffffff7,
+   0xffffffef, 0xffffffdf, 0xffffffbf, 0xffffff7f,
+@@ -122,6 +196,14 @@ static const struct PatternData OneZero = {
+   {5, 5, 15, 5}
+ };
+ 
++static unsigned int OneZeroX16_data[] =   { 0x0000ffff, 0x0000ffff};
++static const struct PatternData OneZeroX16 = {
++  "OneZeroX16",
++  OneZeroX16_data,
++  (sizeof OneZeroX16_data / sizeof OneZeroX16_data[0]) - 1,
++  {5, 0, 0, 0}
++};
++
+ static unsigned int JustZero_data[] =   { 0x00000000, 0x00000000};
+ static const struct PatternData JustZero = {
+   "JustZero",
+@@ -162,6 +244,14 @@ static const struct PatternData FiveA = {
+   {1, 1, 1, 1}
+ };
+ 
++static unsigned int FiveAX16_data[] =   { 0x5555aaaa, 0x5555aaaa};
++static const struct PatternData FiveAX16 = {
++  "FiveAX16",
++  FiveAX16_data,
++  (sizeof FiveAX16_data / sizeof FiveAX16_data[0]) - 1,
++  {1, 0, 0, 0}
++};
++
+ static unsigned int FiveA8_data[] =   {
+   0x5aa5a55a, 0xa55a5aa5, 0xa55a5aa5, 0x5aa5a55a
+ };
+@@ -172,6 +262,24 @@ static const struct PatternData FiveA8 = {
+   {1, 1, 1, 1}
+ };
+ 
++static unsigned int FiveA8X16_data[] =   { 0x5aa5a55a, 0xa55a5aa5};
++static const struct PatternData FiveA8X16 = {
++  "FiveA8X16",
++  FiveA8X16_data,
++  (sizeof FiveA8X16_data / sizeof FiveA8X16_data[0]) - 1,
++  {1, 0, 0, 0}
++};
++
++static unsigned int FiveA8X16Repeat_data[] =   {
++  0x5aa55aa5, 0xa55aa55a, 0xa55aa55a, 0x5aa55aa5
++};
++static const struct PatternData FiveA8X16Repeat = {
++  "FiveA8X16Repeat",
++  FiveA8X16Repeat_data,
++  (sizeof FiveA8X16Repeat_data / sizeof FiveA8X16Repeat_data[0]) - 1,
++  {1, 1, 1, 0}
++};
++
+ static unsigned int Long8b10b_data[] =   { 0x16161616, 0x16161616 };
+ static const struct PatternData Long8b10b = {
+   "Long8b10b",
+@@ -193,7 +301,15 @@ static const struct PatternData Checker8b10b = {
+   "Checker8b10b",
+   Checker8b10b_data,
+   (sizeof Checker8b10b_data / sizeof Checker8b10b_data[0]) - 1,
+-  {1, 0, 0, 1}
++  {1, 0, 1, 1}
++};
++
++static unsigned int Checker8b10bX16_data[] =   { 0xb5b54a4a, 0xb5b54a4a };
++static const struct PatternData Checker8b10bX16 = {
++  "Checker8b10bX16",
++  Checker8b10bX16_data,
++  (sizeof Checker8b10bX16_data / sizeof Checker8b10bX16_data[0]) - 1,
++  {1, 0, 0, 0}
+ };
+ 
+ static unsigned int Five7_data[] =   { 0x55555557, 0x55575555 };
+@@ -204,6 +320,14 @@ static const struct PatternData Five7 = {
+   {0, 2, 0, 0}
+ };
+ 
++static unsigned int Five7X16_data[] =   { 0x55575557, 0x57555755 };
++static const struct PatternData Five7X16 = {
++  "Five7X16",
++  Five7X16_data,
++  (sizeof Five7X16_data / sizeof Five7X16_data[0]) - 1,
++  {2, 0, 0, 0}
++};
++
+ static unsigned int Zero2fd_data[] =   { 0x00020002, 0xfffdfffd };
+ static const struct PatternData Zero2fd = {
+   "Zero2fd",
+@@ -212,23 +336,42 @@ static const struct PatternData Zero2fd = {
+   {0, 2, 0, 0}
+ };
+ 
++static unsigned int Zero2fdX16_data[] =   { 0x02020202, 0xfdfdfdfd };
++static const struct PatternData Zero2fdX16 = {
++  "Zero2fdX16",
++  Zero2fdX16_data,
++  (sizeof Zero2fdX16_data / sizeof Zero2fdX16_data[0]) - 1,
++  {2, 0, 0, 0}
++};
++
+ // Extern array of useable patterns.
+ static const struct PatternData pattern_array[] = {
+   walkingOnes,
++  walkingOnesX16,
++  walkingOnesX16Repeat,
+   walkingInvOnes,
++  walkingInvOnesX16,
++  walkingInvOnesX16Repeat,
+   walkingZeros,
+   OneZero,
++  OneZeroX16,
+   JustZero,
+   JustOne,
+   JustFive,
+   JustA,
+   FiveA,
++  FiveAX16,
+   FiveA8,
++  FiveA8X16,
++  FiveA8X16Repeat,
+   Long8b10b,
+   Short8b10b,
+   Checker8b10b,
++  Checker8b10bX16,
+   Five7,
++  Five7X16,
+   Zero2fd,
++  Zero2fdX16,
+ };
+ static const int pattern_array_size =
+     sizeof pattern_array / sizeof pattern_array[0];
+diff --git a/src/sat.cc b/src/sat.cc
+index 0528bf2..fd0283a 100644
+--- a/src/sat.cc
++++ b/src/sat.cc
+@@ -551,7 +551,7 @@ bool Sat::InitializePages() {
+ 
+ // Print SAT version info.
+ bool Sat::PrintVersion() {
+-  logprintf(1, "Stats: SAT revision %s, %d bit binary\n",
++  logprintf(1, "Stats: SAT revision %s, %d bit binary, 20231020\n",
+             kVersion, address_mode_);
+   logprintf(5, "Log: %s from %s\n", Timestamp(), BuildChangelist());
+ 
+diff --git a/src/worker.cc b/src/worker.cc
+index c96a7fd..592fe1e 100644
+--- a/src/worker.cc
++++ b/src/worker.cc
+@@ -112,6 +112,8 @@ struct ErrorRecord {
+   uint64 actual;  // This is the actual value read.
+   uint64 reread;  // This is the actual value, reread.
+   uint64 expected;  // This is what it should have been.
++  uint64 reread_xor;  // This is the actual value, reread ^ read.
++  uint64 expected_xor;  // This is what it should have been, expected ^ read.
+   uint64 *vaddr;  // This is where it was (or wasn't).
+   char *vbyteaddr;  // This is byte specific where the data was (or wasn't).
+   uint64 paddr;  // This is the bus address, if available.
+@@ -613,6 +615,9 @@ void WorkerThread::ProcessError(struct ErrorRecord *error,
+   // Pretty print DIMM mapping if available.
+   os_->FindDimm(error->paddr, dimm_string, sizeof(dimm_string));
+ 
++  error->reread_xor = error->reread ^ error->actual;
++  error->expected_xor = error->expected ^ error->actual;
++
+   // Report parseable error.
+   if (priority < 5) {
+     // Run miscompare error through diagnoser for logging and reporting.
+@@ -621,8 +626,11 @@ void WorkerThread::ProcessError(struct ErrorRecord *error,
+                                               (error->vaddr), 1);
+ 
+     logprintf(priority,
+-              "%s: miscompare on CPU %d(<-%d) at %p(0x%llx:%s): "
+-              "read:0x%016llx, reread:0x%016llx expected:0x%016llx. '%s'%s.\n",
++              "%s: miscompare on CPU %d(<-%d) at %p(0x%llx:%s):\n"
++              "  read:    0x%016llx\n"
++              "  reread:  0x%016llx(reread^read:0x%016llx)\n"
++              "  expected:0x%016llx(expected^read:0x%016llx)\n"
++              "  '%s'%s\n",
+               message,
+               core_id,
+               error->lastcpu,
+@@ -631,9 +639,26 @@ void WorkerThread::ProcessError(struct ErrorRecord *error,
+               dimm_string,
+               error->actual,
+               error->reread,
++              error->reread_xor,
+               error->expected,
++              error->expected_xor,
+               (error->patternname) ? error->patternname : "None",
+               (error->reread == error->expected) ? " read error" : "");
++
++      uint64 *print_vaddr, i;
++
++      print_vaddr = error->vaddr;
++      print_vaddr = print_vaddr - 32;
++      for (i = 0; i < 64; i = i + 4) {
++      logprintf(priority,
++                "[%p] 0x%016llx, 0x%016llx, 0x%016llx, 0x%016llx\n",
++                print_vaddr + i,
++                *(print_vaddr + i),
++                *(print_vaddr + i + 1),
++                *(print_vaddr + i + 2),
++                *(print_vaddr + i + 3)
++                );
++      }
+   }
+ 
+ 
+@@ -717,13 +742,14 @@ int WorkerThread::CheckRegion(void *addr,
+                               uint32 lastcpu,
+                               int64 length,
+                               int offset,
+-                              int64 pattern_offset) {
++                              int64 pattern_offset,
++                              const char *threadname) {
+   uint64 *memblock = static_cast<uint64*>(addr);
+   const int kErrorLimit = 128;
+   int errors = 0;
+   int overflowerrors = 0;  // Count of overflowed errors.
+   bool page_error = false;
+-  string errormessage("Hardware Error");
++  string errormessage(string(threadname) + " Hardware Error");
+   struct ErrorRecord
+     recorded[kErrorLimit];  // Queued errors for later printing.
+ 
+@@ -757,7 +783,7 @@ int WorkerThread::CheckRegion(void *addr,
+         page_error = true;
+         // If we have overflowed the error queue, just print the errors now.
+         logprintf(10, "Log: Error record overflow, too many miscompares!\n");
+-        errormessage = "Page Error";
++        errormessage = string(threadname) + " Page Error";
+         break;
+       }
+     }
+@@ -829,7 +855,7 @@ int WorkerThread::CheckRegion(void *addr,
+ 
+       if ((state == kGoodAgain) || (state == kBad)) {
+         unsigned int blockerrors = badend - badstart + 1;
+-        errormessage = "Block Error";
++        errormessage = string(threadname) + " Block Error";
+         // It's okay for the 1st entry to be corrected multiple times,
+         // it will simply be reported twice. Once here and once below
+         // when processing the error queue.
+@@ -899,7 +925,7 @@ float WorkerThread::GetCopiedData() {
+ 
+ // Calculate the CRC of a region.
+ // Result check if the CRC mismatches.
+-int WorkerThread::CrcCheckPage(struct page_entry *srcpe) {
++int WorkerThread::CrcCheckPage(struct page_entry *srcpe, const char *threadname) {
+   const int blocksize = 4096;
+   const int blockwords = blocksize / wordsize_;
+   int errors = 0;
+@@ -927,7 +953,8 @@ int WorkerThread::CrcCheckPage(struct page_entry *srcpe) {
+                                    srcpe->pattern,
+                                    srcpe->lastcpu,
+                                    blocksize,
+-                                   currentblock * blocksize, 0);
++                                   currentblock * blocksize, 0,
++                                   threadname);
+       if (errorcount == 0) {
+         logprintf(0, "Log: CrcCheckPage CRC mismatch %s != %s, "
+                      "but no miscompares found.\n",
+@@ -946,7 +973,8 @@ int WorkerThread::CrcCheckPage(struct page_entry *srcpe) {
+                           srcpe->pattern,
+                           srcpe->lastcpu,
+                           leftovers,
+-                          blocks * blocksize, 0);
++                          blocks * blocksize, 0,
++                          threadname);
+   }
+   return errors;
+ }
+@@ -1207,7 +1235,8 @@ bool WorkerThread::AdlerAddrCrcC(uint64 *srcmem64,
+ // Copy a block of memory quickly, while keeping a CRC of the data.
+ // Result check if the CRC mismatches.
+ int WorkerThread::CrcCopyPage(struct page_entry *dstpe,
+-                              struct page_entry *srcpe) {
++                              struct page_entry *srcpe,
++                              const char *threadname) {
+   int errors = 0;
+   const int blocksize = 4096;
+   const int blockwords = blocksize / wordsize_;
+@@ -1239,7 +1268,8 @@ int WorkerThread::CrcCopyPage(struct page_entry *dstpe,
+                                    srcpe->pattern,
+                                    srcpe->lastcpu,
+                                    blocksize,
+-                                   currentblock * blocksize, 0);
++                                   currentblock * blocksize, 0,
++                                   threadname);
+       if (errorcount == 0) {
+         logprintf(0, "Log: CrcCopyPage CRC mismatch %s != %s, "
+                      "but no miscompares found. Retrying with fresh data.\n",
+@@ -1254,7 +1284,8 @@ int WorkerThread::CrcCopyPage(struct page_entry *dstpe,
+                                    srcpe->pattern,
+                                    srcpe->lastcpu,
+                                    blocksize,
+-                                   currentblock * blocksize, 0);
++                                   currentblock * blocksize, 0,
++                                   threadname);
+           if (errorcount == 0) {
+             int core_id = sched_getcpu();
+             logprintf(0, "Process Error: CPU %d(0x%s) CrcCopyPage "
+@@ -1290,7 +1321,8 @@ int WorkerThread::CrcCopyPage(struct page_entry *dstpe,
+                           srcpe->pattern,
+                           srcpe->lastcpu,
+                           leftovers,
+-                          blocks * blocksize, 0);
++                          blocks * blocksize, 0,
++                          threadname);
+     int leftoverwords = leftovers / wordsize_;
+     for (int i = 0; i < leftoverwords; i++) {
+       targetmem[i] = sourcemem[i];
+@@ -1363,7 +1395,8 @@ int InvertThread::InvertPageUp(struct page_entry *srcpe) {
+ // Copy a block of memory quickly, while keeping a CRC of the data.
+ // Result check if the CRC mismatches. Warm the CPU while running
+ int WorkerThread::CrcWarmCopyPage(struct page_entry *dstpe,
+-                                  struct page_entry *srcpe) {
++                                  struct page_entry *srcpe,
++                                  const char *threadname) {
+   int errors = 0;
+   const int blocksize = 4096;
+   const int blockwords = blocksize / wordsize_;
+@@ -1395,7 +1428,8 @@ int WorkerThread::CrcWarmCopyPage(struct page_entry *dstpe,
+                                    srcpe->pattern,
+                                    srcpe->lastcpu,
+                                    blocksize,
+-                                   currentblock * blocksize, 0);
++                                   currentblock * blocksize, 0,
++                                   threadname);
+       if (errorcount == 0) {
+         logprintf(0, "Log: CrcWarmCopyPage CRC mismatch expected: %s != actual: %s, "
+                      "but no miscompares found. Retrying with fresh data.\n",
+@@ -1410,7 +1444,8 @@ int WorkerThread::CrcWarmCopyPage(struct page_entry *dstpe,
+                                    srcpe->pattern,
+                                    srcpe->lastcpu,
+                                    blocksize,
+-                                   currentblock * blocksize, 0);
++                                   currentblock * blocksize, 0,
++                                   threadname);
+           if (errorcount == 0) {
+             int core_id = sched_getcpu();
+             logprintf(0, "Process Error: CPU %d(0x%s) CrciWarmCopyPage "
+@@ -1445,7 +1480,8 @@ int WorkerThread::CrcWarmCopyPage(struct page_entry *dstpe,
+                           srcpe->pattern,
+                           srcpe->lastcpu,
+                           leftovers,
+-                          blocks * blocksize, 0);
++                          blocks * blocksize, 0,
++                          threadname);
+     int leftoverwords = leftovers / wordsize_;
+     for (int i = 0; i < leftoverwords; i++) {
+       targetmem[i] = sourcemem[i];
+@@ -1456,7 +1492,6 @@ int WorkerThread::CrcWarmCopyPage(struct page_entry *dstpe,
+   dstpe->pattern = srcpe->pattern;
+   dstpe->lastcpu = sched_getcpu();
+ 
+-
+   // Clean clean clean the errors away.
+   if (errors) {
+     // TODO(nsanders): Maybe we should patch rather than fill? Filling may
+@@ -1490,7 +1525,7 @@ bool CheckThread::Work() {
+     }
+ 
+     // Do the result check.
+-    CrcCheckPage(&pe);
++    CrcCheckPage(&pe, "Check");
+ 
+     // Push pages back on the valid queue if we are still going,
+     // throw them out otherwise.
+@@ -1545,9 +1580,9 @@ bool CopyThread::Work() {
+ 
+     // We can use memcpy, or CRC check while we copy.
+     if (sat_->warm()) {
+-      CrcWarmCopyPage(&dst, &src);
++      CrcWarmCopyPage(&dst, &src, "Copy");
+     } else if (sat_->strict()) {
+-      CrcCopyPage(&dst, &src);
++      CrcCopyPage(&dst, &src, "Copy");
+     } else {
+       memcpy(dst.addr, src.addr, sat_->page_length());
+       dst.pattern = src.pattern;
+@@ -1597,7 +1632,7 @@ bool InvertThread::Work() {
+     }
+ 
+     if (sat_->strict())
+-      CrcCheckPage(&src);
++      CrcCheckPage(&src, "Inv");
+ 
+     // For the same reason CopyThread yields itself (see YieldSelf comment
+     // in CopyThread::Work(), InvertThread yields itself after each invert
+@@ -1613,7 +1648,7 @@ bool InvertThread::Work() {
+     YieldSelf();
+ 
+     if (sat_->strict())
+-      CrcCheckPage(&src);
++      CrcCheckPage(&src, "Inv");
+ 
+     result = result && sat_->PutValid(&src);
+     if (!result) {
+@@ -1710,7 +1745,7 @@ bool FileThread::WritePages(int fd) {
+ 
+     // Check data correctness.
+     if (strict)
+-      CrcCheckPage(&src);
++      CrcCheckPage(&src, "File");
+ 
+     SectorTagPage(&src, i);
+ 
+@@ -1904,7 +1939,7 @@ bool FileThread::GetValidPage(struct page_entry *src) {
+   } else {
+     src->addr = local_page_;
+     src->offset = 0;
+-    CrcCopyPage(src, &tmp);
++    CrcCopyPage(src, &tmp, "File");
+     if (!sat_->PutValid(&tmp))
+       return false;
+   }
+@@ -1960,7 +1995,7 @@ bool FileThread::ReadPages(int fd) {
+     if (strict) {
+       // Record page index currently CRC checked.
+       crc_page_ = i;
+-      int errors = CrcCheckPage(&dst);
++      int errors = CrcCheckPage(&dst, "File");
+       if (errors) {
+         logprintf(5, "Log: file miscompare at block %d, "
+                   "offset %x-%x. File: %s\n",
+@@ -2268,7 +2303,7 @@ bool NetworkThread::Work() {
+ 
+     // Check data correctness.
+     if (strict)
+-      CrcCheckPage(&src);
++      CrcCheckPage(&src, "Network");
+ 
+     // Do the network write.
+     if (!(result = result && SendPage(sock, &src)))
+@@ -2284,7 +2319,7 @@ bool NetworkThread::Work() {
+ 
+     // Ensure that the transfer ended up with correct data.
+     if (strict)
+-      CrcCheckPage(&dst);
++      CrcCheckPage(&dst, "Network");
+ 
+     // Return all of our pages to the queue.
+     result = result && sat_->PutValid(&dst);
+@@ -3192,7 +3227,7 @@ bool DiskThread::ValidateBlockOnDisk(int fd, BlockData *block) {
+     // the block was never written to disk in the first place.
+     if (!non_destructive_) {
+       if (CheckRegion(block_buffer_, block->pattern(), 0, current_bytes,
+-                      0, bytes_read)) {
++                      0, bytes_read, "disk")) {
+         os_->ErrorReport(device_name_.c_str(), "disk-pattern-error", 1);
+         errorcount_ += 1;
+         logprintf(0, "Hardware Error: Pattern mismatch in block starting at "
+@@ -3427,7 +3462,7 @@ bool MemoryRegionThread::Work() {
+ 
+     // Copying SAT page into memory region.
+     phase_ = kPhaseCopy;
+-    CrcCopyPage(&memregion_pe, &source_pe);
++    CrcCopyPage(&memregion_pe, &source_pe, "MemoryRegion");
+     memregion_pe.pattern = source_pe.pattern;
+     memregion_pe.lastcpu = sched_getcpu();
+ 
+@@ -3441,7 +3476,7 @@ bool MemoryRegionThread::Work() {
+ 
+     // Checking page content in memory region.
+     phase_ = kPhaseCheck;
+-    CrcCheckPage(&memregion_pe);
++    CrcCheckPage(&memregion_pe, "MemoryRegion");
+ 
+     phase_ = kPhaseNoPhase;
+     // Storing pages on their proper queues.
+diff --git a/src/worker.h b/src/worker.h
+index c96c04c..a101884 100644
+--- a/src/worker.h
++++ b/src/worker.h
+@@ -323,18 +323,21 @@ class WorkerThread {
+                           uint32 lastcpu,
+                           int64 length,
+                           int offset,
+-                          int64 patternoffset);
++                          int64 patternoffset,
++                          const char *threadname);
+ 
+   // Fast compare a block of memory.
+-  virtual int CrcCheckPage(struct page_entry *srcpe);
++  virtual int CrcCheckPage(struct page_entry *srcpe, const char *threadname);
+ 
+   // Fast copy a block of memory, while verifying correctness.
+   virtual int CrcCopyPage(struct page_entry *dstpe,
+-                          struct page_entry *srcpe);
++                          struct page_entry *srcpe,
++                          const char *threadname);
+ 
+   // Fast copy a block of memory, while verifying correctness, and heating CPU.
+   virtual int CrcWarmCopyPage(struct page_entry *dstpe,
+-                              struct page_entry *srcpe);
++                              struct page_entry *srcpe,
++                              const char *threadname);
+ 
+   // Fill a page with its specified pattern.
+   virtual bool FillPage(struct page_entry *pe);
+-- 
+2.25.1
+

@@ -1,0 +1,30 @@
+# LVGL - Light and Versatile Graphics Library
+menuconfig BR2_PACKAGE_LVGL
+	bool "LVGL"
+	default n
+	help
+	  Light and Versatile Graphics Library
+
+	choice BR2_PACKAGE_LVGL_VERSION
+		prompt "LVGL Version."
+		default BR2_PACKAGE_LVGL_VERSION_8
+		depends on BR2_PACKAGE_LVGL
+		help
+		  Select LVGL version.
+
+		config BR2_PACKAGE_LVGL_VERSION_8
+			bool "v8.x"
+		config BR2_PACKAGE_LVGL_VERSION_9
+			bool "v9.x"
+	endchoice
+
+if BR2_PACKAGE_LVGL
+	if BR2_PACKAGE_LVGL_VERSION_8
+		source "package/lvgl/lvgl/8.4.0/Config.in"
+		source "package/lvgl/lv_drivers/Config.in"
+	endif
+
+	if BR2_PACKAGE_LVGL_VERSION_9
+		source "package/lvgl/lvgl/9.1/Config.in"
+	endif
+endif

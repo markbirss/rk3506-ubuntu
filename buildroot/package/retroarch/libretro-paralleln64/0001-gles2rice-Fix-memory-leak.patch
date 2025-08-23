@@ -1,0 +1,29 @@
+From 3f497b78c18ebb34b5a444c3879ce992036424e0 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Sat, 2 Nov 2024 21:32:41 +0800
+Subject: [PATCH] gles2rice: Fix memory leak
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ gles2rice/src/TextureManager.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/gles2rice/src/TextureManager.h b/gles2rice/src/TextureManager.h
+index 3d6dd322..c271fcb0 100644
+--- a/gles2rice/src/TextureManager.h
++++ b/gles2rice/src/TextureManager.h
+@@ -132,9 +132,9 @@ typedef struct TxtrCacheEntry
+     ~TxtrCacheEntry()
+     {
+        if (pTexture)
+-          free(pTexture);
++          delete pTexture;
+        if (pEnhancedTexture)
+-          free(pEnhancedTexture);
++          delete pEnhancedTexture;
+ 
+        pTexture         = NULL;
+        pEnhancedTexture = NULL;
+-- 
+2.20.1
+

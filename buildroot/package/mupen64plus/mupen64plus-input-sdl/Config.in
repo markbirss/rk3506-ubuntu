@@ -1,0 +1,8 @@
+config BR2_PACKAGE_MUPEN64PLUS_INPUT_SDL
+        bool "mupen64plus-input-sdl"
+	depends on BR2_PACKAGE_MUPEN64PLUS_CORE
+	depends on BR2_PACKAGE_SDL2
+        help
+          mupen64plus input sdl.
+
+	  https://mupen64plus.org/

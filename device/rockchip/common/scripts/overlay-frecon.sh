@@ -1,0 +1,1 @@
+../overlays/rootfs/frecon/install.sh

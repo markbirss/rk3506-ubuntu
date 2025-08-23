@@ -1,0 +1,44 @@
+From f3437348b49bdb8ad46d35681b4e9c882bf0042b Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Sat, 14 Sep 2024 15:10:10 +0800
+Subject: [PATCH] GLideN64: Graphics: OpenGLContext: Disable coverage and
+ ext_fetch by default
+
+Set env "MUPEN64PLUS_NX_COVERAGE"=1 and "MUPEN64PLUS_NX_COVERAGE_EXT_FETCH"=1
+to allow them.
+
+Fix Wipeout-64 black screen issue.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ GLideN64/src/Graphics/OpenGLContext/opengl_GLInfo.cpp | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/GLideN64/src/Graphics/OpenGLContext/opengl_GLInfo.cpp b/GLideN64/src/Graphics/OpenGLContext/opengl_GLInfo.cpp
+index 24a5512..321f7fa 100644
+--- a/GLideN64/src/Graphics/OpenGLContext/opengl_GLInfo.cpp
++++ b/GLideN64/src/Graphics/OpenGLContext/opengl_GLInfo.cpp
+@@ -201,6 +201,10 @@ void GLInfo::init() {
+ 	texture_barrierNV = Utils::isExtensionSupported(*this, "GL_NV_texture_barrier");
+ 
+ 	ext_fetch = Utils::isExtensionSupported(*this, "GL_EXT_shader_framebuffer_fetch") && (!isGLESX || ext_draw_buffers_indexed);
++
++	if (!getenv("MUPEN64PLUS_NX_EXT_FETCH"))
++		ext_fetch = false;
++
+ 	n64DepthWithFbFetch = ext_fetch && !imageTexturesInterlock;
+ 	eglImage = (Utils::isEGLExtensionSupported("EGL_KHR_image_base") || Utils::isEGLExtensionSupported("EGL_KHR_image"));
+ 	ext_fetch_arm =  Utils::isExtensionSupported(*this, "GL_ARM_shader_framebuffer_fetch") && !ext_fetch;
+@@ -242,6 +246,9 @@ void GLInfo::init() {
+ 		coverage = maxVertexAttribs >= 10;
+ 	}
+ 
++	if (!getenv("MUPEN64PLUS_NX_COVERAGE"))
++		coverage = false;
++
+ #ifdef EGL
+ 	if (isGLESX)
+ 	{
+-- 
+2.20.1
+

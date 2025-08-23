@@ -1,0 +1,27 @@
+From dccab998f209908fbf4540899dc1c357027ecc4a Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Tue, 27 Sep 2022 02:06:55 +0000
+Subject: [PATCH 3/4] HACK: Open rockchip drm device by default
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ xf86drm.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/xf86drm.c b/xf86drm.c
+index 2e76f0e..b1ae6bf 100644
+--- a/xf86drm.c
++++ b/xf86drm.c
+@@ -1247,6 +1247,9 @@ static int drmOpenByName(const char *name, int type)
+  */
+ drm_public int drmOpen(const char *name, const char *busid)
+ {
++    if (!name && !busid)
++        name = "rockchip";
++
+     return drmOpenWithType(name, busid, DRM_NODE_PRIMARY);
+ }
+ 
+-- 
+2.20.1
+

@@ -1,0 +1,7 @@
+source "package/rockchip/ipc/avs/Config.in"
+source "package/rockchip/ipc/ipcweb-backend/Config.in"
+source "package/rockchip/ipc/iva/Config.in"
+source "package/rockchip/ipc/minilogger/Config.in"
+source "package/rockchip/ipc/rkfsmk/Config.in"
+source "package/rockchip/ipc/rkipc/Config.in"
+source "package/rockchip/ipc/samples/Config.in"

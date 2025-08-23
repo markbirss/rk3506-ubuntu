@@ -1,0 +1,29 @@
+config BR2_PACKAGE_RKPARTYBOX
+	bool "RKPARTYBOX demo"
+	depends on BR2_aarch64
+	depends on BR2_PACKAGE_HAS_UDEV
+	depends on BR2_PACKAGE_WPA_SUPPLICANT
+	help
+	  rkpartybox demo
+
+config BR2_PACKAGE_RK3308_RKPARTYBOX_BTMCU
+	bool "RKPARTYBOX use BTMCU"
+	depends on BR2_PACKAGE_RKPARTYBOX
+	help
+	  partybox use external BT soc
+
+config BR2_PACKAGE_PBOX_LCD_DISPLAY
+	bool "RKPARTYBOX LCD display"
+	depends on BR2_PACKAGE_RKPARTYBOX
+	depends on BR2_PACKAGE_LVGL
+	depends on BR2_PACKAGE_LV_DRIVERS
+	default y
+	help
+	  partybox lcd display
+
+config BR2_PACKAGE_PBOX_LED_EFFECT
+	bool "RKPARTYBOX led effect"
+	depends on BR2_PACKAGE_RKPARTYBOX
+	default y
+	help
+	  partybox led effect demo

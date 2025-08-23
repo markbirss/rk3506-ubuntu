@@ -1,0 +1,33 @@
+mainmenu "RT-Thread Configuration"
+
+config BSP_DIR
+    string
+    option env="BSP_ROOT"
+    default "."
+
+config RTT_DIR
+    string
+    option env="RTT_ROOT"
+    default "../../.."
+
+config PKGS_DIR
+    string
+    option env="PKGS_ROOT"
+    default "packages"
+
+config RKMCU_KOALA
+    bool
+    select ARCH_ARM_CORTEX_M3
+    default y
+
+config PM_HAS_CUSTOM_CONFIG
+    bool
+    depends on RT_USING_PM
+    default y
+
+source "$RTT_DIR/Kconfig"
+source "$RTT_DIR/applications/Kconfig"
+source "$PKGS_DIR/Kconfig"
+source "$BSP_DIR/board/Kconfig"
+source "$BSP_DIR/drivers/Kconfig"
+source "$BSP_DIR/tests/Kconfig"

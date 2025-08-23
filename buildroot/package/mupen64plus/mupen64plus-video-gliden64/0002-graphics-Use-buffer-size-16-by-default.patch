@@ -1,0 +1,27 @@
+From 8bf0e221667cb2466d37f28c01d68da5f503f4d5 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Thu, 26 Sep 2024 18:01:25 +0800
+Subject: [PATCH 2/2] graphics: Use buffer size 16 by default
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ .../OpenGLContext/mupen64plus/mupen64plus_DisplayWindow.cpp    | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/Graphics/OpenGLContext/mupen64plus/mupen64plus_DisplayWindow.cpp b/src/Graphics/OpenGLContext/mupen64plus/mupen64plus_DisplayWindow.cpp
+index 595ab91..9757c28 100644
+--- a/src/Graphics/OpenGLContext/mupen64plus/mupen64plus_DisplayWindow.cpp
++++ b/src/Graphics/OpenGLContext/mupen64plus/mupen64plus_DisplayWindow.cpp
+@@ -62,7 +62,8 @@ void DisplayWindowMupen64plus::_setAttributes()
+ 
+ 	FunctionWrapper::CoreVideo_GL_SetAttribute(M64P_GL_DOUBLEBUFFER, 1);
+ 	FunctionWrapper::CoreVideo_GL_SetAttribute(M64P_GL_SWAP_CONTROL, config.video.verticalSync);
+-	FunctionWrapper::CoreVideo_GL_SetAttribute(M64P_GL_BUFFER_SIZE, 32);
++	FunctionWrapper::CoreVideo_GL_SetAttribute(M64P_GL_BUFFER_SIZE,
++		getenv("GLIDEN64_BUFFER_SIZE_32") ? 32 : 16);
+ 	FunctionWrapper::CoreVideo_GL_SetAttribute(M64P_GL_DEPTH_SIZE, 16);
+ 	if (config.video.multisampling > 0 && config.frameBufferEmulation.enable == 0) {
+ 		FunctionWrapper::CoreVideo_GL_SetAttribute(M64P_GL_MULTISAMPLEBUFFERS, 1);
+-- 
+2.20.1
+

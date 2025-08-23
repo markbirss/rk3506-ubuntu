@@ -1,0 +1,48 @@
+From c533bdced677e2104565fc06602e7e63d9c79ac0 Mon Sep 17 00:00:00 2001
+From: Khem Raj <raj.khem@gmail.com>
+Date: Sun, 6 Nov 2016 23:40:54 -0800
+Subject: [PATCH] Lifted from gentoo and ported to 4.4.5
+
+http://data.gpo.zugaina.org/musl/net-fs/samba/files/samba-4.2.7-pam.patch
+
+Upstream-Status: Pending
+
+Signed-off-by: Khem Raj <raj.khem@gmail.com>
+---
+ source3/wscript | 13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/source3/wscript b/source3/wscript
+index b7f96f3..ed12b1e 100644
+--- a/source3/wscript
++++ b/source3/wscript
+@@ -863,7 +863,7 @@ msg.msg_accrightslen = sizeof(fd);
+         if conf.env.with_iconv:
+             conf.DEFINE('HAVE_ICONV', 1)
+ 
+-    if Options.options.with_pam:
++    if Options.options.with_pam != False:
+         use_pam=True
+         conf.CHECK_HEADERS('security/pam_appl.h pam/pam_appl.h')
+         if not conf.CONFIG_SET('HAVE_SECURITY_PAM_APPL_H') and not conf.CONFIG_SET('HAVE_PAM_PAM_APPL_H'):
+@@ -940,6 +940,17 @@ int i; i = PAM_RADIO_TYPE;
+                        "or headers not found. Use --without-pam to disable "
+                        "PAM support.");
+ 
++    else:
++        Logs.warn("PAM disabled")
++        use_pam=False
++        conf.undefine('WITH_PAM')
++        conf.undefine('WITH_PAM_MODULES')
++        conf.undefine('HAVE_SECURITY_PAM_APPL_H')
++        conf.undefine('PAM_RHOST')
++        conf.undefine('PAM_TTY')
++        conf.undefine('HAVE_PAM_PAM_APPL_H')
++
++
+     seteuid = False
+ 
+ #
+-- 
+2.25.1
+

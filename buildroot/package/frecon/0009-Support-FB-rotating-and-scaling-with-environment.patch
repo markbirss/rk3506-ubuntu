@@ -1,0 +1,74 @@
+From 2a017b511ce7a9487d0b82c2cd998ea5b16061ab Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 17 May 2023 10:42:01 +0800
+Subject: [PATCH 09/11] Support FB rotating and scaling with environment
+
+Tested with:
+FRECON_FB_ROTATE=90 FRECON_FB_SCALE=2 frecon
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ fb.c   | 26 ++++++++++++++++++++++++++
+ term.c |  2 +-
+ 2 files changed, 27 insertions(+), 1 deletion(-)
+
+diff --git a/fb.c b/fb.c
+index d7cee5b..71de475 100644
+--- a/fb.c
++++ b/fb.c
+@@ -107,6 +107,7 @@ unref_drm:
+ int fb_buffer_init(fb_t* fb)
+ {
+ 	int32_t width, height, pitch = 0;
++	const char *buf;
+ 	int r;
+ 
+ 	/* reuse the buffer_properties if it was set before */
+@@ -141,6 +142,31 @@ int fb_buffer_init(fb_t* fb)
+ 	fb->buffer_properties.height = height;
+ 	fb->buffer_properties.pitch = pitch;
+ 
++	buf = getenv("FRECON_FB_ROTATE");
++	if (buf) {
++		switch (atoi(buf)) {
++		case 90:
++			fb->buffer_properties.rotation = DRM_MODE_ROTATE_90;
++			break;
++		case 180:
++			fb->buffer_properties.rotation = DRM_MODE_ROTATE_180;
++			break;
++		case 270:
++			fb->buffer_properties.rotation = DRM_MODE_ROTATE_270;
++			break;
++		default:
++			fb->buffer_properties.rotation = DRM_MODE_ROTATE_0;
++			break;
++		}
++	}
++
++	buf = getenv("FRECON_FB_SCALE");
++	if (buf) {
++		fb->buffer_properties.scaling = atoi(buf);
++		if (fb->buffer_properties.scaling < 1)
++			fb->buffer_properties.scaling = 1;
++	}
++
+ 	return 0;
+ }
+ 
+diff --git a/term.c b/term.c
+index 1013987..8e51320 100644
+--- a/term.c
++++ b/term.c
+@@ -727,7 +727,7 @@ void term_clear(terminal_t* terminal)
+ void term_zoom(bool zoom_in)
+ {
+ 	int scaling = font_get_scaling();
+-	if (zoom_in && scaling < 4)
++	if (zoom_in)
+ 		scaling++;
+ 	else if (!zoom_in && scaling > 1)
+ 		scaling--;
+-- 
+2.20.1
+

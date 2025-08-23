@@ -1,0 +1,211 @@
+/*
+ * Copyright (c) 2021 Rockchip Electronics Co., Ltd.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Change Logs:
+ * Date           Author       Notes
+ * 2021-04-12     Steven Liu   first implementation
+ */
+
+#ifndef _HAL_CONF_H_
+#define _HAL_CONF_H_
+
+#include "rtconfig.h"
+
+/* HAL CPU config */
+#define SOC_RK3506
+#define HAL_AP_CORE
+#define SYS_TIMER TIMER5 /* System timer designation (RK TIMER) */
+
+/* RT-Thread Tick Timer */
+#ifndef RT_USING_SYSTICK
+#define TICK_TIMER TIMER4
+#define TICK_IRQn  TIMER4_IRQn
+#else
+#define HAL_ARCHTIMER_MODULE_ENABLED
+#endif
+
+/* HAL Driver Config */
+#define HAL_CPU_TOPOLOGY_MODULE_ENABLED
+#define HAL_DCACHE_MODULE_ENABLED
+#define HAL_GIC_MODULE_ENABLED
+#define HAL_TIMER_MODULE_ENABLED
+
+#ifdef HAL_GIC_MODULE_ENABLED
+#define HAL_GIC_AMP_FEATURE_ENABLED
+#ifndef RT_USING_SMP
+#define HAL_GIC_WAIT_LINUX_INIT_ENABLED
+#endif
+#endif
+
+#ifdef RT_USING_CRU
+#define HAL_CRU_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_DW_MIPI_DSI
+#define HAL_DW_MIPI_DSI_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_INNO_MIPI_DPHY
+#define HAL_INNO_MIPI_DPHY_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_HWCRYPTO
+#define HAL_CRYPTO_MODULE_ENABLED
+
+#ifdef RT_USING_NPOR
+#define HAL_NPOR_MODULE_ENABLED
+#endif
+
+#ifdef RT_HWCRYPTO_USING_RNG
+#define HAL_TRNG_MODULE_ENABLED
+#endif
+
+#endif
+
+#ifdef RT_USING_FLEXBUS_ADC
+#define HAL_FLEXBUS_ADC_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_FLEXBUS_DAC
+#define HAL_FLEXBUS_DAC_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_PIN
+#define HAL_GPIO_MODULE_ENABLED
+#define HAL_PINCTRL_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_I2C
+#define HAL_I2C_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_ACODEC
+#define HAL_ACODEC_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_ACDCDIG_DSM
+#define HAL_ACDCDIG_DSM_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_PDM
+#define HAL_PDM_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_SAI
+#define HAL_SAI_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_SPDIFRX
+#define HAL_SPDIFRX_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_SPDIFTX
+#define HAL_SPDIFTX_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_GMAC
+#define HAL_GMAC_MODULE_ENABLED
+#ifdef RT_USING_GMAC_PTP
+#define HAL_GMAC_PTP_FEATURE_ENABLED
+#endif
+#endif
+
+#ifdef RT_USING_DMA_PL330
+#define HAL_PL330_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_DSMC_HOST
+#define HAL_DSMC_HOST_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_DSMC_SLAVE
+#define HAL_DSMC_SLAVE_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_MAILBOX
+#define HAL_MBOX_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_PWM
+#define HAL_PWM_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_SARADC
+#define HAL_SARADC_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_SNOR
+#define HAL_FSPI_MODULE_ENABLED
+#define HAL_NPOR_MODULE_ENABLED
+#define HAL_SNOR_MODULE_ENABLED
+#define HAL_SNOR_FSPI_HOST
+#endif
+
+#ifdef RT_USING_SPI
+#define HAL_SPI_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_SPINAND
+#define HAL_SPINAND_MODULE_ENABLED
+#ifdef RT_USING_SPINAND_FSPI_HOST
+#define HAL_FSPI_MODULE_ENABLED
+#define HAL_NPOR_MODULE_ENABLED
+#endif
+#endif
+
+#ifdef RT_USING_TSADC
+#define HAL_TSADC_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_UART
+#define HAL_UART_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_USB_DEVICE
+#define HAL_PCD_MODULE_ENABLED
+#define USB_INNO_PHY_BCD_DETECT
+#endif
+
+#ifdef RT_USING_USB_HOST
+#define HAL_HCD_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_VOP
+#define HAL_VOP_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_WDT
+#define HAL_WDT_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_TOUCHKEY
+#define HAL_TOUCHKEY_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_SDIO
+#define HAL_SDIO_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_SPI2APB
+#define HAL_SPI2APB_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_FLEXBUS
+#define HAL_FLEXBUS_MODULE_ENABLED
+#endif
+
+#ifdef RT_USING_FLEXBUS_SPI
+#define HAL_FLEXBUS_SPI_MODULE_ENABLED
+#endif
+
+/* HAL_DBG SUB CONFIG */
+#define HAL_DBG_USING_RTT_SERIAL
+#define HAL_DBG_ON
+#define HAL_DBG_INFO_ON
+#define HAL_DBG_WRN_ON
+#define HAL_DBG_ERR_ON
+#define HAL_ASSERT_ON
+
+#endif

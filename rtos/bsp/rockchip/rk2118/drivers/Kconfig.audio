@@ -1,0 +1,188 @@
+if RT_USING_AUDIO
+menu "Enable Audio"
+    source "$BSP_DIR/../common/drivers/audio/codecs/Kconfig"
+    source "$BSP_DIR/../common/drivers/audio/pcm/Kconfig"
+
+    menu "Audio Cards"
+
+    config RT_USING_AUDIO_CARD
+        bool "Audio Cards"
+        select RT_USING_CODEC
+        default n
+
+    config RT_USING_AUDIO_CARD_SAI0
+        bool "Enable SAI0 Digital audio card"
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_SAI0
+        default n
+        help
+          Say Y if you want to use sai0 digital audio card.
+
+    config RT_USING_AUDIO_CARD_SAI1
+        bool "Enable SAI1 Digital audio card"
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_SAI1
+        default n
+        help
+          Say Y if you want to use sai1 digital audio card.
+
+    config RT_USING_AUDIO_CARD_SAI2
+        bool "Enable SAI2 Digital audio card"
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_SAI2
+        default n
+        help
+          Say Y if you want to use sai2 digital audio card.
+
+    config RT_USING_AUDIO_CARD_SAI3
+        bool "Enable SAI3 Digital audio card"
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_SAI3
+        default n
+        help
+          Say Y if you want to use sai3 digital audio card.
+
+    config RT_USING_AUDIO_CARD_SAI4
+        bool "Enable SAI4 Digital audio card"
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_SAI4
+        default n
+        help
+          Say Y if you want to use sai4 digital audio card.
+
+    config RT_USING_AUDIO_CARD_SAI5
+        bool "Enable SAI5 Digital audio card"
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_SAI5
+        default n
+        help
+          Say Y if you want to use sai5 digital audio card.
+
+    config RT_USING_AUDIO_CARD_SAI6
+        bool "Enable SAI6 Digital audio card"
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_SAI6
+        default n
+        help
+          Say Y if you want to use sai6 digital audio card.
+
+    config RT_USING_AUDIO_CARD_SAI7
+        bool "Enable SAI7 Digital audio card"
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_SAI7
+        default n
+        help
+          Say Y if you want to use sai7 digital audio card.
+
+    config RT_USING_AUDIO_CARD_SPDIFRX0
+        bool "Enable SPDIFRX0 Digital audio card"
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_SPDIFRX0
+        default n
+        help
+          Say Y if you want to use spdifrx0 digital audio card.
+
+    config RT_USING_AUDIO_CARD_SPDIFRX1
+        bool "Enable SPDIFRX1 Digital audio card"
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_SPDIFRX1
+        default n
+        help
+          Say Y if you want to use spdifrx1 digital audio card.
+
+    config RT_USING_AUDIO_CARD_SPDIFTX0
+        bool "Enable SPDIFTX0 Digital audio card"
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_SPDIFTX0
+        default n
+        help
+          Say Y if you want to use spdiftx0 digital audio card.
+
+    config RT_USING_AUDIO_CARD_PDM0
+        bool "Enable PDM0 Digital audio card"
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_PDM0
+        default n
+        help
+          Say Y if you want to use pdm0 digital audio card.
+
+    endmenu
+
+    menu "Audio Interfaces"
+
+    config RT_USING_PCM
+        bool
+        select RT_USING_DMA
+        default y
+
+    config RT_USING_MULTI_DAIS
+        bool
+
+    config RT_USING_MULTI_PCM
+        bool
+
+    config RT_USING_SAI
+        bool
+
+    config RT_USING_SAI0
+        bool
+        select RT_USING_SAI
+
+    config RT_USING_SAI1
+        bool
+        select RT_USING_SAI
+
+    config RT_USING_SAI2
+        bool
+        select RT_USING_SAI
+
+    config RT_USING_SAI3
+        bool
+        select RT_USING_SAI
+
+    config RT_USING_SAI4
+        bool
+        select RT_USING_SAI
+
+    config RT_USING_SAI5
+        bool
+        select RT_USING_SAI
+
+    config RT_USING_SAI6
+        bool
+        select RT_USING_SAI
+
+    config RT_USING_SAI7
+        bool
+        select RT_USING_SAI
+
+    config RT_USING_SPDIFRX
+        bool
+
+    config RT_USING_SPDIFRX0
+        bool
+        select RT_USING_SPDIFRX
+
+    config RT_USING_SPDIFRX1
+        bool
+        select RT_USING_SPDIFRX
+
+    config RT_USING_SPDIFTX
+        bool
+
+    config RT_USING_SPDIFTX0
+        bool
+        select RT_USING_SPDIFTX
+
+    config RT_USING_PDM
+        bool
+
+    config RT_USING_PDM0
+        bool
+        select RT_USING_PDM
+
+    endmenu
+
+endmenu
+
+endif

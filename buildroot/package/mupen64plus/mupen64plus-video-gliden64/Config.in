@@ -1,0 +1,8 @@
+config BR2_PACKAGE_MUPEN64PLUS_VIDEO_GLIDEN64
+        bool "mupen64plus-video-gliden64"
+	depends on BR2_PACKAGE_LIBPNG
+	depends on BR2_PACKAGE_ZLIB
+        help
+          mupen64plus video gliden64.
+
+	  https://github.com/gonetz/GLideN64

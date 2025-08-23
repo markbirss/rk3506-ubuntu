@@ -1,0 +1,2176 @@
+From fea41fc576e28608434bc66922f97087518ab458 Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Mon, 27 Nov 2023 14:24:59 +0800
+Subject: [PATCH] sdl: Support opengl
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ CMakeLists.txt                |    7 +
+ lv_drv_conf.h                 |    4 +
+ sdl/gl/gl.c                   | 1117 +++++++++++++++++++++++++++++++++
+ sdl/gl/gl.h                   |  161 +++++
+ sdl/gl/mat.c                  |  369 +++++++++++
+ sdl/gl/mat.h                  |   23 +
+ sdl/gl/shaders.c              |  106 ++++
+ sdl/gl/shaders/bgra.frag      |   12 +
+ sdl/gl/shaders/bgra_cube.frag |   10 +
+ sdl/gl/shaders/common.vert    |   54 ++
+ sdl/gl/shaders/cube.vert      |   17 +
+ sdl/gl/shaders/default.vert   |   22 +
+ sdl/gl/shaders/fold.vert      |   21 +
+ sdl/gl/shaders/rgba.frag      |   12 +
+ sdl/gl/shaders/rgba_cube.frag |   10 +
+ sdl/sdl_gpu.c                 |   34 +-
+ 16 files changed, 1978 insertions(+), 1 deletion(-)
+ create mode 100644 sdl/gl/gl.c
+ create mode 100644 sdl/gl/gl.h
+ create mode 100644 sdl/gl/mat.c
+ create mode 100644 sdl/gl/mat.h
+ create mode 100644 sdl/gl/shaders.c
+ create mode 100644 sdl/gl/shaders/bgra.frag
+ create mode 100644 sdl/gl/shaders/bgra_cube.frag
+ create mode 100644 sdl/gl/shaders/common.vert
+ create mode 100644 sdl/gl/shaders/cube.vert
+ create mode 100644 sdl/gl/shaders/default.vert
+ create mode 100644 sdl/gl/shaders/fold.vert
+ create mode 100644 sdl/gl/shaders/rgba.frag
+ create mode 100644 sdl/gl/shaders/rgba_cube.frag
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 48500e97..14912180 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -19,6 +19,13 @@ add_library(lvgl::drivers ALIAS lv_drivers)
+ if (LV_DRV_USE_SDL_GPU)
+     add_definitions(-DUSE_SDL_GPU=1)
+     add_definitions(-DLV_USE_GPU_SDL=1)
++if (LV_DRV_SDL_DIS_FULLSCREEN)
++    add_definitions(-DSDL_DIS_FULLSCREEN)
++endif()
++endif()
++if (LV_DRV_USE_OPENGL)
++    add_definitions(-DUSE_SDL_OPENGL=1)
++    install(DIRECTORY sdl/gl/shaders DESTINATION /usr/share/lv_drivers)
+ endif()
+ if (LV_DRV_USE_DRM)
+     add_definitions(-DUSE_DRM=1)
+diff --git a/lv_drv_conf.h b/lv_drv_conf.h
+index 345762aa..d6f10ee5 100644
+--- a/lv_drv_conf.h
++++ b/lv_drv_conf.h
+@@ -94,6 +94,10 @@
+ # define USE_SDL_GPU 0
+ #endif
+ 
++#ifndef USE_SDL_OPENGL
++# define USE_SDL_OPENGL 0
++#endif
++
+ #if USE_SDL || USE_SDL_GPU
+ //#  define SDL_HOR_RES     720
+ //#  define SDL_VER_RES     1280
+diff --git a/sdl/gl/gl.c b/sdl/gl/gl.c
+new file mode 100644
+index 00000000..09e68b78
+--- /dev/null
++++ b/sdl/gl/gl.c
+@@ -0,0 +1,1117 @@
++#include <stdio.h>
++#include <stdlib.h>
++#include <unistd.h>
++#include <fcntl.h>
++
++#if USE_SDL_OPENGL
++#include <lvgl/lvgl.h>
++
++#define SDL_MAIN_HANDLED
++#include <GLES3/gl3.h>
++#include <SDL2/SDL.h>
++#include <SDL2/SDL_egl.h>
++#include <SDL2/SDL_opengl.h>
++#include <SDL2/SDL_opengles2.h>
++
++#include "gl.h"
++
++#define LOGD            //printf
++
++#define DATA_PATH       "/usr/share/lv_drivers/shaders"
++
++static char *_common = DATA_PATH"/common.vert";
++static char *_vert = DATA_PATH"/default.vert";
++static char *_vert_cube = DATA_PATH"/cube.vert";
++static char *_frag_bgra = DATA_PATH"/bgra.frag";
++static char *_frag_rgba = DATA_PATH"/rgba.frag";
++static char *_frag_bgra_cube = DATA_PATH"/bgra_cube.frag";
++static char *_frag_rgba_cube = DATA_PATH"/rgba_cube.frag";
++
++static const lv_gl_vec_t default_vec[4] = {
++    /* bottom left */
++    {-1.0, -1.0, 0.0},
++    /* bottom right */
++    { 1.0, -1.0, 0.0},
++    /* top left */
++    {-1.0,  1.0, 0.0},
++    /* top right */
++    { 1.0,  1.0, 0.0},
++};
++
++static const GLfloat verts_2d[] = {
++    /* bottom left */
++    -1.0, -1.0, 0.0, 1.0, 0.0, 1.0,
++    /* bottom right */
++     1.0, -1.0, 0.0, 1.0, 1.0, 1.0,
++    /* top left */
++    -1.0,  1.0, 0.0, 1.0, 0.0, 0.0,
++    /* top right */
++     1.0,  1.0, 0.0, 1.0, 1.0, 0.0,
++};
++
++static const GLfloat verts_cube[] = {
++    /* Front */
++    -1.0, -1.0,  1.0, 1.0, 0.0, 0.0,
++     1.0, -1.0,  1.0, 1.0, 1.0, 0.0,
++    -1.0,  1.0,  1.0, 1.0, 0.0, 1.0,
++    -1.0,  1.0,  1.0, 1.0, 0.0, 1.0,
++     1.0,  1.0,  1.0, 1.0, 1.0, 1.0,
++     1.0, -1.0,  1.0, 1.0, 0.0, 1.0,
++
++    /* Left */
++    -1.0, -1.0, -1.0, 1.0, 0.0, 0.0,
++    -1.0, -1.0,  1.0, 1.0, 1.0, 0.0,
++    -1.0,  1.0, -1.0, 1.0, 0.0, 1.0,
++    -1.0,  1.0, -1.0, 1.0, 0.0, 1.0,
++    -1.0,  1.0,  1.0, 1.0, 1.0, 1.0,
++    -1.0, -1.0,  1.0, 1.0, 0.0, 1.0,
++
++    /* Right */
++     1.0, -1.0, -1.0, 1.0, 0.0, 0.0,
++     1.0, -1.0,  1.0, 1.0, 1.0, 0.0,
++     1.0,  1.0,  1.0, 1.0, 0.0, 1.0,
++     1.0,  1.0,  1.0, 1.0, 0.0, 1.0,
++     1.0,  1.0, -1.0, 1.0, 1.0, 1.0,
++     1.0, -1.0, -1.0, 1.0, 0.0, 1.0,
++
++    /* Back */
++    -1.0,  1.0, -1.0, 1.0, 0.0, 0.0,
++    -1.0, -1.0, -1.0, 1.0, 1.0, 0.0,
++     1.0, -1.0, -1.0, 1.0, 0.0, 1.0,
++     1.0, -1.0, -1.0, 1.0, 0.0, 1.0,
++     1.0,  1.0, -1.0, 1.0, 1.0, 1.0,
++    -1.0,  1.0, -1.0, 1.0, 0.0, 1.0,
++
++    /* Top */
++    -1.0,  1.0,  1.0, 1.0, 0.0, 0.0,
++     1.0,  1.0,  1.0, 1.0, 1.0, 0.0,
++    -1.0,  1.0, -1.0, 1.0, 0.0, 1.0,
++    -1.0,  1.0, -1.0, 1.0, 0.0, 1.0,
++     1.0,  1.0, -1.0, 1.0, 1.0, 1.0,
++     1.0,  1.0,  1.0, 1.0, 0.0, 1.0,
++
++    /* Bottom */
++    -1.0, -1.0, -1.0, 1.0, 0.0, 0.0,
++    -1.0, -1.0,  1.0, 1.0, 1.0, 0.0,
++     1.0, -1.0, -1.0, 1.0, 0.0, 1.0,
++     1.0, -1.0, -1.0, 1.0, 0.0, 1.0,
++     1.0, -1.0,  1.0, 1.0, 1.0, 1.0,
++    -1.0, -1.0,  1.0, 1.0, 0.0, 1.0,
++};
++
++enum {
++    VERTEX_DEFAULT,
++    VERTEX_CUBE,
++};
++
++enum {
++    IMAGESOURCE_RGBA,
++    IMAGESOURCE_BGRA,
++};
++
++typedef struct {
++    GLuint program;
++    GLuint vert;
++    GLuint frag;
++    GLuint VAO;
++    GLuint VBO;
++} lv_gl_prog_t;
++
++typedef struct {
++    lv_gl_base_t base;
++    lv_gl_base_t * fb;
++    int inited;
++    int clear_depth;
++    lv_gl_prog_t * cur_prog;
++    lv_gl_prog_t * progs[6];
++    SDL_Window * window;
++    SDL_GLContext context;
++} lv_gl_ctx_t;
++
++static lv_gl_ctx_t gl_ctx = {
++    .inited = 0,
++};
++
++static GLuint gl_pos = 0;
++static GLuint gl_tex = 1;
++
++static void reset_crop(lv_gl_base_t *base);
++static void reset_viewport(lv_gl_base_t *base);
++static void update_crop_viewport(lv_gl_base_t *base);
++
++static lv_gl_render_cb_t user_cb = NULL;
++
++void lv_gl_set_render_cb(lv_gl_render_cb_t cb)
++{
++    user_cb = cb;
++}
++
++static inline lv_gl_tex_t *tex_ref(lv_gl_tex_t *tex)
++{
++    tex->ref_cnt++;
++
++    return tex;
++}
++
++static inline lv_gl_tex_t *tex_unref(lv_gl_tex_t *tex)
++{
++    if ((--tex->ref_cnt) > 0)
++        return tex;
++
++    lv_gl_tex_del(tex);
++
++    return NULL;
++}
++
++static SDL_GLContext enter_critical(void)
++{
++    SDL_GLContext ctx;
++
++    ctx = SDL_GL_GetCurrentContext();
++    if (ctx != gl_ctx.context)
++        SDL_GL_MakeCurrent(gl_ctx.window, gl_ctx.context);
++}
++
++static void exit_critical(SDL_GLContext ctx)
++{
++    if (ctx != gl_ctx.context)
++        SDL_GL_MakeCurrent(gl_ctx.window, ctx);
++}
++
++static GLuint create_shader(const char *source_path, GLenum shader_type)
++{
++    GLuint shader;
++    GLint status;
++    FILE *fd;
++    FILE *fd_common;
++    int size;
++    int size_common = 0;
++    char *source;
++
++    fd = fopen(source_path, "rb");
++    fseek(fd, 0, SEEK_END);
++    size = ftell(fd);
++    fseek(fd, 0, SEEK_SET);
++
++    if (shader_type == GL_VERTEX_SHADER)
++    {
++        fd_common = fopen(_common, "rb");
++        fseek(fd_common, 0, SEEK_END);
++        size_common = ftell(fd_common);
++        fseek(fd_common, 0, SEEK_SET);
++    }
++
++    source = malloc(size + size_common + 1);
++    memset(source, 0x0, size + size_common + 1);
++    if (shader_type == GL_VERTEX_SHADER)
++    {
++        fread(source, 1, size_common, fd_common);
++        fclose(fd_common);
++    }
++    fread(source + size_common, 1, size, fd);
++    fclose(fd);
++
++    shader = glCreateShader(shader_type);
++    if (!shader)
++        exit(1);
++
++    glShaderSource(shader, 1, (const char **) &source, NULL);
++    glCompileShader(shader);
++
++    free(source);
++    glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
++    if (!status) {
++        char log[1000];
++        GLsizei len;
++        glGetShaderInfoLog(shader, 1000, &len, log);
++        fprintf(stderr, "Error: compiling %s: %.*s\n",
++            shader_type == GL_VERTEX_SHADER ? "vertex" : "fragment",
++            len, log);
++        exit(1);
++    }
++
++    return shader;
++}
++
++static lv_gl_prog_t * create_program(int vert_type, int frag_type)
++{
++    lv_gl_prog_t * prog;
++    const char *vert_text;
++    const char *frag_text;
++    GLuint program;
++    GLuint vert;
++    GLuint frag;
++    GLint status;
++
++    switch (vert_type)
++    {
++    case VERTEX_DEFAULT:
++        vert_text = _vert;
++        break;
++    default:
++        printf("Invalid vert type\n");
++        break;
++    }
++    switch(frag_type)
++    {
++    case IMAGESOURCE_BGRA:
++        frag_text = _frag_bgra;
++        break;
++    case IMAGESOURCE_RGBA:
++        frag_text = _frag_rgba;
++        break;
++    default:
++        printf("Invalid frag type\n");
++        break;
++    }
++
++    prog = malloc(sizeof(lv_gl_prog_t));
++
++    frag = create_shader(frag_text, GL_FRAGMENT_SHADER);
++    vert = create_shader(vert_text, GL_VERTEX_SHADER);
++
++    program = glCreateProgram();
++    glAttachShader(program, frag);
++    glAttachShader(program, vert);
++    glLinkProgram(program);
++
++    glGetProgramiv(program, GL_LINK_STATUS, &status);
++    if (!status) {
++        char log[1000];
++        GLsizei len;
++        glGetProgramInfoLog(program, 1000, &len, log);
++        fprintf(stderr, "Error: linking:\n%.*s\n", len, log);
++        exit(1);
++    }
++    glUseProgram(program);
++
++	glBindAttribLocation(program, gl_pos, "pos");
++    glBindAttribLocation(program, gl_tex, "tex");
++    glLinkProgram(program);
++
++    glGenVertexArrays(1, &prog->VAO);
++    glGenBuffers(1, &prog->VBO);
++    glBindVertexArray(prog->VAO);
++
++    glBindBuffer(GL_ARRAY_BUFFER, prog->VBO);
++    glBufferData(GL_ARRAY_BUFFER, sizeof(verts_2d),
++        &verts_2d, GL_STATIC_DRAW);
++    glEnableVertexAttribArray(gl_pos);
++    glVertexAttribPointer(gl_pos, 4, GL_FLOAT,
++        GL_FALSE, 6 * sizeof(GLfloat), (GLvoid *)0);
++    glEnableVertexAttribArray(gl_tex);
++    glVertexAttribPointer(gl_tex, 2, GL_FLOAT,
++        GL_FALSE, 6 * sizeof(GLfloat),
++        (GLvoid *)(4 * sizeof(GLfloat)));
++
++    glBindVertexArray(0);
++
++    prog->program = program;
++    prog->frag = frag;
++    prog->vert = vert;
++
++    return prog;
++}
++
++static lv_gl_prog_t * create_cube_program(int type)
++{
++    lv_gl_prog_t * prog;
++    const char *vert_text;
++    const char *frag_text;
++    GLuint program;
++    GLuint vert;
++    GLuint frag;
++    GLint status;
++
++    switch(type)
++    {
++    case IMAGESOURCE_BGRA:
++        vert_text = _vert_cube;
++        frag_text = _frag_bgra_cube;
++        break;
++    case IMAGESOURCE_RGBA:
++        vert_text = _vert_cube;
++        frag_text = _frag_rgba_cube;
++        break;
++    }
++
++    prog = malloc(sizeof(lv_gl_prog_t));
++
++    frag = create_shader(frag_text, GL_FRAGMENT_SHADER);
++    vert = create_shader(vert_text, GL_VERTEX_SHADER);
++
++    program = glCreateProgram();
++    glAttachShader(program, frag);
++    glAttachShader(program, vert);
++    glLinkProgram(program);
++
++    glGetProgramiv(program, GL_LINK_STATUS, &status);
++    if (!status) {
++        char log[1000];
++        GLsizei len;
++        glGetProgramInfoLog(program, 1000, &len, log);
++        fprintf(stderr, "Error: linking:\n%.*s\n", len, log);
++        exit(1);
++    }
++    glUseProgram(program);
++
++	glBindAttribLocation(program, gl_pos, "pos");
++    glLinkProgram(program);
++
++    glGenVertexArrays(1, &prog->VAO);
++    glGenBuffers(1, &prog->VBO);
++    glBindVertexArray(prog->VAO);
++    glBindBuffer(GL_ARRAY_BUFFER, prog->VBO);
++    glBufferData(GL_ARRAY_BUFFER, sizeof(verts_cube),
++        &verts_cube, GL_STATIC_DRAW);
++    glEnableVertexAttribArray(gl_pos);
++    glVertexAttribPointer(gl_pos, 4, GL_FLOAT,
++        GL_FALSE, 6 * sizeof(GLfloat), (GLvoid *)0);
++    glBindVertexArray(0);
++
++    prog->program = program;
++    prog->frag = frag;
++    prog->vert = vert;
++
++    return prog;
++}
++
++int lv_gl_ctx_init(void)
++{
++    printf("%s\n", glGetString(GL_RENDERER));
++    printf("%s\n", glGetString(GL_VENDOR));
++    printf("%s\n", glGetString(GL_VERSION));
++    printf("%s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
++
++    memset(&gl_ctx, 0x0, sizeof(gl_ctx));
++
++    gl_ctx.progs[GL_TEX_TYPE_2D * 2 + 0] =
++        create_program(VERTEX_DEFAULT, IMAGESOURCE_RGBA);
++    gl_ctx.progs[GL_TEX_TYPE_2D * 2 + 1] =
++        create_program(VERTEX_DEFAULT, IMAGESOURCE_BGRA);
++    gl_ctx.progs[GL_TEX_TYPE_CUBE * 2 + 0] =
++        create_cube_program(IMAGESOURCE_RGBA);
++    gl_ctx.progs[GL_TEX_TYPE_CUBE * 2 + 1] =
++        create_cube_program(IMAGESOURCE_BGRA);
++
++    gl_ctx.window = SDL_GL_GetCurrentWindow();
++    gl_ctx.context = SDL_GL_GetCurrentContext();
++    SDL_GetWindowSize(gl_ctx.window, &gl_ctx.base.w,
++        &gl_ctx.base.h);
++
++    gl_ctx.base.reverse_y = 1;
++    reset_viewport(&gl_ctx.base);
++    reset_crop(&gl_ctx.base);
++
++    gl_ctx.fb = &gl_ctx.base;
++    gl_ctx.inited = 1;
++}
++
++void lv_gl_set_fb(lv_gl_obj_t *obj)
++{
++    lv_gl_base_t *fb;
++
++    if (obj)
++        fb = &obj->base;
++    else
++        fb = &gl_ctx.base;
++
++    if (gl_ctx.fb == fb)
++        return;
++
++    gl_ctx.fb = fb;
++    gl_ctx.clear_depth = 1;
++}
++
++void lv_gl_read_pixels(void *ptr, SDL_Rect *r, int type)
++{
++    SDL_GLContext previousContext;
++    GLenum status;
++    lv_gl_base_t *fb;
++
++    previousContext = enter_critical();
++    fb = gl_ctx.fb;
++    if (fb->tex == NULL)
++    {
++        glBindFramebuffer(GL_FRAMEBUFFER, 0);
++    }
++    else
++    {
++        glBindFramebuffer(GL_FRAMEBUFFER, fb->tex->FBO);
++        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
++            type ? type : GL_TEXTURE_2D, fb->tex->gl_tex, 0);
++        status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
++        if (status != GL_FRAMEBUFFER_COMPLETE) {
++            printf("bind framebuffer error\n");
++            return;
++        }
++    }
++
++    glReadPixels(r->x, r->y, r->w, r->h, GL_RGBA, GL_UNSIGNED_BYTE, ptr);
++
++    exit_critical(previousContext);
++}
++
++lv_gl_tex_t *lv_gl_tex_create(int type, int w, int h, lv_gl_img_t *img)
++{
++    SDL_GLContext previousContext;
++    lv_gl_tex_t *new;
++    int count = 1;
++
++    if (!gl_ctx.inited) {
++        printf("call lv_gl_ctx_init first\n");
++        return NULL;
++    }
++
++    previousContext = enter_critical();
++
++    new = lv_mem_alloc(sizeof(*new));
++    memset(new, 0, sizeof(*new));
++    new->type = type;
++    glGenFramebuffers(1, &new->FBO);
++    glGenTextures(1, &new->gl_tex);
++
++    if (type == GL_TEX_TYPE_2D)
++    {
++        glBindTexture(GL_TEXTURE_2D, new->gl_tex);
++        if (img && img->pixels)
++        {
++            new->size[0].w = img->w;
++            new->size[0].h = img->h;
++            new->format = img->format;
++            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, img->w, img->h,
++                0, GL_RGBA, GL_UNSIGNED_BYTE, img->pixels);
++        }
++        else
++        {
++            new->size[0].w = w;
++            new->size[0].h = h;
++            new->format = LV_GL_FMT_BGRA;
++            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h,
++                0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
++        }
++        glTexParameteri(GL_TEXTURE_2D,
++            GL_TEXTURE_MIN_FILTER, GL_LINEAR);
++        glTexParameteri(GL_TEXTURE_2D,
++            GL_TEXTURE_MAG_FILTER, GL_LINEAR);
++        glBindTexture(GL_TEXTURE_2D, 0);
++    }
++
++    if (type == GL_TEX_TYPE_CUBE)
++    {
++        glBindTexture(GL_TEXTURE_CUBE_MAP, new->gl_tex);
++        for (int i = CUBE_LEFT; i <= CUBE_BACK; i++)
++        {
++            if (img && img[i].pixels)
++            {
++                new->size[0].w = img[i].w;
++                new->size[0].h = img[i].h;
++                new->format = img->format;
++                glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
++                    0, GL_RGBA, img[i].w, img[i].h,
++                    0, GL_RGBA, GL_UNSIGNED_BYTE, img[i].pixels);
++            }
++            else
++            {
++                new->size[0].w = w;
++                new->size[0].h = h;
++                new->format = LV_GL_FMT_RGBA;
++                glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
++                    0, GL_RGBA, w, h,
++                    0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
++            }
++        }
++        glTexParameteri(GL_TEXTURE_CUBE_MAP,
++            GL_TEXTURE_MAG_FILTER, GL_LINEAR);
++        glTexParameteri(GL_TEXTURE_CUBE_MAP,
++            GL_TEXTURE_MIN_FILTER, GL_LINEAR);
++        glTexParameteri(GL_TEXTURE_CUBE_MAP,
++            GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++        glTexParameteri(GL_TEXTURE_CUBE_MAP,
++            GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++        glTexParameteri(GL_TEXTURE_CUBE_MAP,
++            GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
++        glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
++    }
++
++    exit_critical(previousContext);
++
++    return new;
++}
++
++void lv_gl_tex_del(lv_gl_tex_t *tex)
++{
++    SDL_GLContext previousContext;
++
++    previousContext = enter_critical();
++
++    glDeleteFramebuffers(1, &tex->FBO);
++    glDeleteTextures(1, &tex->gl_tex);
++    lv_mem_free(tex);
++
++    exit_critical(previousContext);
++}
++
++static void import_img_cube(lv_gl_tex_t *tex,
++    lv_gl_img_t *img)
++{
++    SDL_GLContext previousContext;
++
++    previousContext = enter_critical();
++
++    glBindTexture(GL_TEXTURE_CUBE_MAP, tex->gl_tex);
++    for (int i = CUBE_LEFT; i <= CUBE_BACK; i++)
++    {
++        if (!img[i].pixels)
++            continue;
++        glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
++            0, GL_RGBA, img[i].w, img[i].h, 0,
++            GL_RGBA, GL_UNSIGNED_BYTE,
++            img[i].pixels);
++    }
++    glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
++    tex->format = img->format;
++
++    exit_critical(previousContext);
++}
++
++static void import_img_2d(lv_gl_tex_t *tex, lv_gl_img_t *img)
++{
++    SDL_GLContext previousContext;
++
++    previousContext = enter_critical();
++
++    glBindTexture(GL_TEXTURE_2D, tex->gl_tex);
++    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
++        img->w, img->h, 0, GL_RGBA,
++        GL_UNSIGNED_BYTE, img->pixels);
++    glBindTexture(GL_TEXTURE_2D, 0);
++    tex->format = img->format;
++
++    exit_critical(previousContext);
++}
++
++void lv_gl_tex_import_img(lv_gl_tex_t *tex, lv_gl_img_t *img)
++{
++    switch (tex->type)
++    {
++    case GL_TEX_TYPE_2D:
++        import_img_2d(tex, img);
++        break;
++    case GL_TEX_TYPE_CUBE:
++        import_img_cube(tex, img);
++        break;
++    }
++}
++
++void lv_gl_tex_clear(lv_gl_tex_t *tex, float r, float g, float b, float a)
++{
++    SDL_GLContext previousContext;
++    GLenum status;
++
++    previousContext = enter_critical();
++
++    glBindFramebuffer(GL_FRAMEBUFFER, tex->FBO);
++    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
++        GL_TEXTURE_2D, tex->gl_tex, 0);
++    status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
++    if (status != GL_FRAMEBUFFER_COMPLETE) {
++        printf("bind framebuffer error\n");
++        exit_critical(previousContext);
++        return;
++    }
++
++    glClearColor(r, g, b, a);
++    glClear(GL_COLOR_BUFFER_BIT);
++    exit_critical(previousContext);
++}
++
++lv_gl_obj_t *lv_gl_obj_create(int w, int h)
++{
++    lv_gl_obj_t *new;
++
++    new = lv_mem_alloc(sizeof(*new));
++    if (!new)
++        return NULL;
++    memset(new, 0, sizeof(*new));
++    new->base.w = w;
++    new->base.h = h;
++    new->alpha = 1.0;
++    new->scale.x = 1.0;
++    new->scale.y = 1.0;
++    new->scale.z = 1.0;
++    new->tp.w = w;
++    new->tp.h = h;
++    reset_crop(&new->base);
++    reset_viewport(&new->base);
++    lv_gl_obj_reset_points(new);
++
++    return new;
++}
++
++void lv_gl_obj_del(lv_gl_obj_t *obj)
++{
++    lv_gl_tex_t *tex;
++
++    tex = obj->base.tex;
++    if (tex)
++        tex_unref(tex);
++    lv_mem_free(obj);
++}
++
++void lv_gl_obj_resize(lv_gl_obj_t *obj, lv_gl_obj_t *parent)
++{
++    SDL_Rect r;
++
++    lv_gl_obj_get_viewport(parent, &r);
++
++    obj->scale.x = (float)obj->base.w / r.w;
++    obj->scale.y = (float)obj->base.h / r.h;
++    obj->scale.z = 1.0;
++}
++
++void lv_gl_obj_move(lv_gl_obj_t *obj, lv_gl_obj_t *parent)
++{
++    SDL_Rect r;
++
++    lv_gl_obj_get_viewport(parent, &r);
++
++    obj->move.x = obj->scale.x + ((float)obj->base.r.x / r.w * 2.0 - 1.0);
++    obj->move.y = obj->scale.y + ((float)obj->base.r.y / r.h * 2.0 - 1.0);
++}
++
++void lv_gl_obj_bind_tex(lv_gl_obj_t *obj, lv_gl_tex_t *tex)
++{
++    if (obj->base.tex)
++        tex_unref(obj->base.tex);
++
++    obj->base.tex = tex_ref(tex);
++    lv_gl_obj_reset_tex_points(obj);
++}
++
++void lv_gl_obj_update_vao(lv_gl_obj_t *obj)
++{
++    SDL_GLContext previousContext;
++    SDL_Rect *r;
++    lv_gl_tex_t *tex;
++    lv_gl_base_t *fb = gl_ctx.fb;
++    GLuint swap;
++    int format;
++    GLfloat x1, x2, y1, y2;
++    GLfloat verts[] = {
++        -1.0, -1.0, 0.0, 1.0, 0.0, 1.0,
++         1.0, -1.0, 0.0, 1.0, 1.0, 1.0,
++        -1.0,  1.0, 0.0, 1.0, 0.0, 0.0,
++         1.0,  1.0, 0.0, 1.0, 1.0, 0.0,
++    };
++
++    if (!obj || !obj->base.tex)
++        return;
++    tex = obj->base.tex;
++
++    previousContext = enter_critical();
++
++    if (fb->tex == NULL)
++        format = LV_GL_FMT_RGBA;
++    else
++        format = fb->tex->format;
++
++    if (!obj->VAO)
++    {
++        glGenVertexArrays(1, &obj->VAO);
++        glGenBuffers(1, &obj->VBO);
++    }
++
++    r  = &obj->tp;
++    x1 = (float)r->x / lv_gl_tex_get_w(tex, 0);
++    x2 = (float)(r->x + r->w) / lv_gl_tex_get_w(tex, 0);
++    y1 = (float)r->y / lv_gl_tex_get_h(tex, 0);
++    y2 = (float)(r->y + r->h) / lv_gl_tex_get_h(tex, 0);
++
++    verts[6 * 0 + 4] = x1;
++    verts[6 * 0 + 5] = y2;
++    verts[6 * 1 + 4] = x2;
++    verts[6 * 1 + 5] = y2;
++    verts[6 * 2 + 4] = x1;
++    verts[6 * 2 + 5] = y1;
++    verts[6 * 3 + 4] = x2;
++    verts[6 * 3 + 5] = y1;
++
++    memcpy(&verts[0],  &obj->p[0], sizeof(lv_gl_vec_t));
++    memcpy(&verts[6],  &obj->p[1], sizeof(lv_gl_vec_t));
++    memcpy(&verts[12], &obj->p[2], sizeof(lv_gl_vec_t));
++    memcpy(&verts[18], &obj->p[3], sizeof(lv_gl_vec_t));
++
++    for (int i = 0; i < 4; i++)
++    {
++        for (int j = 0; j < 6; j++)
++        {
++            LOGD("%f ", verts[i * 6 + j]);
++        }
++        LOGD("\n");
++    }
++    LOGD("\n");
++
++    swap = (obj->base.tex->format != format);
++    glUseProgram(gl_ctx.progs[tex->type * 2 + swap]->program);
++    glBindVertexArray(obj->VAO);
++
++    glBindBuffer(GL_ARRAY_BUFFER, obj->VBO);
++    glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_DYNAMIC_DRAW);
++    glEnableVertexAttribArray(gl_pos);
++    glVertexAttribPointer(gl_pos, 4, GL_FLOAT,
++        GL_FALSE, 6 * sizeof(GLfloat), (GLvoid *)0);
++    glEnableVertexAttribArray(gl_tex);
++    glVertexAttribPointer(gl_tex, 2, GL_FLOAT,
++        GL_FALSE, 6 * sizeof(GLfloat),
++        (GLvoid *)(4 * sizeof(GLfloat)));
++
++    glBindVertexArray(0);
++    glUseProgram(0);
++
++    exit_critical(previousContext);
++}
++
++void lv_gl_obj_release_vao(lv_gl_obj_t *obj)
++{
++    SDL_GLContext previousContext;
++
++    if (!obj || !obj->VAO)
++        return;
++
++    previousContext = enter_critical();
++
++    glDeleteVertexArrays(1, &obj->VAO);
++    glDeleteBuffers(1, &obj->VBO);
++    obj->VAO = 0;
++    obj->VBO = 0;
++
++    exit_critical(previousContext);
++}
++
++void lv_gl_obj_reset_points(lv_gl_obj_t *obj)
++{
++    memcpy(obj->p, default_vec, sizeof(default_vec));
++}
++
++void lv_gl_obj_reset_tex_points(lv_gl_obj_t *obj)
++{
++    int w, h;
++
++    if (!obj->base.tex)
++        return;
++
++    w = lv_gl_tex_get_w(obj->base.tex, 0);
++    h = lv_gl_tex_get_h(obj->base.tex, 0);
++
++    obj->tp.x = 0;
++    obj->tp.y = 0;
++    obj->tp.w = w;
++    obj->tp.h = h;
++}
++
++#define load_1f(x, f0) \
++    do {               \
++        LOGD(#x" "#f0"=%f\n", f0); \
++        uniform =      \
++            glGetUniformLocation(program, #x);  \
++        glUniform1f(uniform, f0);               \
++    } while (0);
++#define load_vec3(x, f0, f1, f2) \
++    do {                         \
++        LOGD(#x" "#f0"=%f "#f1"=%f "#f2"=%f\n", f0, f1, f2); \
++        uniform =                \
++            glGetUniformLocation(program, #x);  \
++        glUniform3f(uniform, f0, f1, f2);       \
++    } while (0);
++
++static void render_cube(lv_gl_obj_t *obj, GLuint program)
++{
++    lv_gl_tex_t *tex;
++    GLuint uniform;
++
++    tex = obj->base.tex;
++
++    load_vec3(scale, obj->scale.x, obj->scale.y, obj->scale.z);
++    load_vec3(rot, obj->self_rot.x, obj->self_rot.y, obj->self_rot.z);
++    load_vec3(vrot, obj->view_rot.x, obj->view_rot.y, obj->view_rot.z);
++    load_vec3(move, obj->move.x, obj->move.y, obj->move.z);
++
++    glBindTexture(GL_TEXTURE_CUBE_MAP, tex->gl_tex);
++    glDrawArrays(GL_TRIANGLES, 0, 36);
++    glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
++}
++
++static void render_2d(lv_gl_obj_t *obj, GLuint program)
++{
++    lv_gl_tex_t *tex;
++    GLuint uniform;
++
++    tex = obj->base.tex;
++
++    load_1f(alpha, obj->alpha);
++    load_vec3(offset, obj->offset.x, obj->offset.y, obj->offset.z);
++    load_vec3(scale, obj->scale.x, obj->scale.y, obj->scale.z);
++    load_vec3(rot, obj->self_rot.x, obj->self_rot.y, obj->self_rot.z);
++    load_vec3(vrot, obj->view_rot.x, obj->view_rot.y, obj->view_rot.z);
++    load_vec3(move, obj->move.x, obj->move.y, obj->move.z);
++
++    glBindTexture(GL_TEXTURE_2D, tex->gl_tex);
++    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
++    glBindTexture(GL_TEXTURE_2D, 0);
++
++    glBindVertexArray(0);
++}
++#undef load_vec3
++#undef load_1f
++
++static void reset_crop(lv_gl_base_t *base)
++{
++    base->crop.x = 0;
++    base->crop.y = 0;
++    base->crop.w = base->w;
++    base->crop.h = base->h;
++    base->crop_dirty = 1;
++}
++
++static void reset_viewport(lv_gl_base_t *base)
++{
++    base->view.x = 0;
++    base->view.y = 0;
++    base->view.w = base->w;
++    base->view.h = base->h;
++    base->view_dirty = 1;
++}
++
++static void update_crop_viewport(lv_gl_base_t *base)
++{
++    if (1 || base->crop_dirty)
++    {
++        if (base->crop_en)
++        {
++            glEnable(GL_SCISSOR_TEST);
++            glScissor(base->crop.x, base->crop.y,
++                base->crop.w, base->crop.h);
++        }
++        else
++        {
++            glDisable(GL_SCISSOR_TEST);
++        }
++        base->crop_dirty = 0;
++    }
++
++    if (1 || base->view_dirty)
++    {
++        LOGD("%s %d %d %d %d\n", __func__, base->view.x, base->view.y,
++            base->view.w, base->view.h);
++        glViewport(base->view.x, base->view.y,
++            base->view.w, base->view.h);
++        base->view_dirty = 0;
++    }
++}
++
++static void render(lv_gl_obj_t *obj)
++{
++    lv_gl_tex_t *tex;
++    lv_gl_base_t *fb;
++    lv_gl_prog_t *prog;
++    GLuint swap;
++    GLenum status;
++    int format;
++
++    if (!obj || !obj->base.tex)
++        return;
++    tex = obj->base.tex;
++
++    fb = gl_ctx.fb;
++    if (fb->tex == NULL)
++    {
++        format = LV_GL_FMT_RGBA;
++        glBindFramebuffer(GL_FRAMEBUFFER, 0);
++    }
++    else
++    {
++        format = fb->tex->format;
++        glBindFramebuffer(GL_FRAMEBUFFER, fb->tex->FBO);
++        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
++            obj->out_type ? obj->out_type : GL_TEXTURE_2D,
++            fb->tex->gl_tex, 0);
++        status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
++        if (status != GL_FRAMEBUFFER_COMPLETE) {
++            printf("bind framebuffer error\n");
++            return;
++        }
++    }
++    update_crop_viewport(fb);
++
++    swap = (obj->base.tex->format != format);
++    prog = gl_ctx.progs[tex->type * 2 + swap];
++
++    glUseProgram(prog->program);
++
++    if (obj->VAO)
++    {
++        LOGD("Use obj->VAO\n");
++        glBindVertexArray(obj->VAO);
++    }
++    else
++    {
++        LOGD("Use prog->VAO\n");
++        glBindVertexArray(prog->VAO);
++    }
++
++    if (gl_ctx.clear_depth)
++    {
++        glEnable(GL_DEPTH_TEST);
++        glClearDepthf(0.0);
++        glDepthFunc(GL_GREATER);
++        glClear(GL_DEPTH_BUFFER_BIT);
++        gl_ctx.clear_depth = 0;
++    }
++
++    if (tex->type == GL_TEX_TYPE_2D)
++        render_2d(obj, prog->program);
++    else
++        render_cube(obj, prog->program);
++
++    glBindVertexArray(0);
++}
++
++void lv_gl_obj_render(lv_gl_obj_t *obj)
++{
++    SDL_GLContext previousContext;
++    previousContext = enter_critical();
++    render(obj);
++    exit_critical(previousContext);
++}
++
++void lv_gl_obj_set_viewport(lv_gl_obj_t *obj, SDL_Rect *r)
++{
++    lv_gl_base_t *base;
++
++    if (!obj)
++    {
++        if (!gl_ctx.inited) {
++            printf("call lv_gl_ctx_init first\n");
++            return;
++        }
++        base = &gl_ctx.base;
++    }
++    else
++    {
++        base = &obj->base;
++    }
++
++    if (r)
++    {
++        base->view.x = r->x;
++        base->view.y = r->y;
++        base->view.w = r->w;
++        base->view.h = r->h;
++    }
++    else
++    {
++        reset_viewport(base);
++    }
++    base->view_dirty = 1;
++}
++
++void lv_gl_obj_get_viewport(lv_gl_obj_t *obj, SDL_Rect *r)
++{
++    lv_gl_base_t *base;
++
++    if (!obj)
++    {
++        if (!gl_ctx.inited) {
++            printf("call lv_gl_ctx_init first\n");
++            return;
++        }
++        base = &gl_ctx.base;
++    }
++    else
++    {
++        base = &obj->base;
++    }
++
++    if (r)
++    {
++        r->x = base->view.x;
++        r->y = base->view.y;
++        r->w = base->view.w;
++        r->h = base->view.h;
++    }
++}
++
++void lv_gl_obj_set_crop(lv_gl_obj_t *obj, SDL_Rect *r, int en)
++{
++    lv_gl_base_t *base;
++
++    if (!obj)
++    {
++        if (!gl_ctx.inited) {
++            printf("call lv_gl_ctx_init first\n");
++            return;
++        }
++        base = &gl_ctx.base;
++    }
++    else
++    {
++        base = &obj->base;
++    }
++
++    if (r)
++    {
++        base->crop.x = r->x;
++        base->crop.y = r->y;
++        base->crop.w = r->w;
++        base->crop.h = r->h;
++    }
++    else
++    {
++        reset_crop(base);
++    }
++    base->crop_en = en;
++    base->crop_dirty = 1;
++}
++
++void lv_gl_obj_get_crop(lv_gl_obj_t *obj, SDL_Rect *r)
++{
++    lv_gl_base_t *base;
++
++    if (!obj)
++    {
++        if (!gl_ctx.inited) {
++            printf("call lv_gl_ctx_init first\n");
++            return;
++        }
++        base = &gl_ctx.base;
++    }
++    else
++    {
++        base = &obj->base;
++    }
++
++    if (r)
++    {
++        r->x = base->crop.x;
++        r->y = base->crop.y;
++        r->w = base->crop.w;
++        r->h = base->crop.h;
++    }
++}
++
++void lv_gl_render(void)
++{
++    glEnable(GL_MULTISAMPLE);
++    glEnable(GL_BLEND);
++    glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA,
++        GL_ZERO, GL_ONE);
++    glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
++
++    gl_ctx.clear_depth = 1;
++    if (user_cb)
++        user_cb();
++    glFinish();
++}
++#endif
++
+diff --git a/sdl/gl/gl.h b/sdl/gl/gl.h
+new file mode 100644
+index 00000000..6f054e37
+--- /dev/null
++++ b/sdl/gl/gl.h
+@@ -0,0 +1,161 @@
++#ifndef __GL_H__
++#define __GL_H__
++
++#include <lvgl/lvgl.h>
++#include <SDL2/SDL.h>
++#include <SDL2/SDL_opengl.h>
++#include <SDL2/SDL_opengles2.h>
++
++enum {
++    LV_GL_FMT_ALPHA,
++    LV_GL_FMT_LUMINANCE,
++    LV_GL_FMT_LUMINANCE_ALPHA,
++    LV_GL_FMT_INTENSITY,
++    LV_GL_FMT_RGB,
++    LV_GL_FMT_RGBA,
++    LV_GL_FMT_BGRA,
++};
++
++enum {
++    GL_TEX_TYPE_2D,
++    GL_TEX_TYPE_CUBE,
++};
++
++enum {
++    CUBE_LEFT,
++    CUBE_RIGHT,
++    CUBE_TOP,
++    CUBE_BOTTOM,
++    CUBE_FRONT,
++    CUBE_BACK,
++};
++
++typedef void (*lv_gl_render_cb_t)(void);
++
++typedef struct {
++    const void *pixels;
++    int format;
++    int w;
++    int h;
++} lv_gl_img_t;
++
++typedef struct {
++    int w;
++    int h;
++} lv_gl_size_t;
++
++typedef struct {
++    GLuint gl_tex;
++    GLuint FBO;
++    lv_gl_size_t size[6];
++    int format;
++    int type;
++    int ref_cnt;
++} lv_gl_tex_t;
++
++typedef struct {
++    float x, y, z;
++} lv_gl_vec_t;
++
++typedef struct {
++    int w;
++    int h;
++    int reverse_y;
++    lv_gl_tex_t *tex;
++    SDL_Rect r;
++    SDL_Rect view;
++    SDL_Rect crop;
++    int view_dirty;
++    int crop_dirty;
++    int crop_en;
++} lv_gl_base_t;
++
++typedef struct {
++    lv_gl_base_t base;
++    GLuint VAO;
++    GLuint VBO;
++    int out_type;
++    lv_gl_vec_t p[4];
++    SDL_Rect tp;
++
++    float alpha;
++    lv_gl_vec_t scale;
++    lv_gl_vec_t offset;
++    lv_gl_vec_t self_rot;
++    lv_gl_vec_t view_rot;
++    lv_gl_vec_t move;
++    int steps;
++    int pos;
++} lv_gl_obj_t;
++
++static inline int lv_gl_tex_get_w(lv_gl_tex_t *tex, int index)
++{
++    if (tex->type == GL_TEX_TYPE_2D)
++        return tex->size[0].w;
++
++    if (index > CUBE_BACK || index < 0)
++        return 0;
++
++    return tex->size[index].w;
++}
++
++static inline int lv_gl_tex_get_h(lv_gl_tex_t *tex, int index)
++{
++    if (tex->type == GL_TEX_TYPE_2D)
++        return tex->size[0].w;
++
++    if (index > CUBE_BACK || index < 0)
++        return 0;
++
++    return tex->size[index].w;
++}
++
++static inline void lv_gl_obj_set_angle(lv_gl_obj_t *obj,
++    float x, float y, float z)
++{
++    obj->self_rot.x = x;
++    obj->self_rot.y = y;
++    obj->self_rot.z = z;
++}
++
++static inline void lv_gl_obj_set_view_angle(lv_gl_obj_t *obj,
++    float x, float y, float z)
++{
++    obj->view_rot.x = x;
++    obj->view_rot.y = y;
++    obj->view_rot.z = z;
++}
++
++/* Called by sdl_gpu.c */
++int lv_gl_ctx_init(void);
++void lv_gl_render(void);
++
++/* Called by application */
++void lv_gl_set_render_cb(lv_gl_render_cb_t cb);
++void lv_gl_set_fb(lv_gl_obj_t *obj);
++void lv_gl_read_pixels(void *ptr, SDL_Rect *r, int type);
++
++lv_gl_tex_t *lv_gl_tex_create(int type, int w, int h, lv_gl_img_t *img);
++void lv_gl_tex_del(lv_gl_tex_t *tex);
++void lv_gl_tex_import_img(lv_gl_tex_t *tex, lv_gl_img_t *img);
++void lv_gl_tex_clear(lv_gl_tex_t *tex, float r, float g, float b, float a);
++
++lv_gl_obj_t *lv_gl_obj_create(int w, int h);
++void lv_gl_obj_del(lv_gl_obj_t *obj);
++void lv_gl_obj_resize(lv_gl_obj_t *obj, lv_gl_obj_t *parent);
++void lv_gl_obj_move(lv_gl_obj_t *obj, lv_gl_obj_t *parent);
++void lv_gl_obj_reset_points(lv_gl_obj_t *obj);
++void lv_gl_obj_reset_tex_points(lv_gl_obj_t *obj);
++void lv_gl_obj_update_vao(lv_gl_obj_t *obj);
++void lv_gl_obj_release_vao(lv_gl_obj_t *obj);
++void lv_gl_obj_bind_tex(lv_gl_obj_t *obj, lv_gl_tex_t *tex);
++void lv_gl_obj_set_crop(lv_gl_obj_t *obj, SDL_Rect *r, int en);
++void lv_gl_obj_get_crop(lv_gl_obj_t *obj, SDL_Rect *r);
++void lv_gl_obj_set_viewport(lv_gl_obj_t *obj, SDL_Rect *r);
++void lv_gl_obj_get_viewport(lv_gl_obj_t *obj, SDL_Rect *r);
++
++/* Must called in render cb */
++void lv_gl_obj_render(lv_gl_obj_t *obj);
++
++#endif
++
+diff --git a/sdl/gl/mat.c b/sdl/gl/mat.c
+new file mode 100644
+index 00000000..97282588
+--- /dev/null
++++ b/sdl/gl/mat.c
+@@ -0,0 +1,369 @@
++#include <stdio.h>
++#include <stdlib.h>
++#include <math.h>
++#include <string.h>
++
++#include "mat.h"
++
++#define PI   3.14159265358979f
++
++#define radToDeg(x) ((x) * 180.f / PI)
++#define degToRad(x) ((x) * PI / 180.f)
++
++void mat_multiply_to(float *c, float *a, float *b)
++{
++    float x, y, z, w;
++    for (int i = 0; i < 4; i++)
++    {
++        x = a[0];
++        y = a[1];
++        z = a[2];
++        w = a[3];
++        c[0] = x * b[0] + y * b[1] + z * b[2] + w * b[3];
++        c[1] = x * b[4] + y * b[5] + z * b[6] + w * b[7];
++        c[2] = x * b[8] + y * b[9] + z * b[10] + w * b[11];
++        c[3] = x * b[12] + y * b[13] + z * b[14] + w * b[15];
++        c += 4;
++        a += 4;
++    }
++}
++
++void mat_multiply(float *dst, float *src)
++{
++    float x, y, z, w;
++    for (int i = 0; i < 4; i++)
++    {
++        x = dst[0];
++        y = dst[1];
++        z = dst[2];
++        w = dst[3];
++        dst[0] = x * src[0] + y * src[1]
++            + z * src[2] + w * src[3];
++        dst[1] = x * src[4] + y * src[5]
++            + z * src[6] + w * src[7];
++        dst[2] = x * src[8] + y * src[9]
++            + z * src[10] + w * src[11];
++        dst[3] = x * src[12] + y * src[13]
++            + z * src[14] + w * src[15];
++        dst += 4;
++    }
++}
++
++void move_xyz(float *m, float x, float y, float z)
++{
++    m[0] = 1.0f;
++    m[1] = 0.0f;
++    m[2] = 0.0f;
++    m[3] = x;
++
++    m[4] = 0.0f;
++    m[5] = 1.0f;
++    m[6] = 0.0f;
++    m[7] = y;
++
++    m[8] = 0.0f;
++    m[9] = 0.0f;
++    m[10] = 1.0f;
++    m[11] = z;
++
++    m[12] = 0.0f;
++    m[13] = 0.0f;
++    m[14] = 0.0f;
++    m[15] = 1.0f;
++}
++
++void scale_xyz(float *m, float x, float y, float z)
++{
++    m[0] = x;
++    m[1] = 0.0f;
++    m[2] = 0.0f;
++    m[3] = 0.0f;
++
++    m[4] = 0.0f;
++    m[5] = y;
++    m[6] = 0.0f;
++    m[7] = 0.0f;
++
++    m[8] = 0.0f;
++    m[9] = 0.0f;
++    m[10] = z;
++    m[11] = 0.0f;
++
++    m[12] = 0.0f;
++    m[13] = 0.0f;
++    m[14] = 0.0f;
++    m[15] = 1.0f;
++}
++
++void rotate(float *m, float x, float y, float z)
++{
++    float rad;
++    float sinx, cosx;
++    float siny, cosy;
++    float sinz, cosz;
++
++    rad = degToRad(x);
++    sinx = sin(x);
++    cosx = cos(x);
++    rad = degToRad(y);
++    siny = sin(y);
++    cosy = cos(y);
++    rad = degToRad(z);
++    sinz = sin(z);
++    cosz = cos(z);
++
++    m[0] = cosz * cosy;
++    m[1] = -sinz * cosy;
++    m[2] = -siny;
++    m[3] = 0.0f;
++
++    m[4] = sinz * cosx - cosz * siny * sinx;
++    m[5] = cosz * cosy + sinz * siny * sinx;
++    m[6] = -sinx * cosy;
++    m[7] = 0.0f;
++
++    m[8] = cosz * siny * cosx + sinz * sinx;
++    m[9] = cosz * sinx - sinz * siny * cosx;
++    m[10] = cosy * cosx;
++    m[11] = 0.0f;
++
++    m[12] = 0.0f;
++    m[13] = 0.0f;
++    m[14] = 0.0f;
++    m[15] = 1.0f;
++}
++
++void rotate_x(float *m, float degree)
++{
++    float rad = degToRad(degree);
++
++    m[0] = 1.0f;
++    m[1] = 0.0f;
++    m[2] = 0.0f;
++    m[3] = 0.0f;
++
++    m[4] = 0.0f;
++    m[5] = cos(rad);
++    m[6] = -sin(rad);
++    m[7] = 0.0f;
++
++    m[8] = 0.0f;
++    m[9] = sin(rad);
++    m[10] = cos(rad);
++    m[11] = 0.0f;
++
++    m[12] = 0.0f;
++    m[13] = 0.0f;
++    m[14] = 0.0f;
++    m[15] = 1.0f;
++}
++
++void rotate_y(float *m, float degree)
++{
++    float rad = degToRad(degree);
++
++    m[0] = cos(rad);
++    m[1] = 0.0f;
++    m[2] = -sin(rad);
++    m[3] = 0.0f;
++
++    m[4] = 0.0f;
++    m[5] = 1.0f;
++    m[6] = 0.0f;
++    m[7] = 0.0f;
++
++    m[8] = sin(rad);
++    m[9] = 0.0f;
++    m[10] = cos(rad);
++    m[11] = 0.0f;
++
++    m[12] = 0.0f;
++    m[13] = 0.0f;
++    m[14] = 0.0f;
++    m[15] = 1.0f;
++}
++
++void rotate_z(float *m, float degree)
++{
++    float rad = degToRad(degree);
++
++    m[0] = cos(rad);
++    m[1] = -sin(rad);
++    m[2] = 0.0f;
++    m[3] = 0.0f;
++
++    m[4] = sin(rad);
++    m[5] = cos(rad);
++    m[6] = 0.0f;
++    m[7] = 0.0f;
++
++    m[8] = 0.0f;
++    m[9] = 0.0f;
++    m[10] = 1.0f;
++    m[11] = 0.0f;
++
++    m[12] = 0.0f;
++    m[13] = 0.0f;
++    m[14] = 0.0f;
++    m[15] = 1.0f;
++}
++
++void frustumM(float *m,
++              int w, int h,
++              int near, int far)
++{
++    float r_width  = 1.0f / w;
++    float r_height = 1.0f / h;
++    float r_depth  = 1.0f / (near - far);
++    float x = 2.0f * (near * r_width);
++    float y = 2.0f * (near * r_height);
++    float A = w * r_width;
++    float B = h * r_height;
++    float C = (far + near) * r_depth;
++    float D = 2.0f * (far * near * r_depth);
++    m[0] = x;
++    m[5] = y;
++    m[8] = A;
++    m[ 9] = B;
++    m[10] = C;
++    m[14] = D;
++    m[11] = -1.0f;
++    m[ 1] = 0.0f;
++    m[ 2] = 0.0f;
++    m[ 3] = 0.0f;
++    m[ 4] = 0.0f;
++    m[ 6] = 0.0f;
++    m[ 7] = 0.0f;
++    m[12] = 0.0f;
++    m[13] = 0.0f;
++    m[15] = 0.0f;
++}
++
++void perspectiveM(float *m, float fovy,
++                  float aspect, float zNear, float zFar)
++{
++    float f;
++    float _tan = (float) tan(fovy * (1 * PI / 360.0));
++    float rangeReciprocal = 1.0f / (zNear - zFar);
++
++    if (_tan == 0.0)
++        f = 1.0f;
++    else
++        f = 1.0f / _tan;
++
++    m[0] = f / aspect;
++    m[1] = 0.0f;
++    m[2] = 0.0f;
++    m[3] = 0.0f;
++
++    m[4] = 0.0f;
++    m[5] = f;
++    m[6] = 0.0f;
++    m[7] = 0.0f;
++
++    m[8] = 0.0f;
++    m[9] = 0.0f;
++    m[10] = (zFar + zNear) * rangeReciprocal;
++    m[11] = 2.0f * zFar * zNear * rangeReciprocal;
++
++    m[12] = 0.0f;
++    m[13] = 0.0f;
++    m[14] = -1.0f;
++    m[15] = 1.0f;  // HACK, w should not be 0.0f
++}
++
++void RA4(float *m, float u, float v, float w, float degree)
++{
++    float rad = degToRad(degree);
++    float _cos = cos(rad);
++    float _sin = sin(rad);
++    float u2 = u * u;
++    float v2 = v * v;
++    float w2 = w * w;
++    float uv = u * v;
++    float uw = v * w;
++    float vw = v * w;
++
++    m[0] = u2 + (1 - u2) * _cos;
++    m[1] = uv * (1 - _cos) - w * _sin;
++    m[2] = uw * (1 - _cos) + v * _sin;
++    m[3] = 0.0f;
++
++    m[4] = uv * (1 - _cos) + w * _sin;
++    m[5] = v2 + (1 - v2) * _cos;
++    m[6] = vw * (1 - _cos) - u * _sin;
++    m[7] = 0.0f;
++
++    m[8] = uw * (1 - _cos) - v * _sin;
++    m[9] = vw * (1 - _cos) + u * _sin;
++    m[10] = w2 + (1 - w2) * _cos;
++    m[11] = 0.0f;
++
++    m[12] = 0.0f;
++    m[13] = 0.0f;
++    m[14] = 0.0f;
++    m[15] = 1.0f;
++}
++
++void mat_test(float *m, float x, float y, float z,
++    float degree)
++{
++    float rad = degToRad(degree);
++    float A, B, C, L, V;
++
++    A = x;
++    B = y;
++    C = z;
++
++    L = sqrt(A * A + B * B + C * C);
++    V = sqrt(B * B + C * C);
++
++    float Mrx[16] = {
++        1.0, 0.0,  0.0, 0.0,
++        0.0, C/V, -B/V, 0.0,
++        0.0, B/V,  C/V, 0.0,
++        0.0, 0.0,  0.0, 1.0,
++    };
++    float Mry[16] = {
++        V/L, 0.0, -A/L, 0.0,
++        0.0, 1.0,  0.0, 0.0,
++        A/L, 0.0,  V/L, 0.0,
++        0.0, 0.0,  0.0, 1.0,
++    };
++    float Mrz[16] = {
++        cos(rad), -sin(rad), 0.0, 0.0,
++        sin(rad),  cos(rad), 0.0, 0.0,
++        0.0,       0.0,      1.0, 0.0,
++        0.0,       0.0,      0.0, 1.0,
++    };
++    float Mrry[16] = {
++         V/L, 0.0, A/L, 0.0,
++         0.0, 1.0, 0.0, 0.0,
++        -A/L, 0.0, V/L, 0.0,
++         0.0, 0.0, 0.0, 1.0,
++    };
++    float Mrrx[16] = {
++        1.0,  0.0, 0.0, 0.0,
++        0.0,  C/V, B/V, 0.0,
++        0.0, -B/V, C/V, 0.0,
++        0.0,  0.0, 0.0, 1.0,
++    };
++    memcpy(m, Mrx, sizeof(Mrx));
++    mat_multiply(m, Mry);
++    mat_multiply(m, Mrz);
++    mat_multiply(m, Mrry);
++    mat_multiply(m, Mrrx);
++}
++
++void init_mat(float *m)
++{
++    static const float mat[] = {
++        1.0f, 0.0f, 0.0f, 0.0f,
++        0.0f, 1.0f, 0.0f, 0.0f,
++        0.0f, 0.0f, 1.0f, 0.0f,
++        0.0f, 0.0f, 0.0f, 1.0f
++    };
++
++    memcpy(m, &mat, sizeof(mat));
++}
++
+diff --git a/sdl/gl/mat.h b/sdl/gl/mat.h
+new file mode 100644
+index 00000000..0e6405ea
+--- /dev/null
++++ b/sdl/gl/mat.h
+@@ -0,0 +1,23 @@
++#ifndef __MAT_H__
++#define __MAT_H__
++
++void init_mat(float *m);
++void mat_multiply_to(float *c, float *a, float *b);
++void mat_multiply(float *dst, float *src);
++void move_xyz(float *m, float x, float y, float z);
++void scale_xyz(float *m, float x, float y, float z);
++void rotate_x(float *m, float degree);
++void rotate_y(float *m, float degree);
++void rotate_z(float *m, float degree);
++void frustumM(float *m,
++              int w, int h,
++              int near, int far);
++void perspectiveM(float *m, float fovy,
++                  float aspect, float zNear, float zFar);
++void RA4(float *m, float u, float v, float w, float degree);
++void mat_test(float *m, float x, float y, float z,
++    float degree);
++void rotate(float *m, float x, float y, float z);
++
++#endif
++
+diff --git a/sdl/gl/shaders.c b/sdl/gl/shaders.c
+new file mode 100644
+index 00000000..e7aef8a1
+--- /dev/null
++++ b/sdl/gl/shaders.c
+@@ -0,0 +1,106 @@
++static const char *_vert =
++    "#version 300 es\n"
++    "in vec4 pos;\n"
++    "in vec2 tex;\n"
++    "uniform mat4 view;\n"
++    "uniform mat4 scale;\n"
++    "uniform mat4 move;\n"
++    "uniform mat4 perspective;\n"
++    "out vec2 v_tex;\n"
++    "void main() {\n"
++    "  gl_Position = pos * scale * view * move;\n"
++    "  v_tex = tex;\n"
++    "}\n";
++
++static const char *_vert_cube =
++    "#version 300 es\n"
++    "in vec4 pos;\n"
++    "in vec3 tex;\n"
++    "uniform mat4 view;\n"
++    "uniform mat4 scale;\n"
++    "uniform mat4 move;\n"
++    "uniform mat4 perspective;\n"
++    "out vec3 v_tex;\n"
++    "void main() {\n"
++    "  gl_Position = pos * scale * view * move;\n"
++    "  v_tex = vec3(-pos.x, pos.y, pos.z);\n"
++    "}\n";
++#if 0
++	"attribute vec4 pos;\n"
++    "attribute vec2 tex;\n"
++    "varying vec2 v_tex;\n"
++    "void main() {\n"
++    "  gl_Position = pos;\n"
++    "  v_tex = tex;\n"
++    "}\n";
++#endif
++static const char *_vert_fold =
++    "#version 300 es\n"
++    "in vec4 pos;\n"
++    "in vec2 tex;\n"
++    "uniform mat4 rotate;\n"
++    "uniform mat4 scale;\n"
++    "uniform mat4 move;\n"
++    "uniform mat4 offset;\n"
++    "uniform mat4 t_move;\n"
++    "uniform mat4 view;\n"
++    "out vec2 v_tex;\n"
++    "void main() {\n"
++    "  gl_Position = pos * scale * offset * rotate * move * view;\n"
++    "  vec4 _tex = vec4(tex, 1.0, 1.0) * scale * t_move;"
++    "  v_tex = _tex.xy;\n"
++    "}\n";
++
++static const char *_frag_rgba =
++    "#version 300 es\n"
++    "precision mediump float;\n"
++    "in vec2 v_tex;\n"
++    "out vec4 color;\n"
++    "uniform sampler2D tex_in;\n"
++    "void main() {\n"
++    "  vec2 tex_fix = vec2(v_tex.x, 1.0 - v_tex.y);\n"
++    "  vec4 rgba = texture2D(tex_in, tex_fix);\n"
++    "  color = rgba;\n"
++    "}\n";
++static const char *_frag_bgra =
++    "#version 300 es\n"
++    "precision mediump float;\n"
++    "in vec2 v_tex;\n"
++    "out vec4 color;\n"
++    "uniform sampler2D tex_in;\n"
++    "void main() {\n"
++    "  vec2 tex_fix = vec2(v_tex.x, 1.0 - v_tex.y);\n"
++    "  vec4 rgba = texture2D(tex_in, v_tex);\n"
++    "  color = rgba.bgra;\n"
++    "}\n";
++static const char *_frag_rgba_cube =
++    "#version 300 es\n"
++    "precision mediump float;\n"
++    "in vec3 v_tex;\n"
++    "out vec4 color;\n"
++    "uniform samplerCube tex_in;\n"
++    "void main() {\n"
++    "  vec4 rgba = texture(tex_in, v_tex);\n"
++    "  color = rgba;\n"
++    "}\n";
++static const char *_frag_bgra_cube =
++    "#version 300 es\n"
++    "precision mediump float;\n"
++    "in vec3 v_tex;\n"
++    "out vec4 color;\n"
++    "uniform samplerCube tex_in;\n"
++    "void main() {\n"
++    "  vec4 rgba = texture(tex_in, v_tex);\n"
++    "  color = rgba.bgra;\n"
++    "}\n";
++#if 0
++    "precision mediump float;\n"
++    "varying vec2 v_tex;\n"
++    "uniform sampler2D ourTexture;\n"
++    "void main() {\n"
++    "  vec4 rgba = texture2D(ourTexture, v_tex);\n"
++    "  gl_FragColor = rgba;\n"
++    "  gl_FragColor.r = rgba.b;\n"
++    "  gl_FragColor.b = rgba.r;\n"
++    "}\n";
++#endif
+diff --git a/sdl/gl/shaders/bgra.frag b/sdl/gl/shaders/bgra.frag
+new file mode 100644
+index 00000000..0934f8cf
+--- /dev/null
++++ b/sdl/gl/shaders/bgra.frag
+@@ -0,0 +1,12 @@
++#version 300 es
++precision mediump float;
++in float v_alpha;
++in vec2 v_tex;
++out vec4 color;
++uniform sampler2D tex_in;
++void main() {
++  vec4 rgba = texture(tex_in, v_tex);
++  color = rgba.bgra;
++  color.a = rgba.a * v_alpha;
++}
++
+diff --git a/sdl/gl/shaders/bgra_cube.frag b/sdl/gl/shaders/bgra_cube.frag
+new file mode 100644
+index 00000000..5cdaf08b
+--- /dev/null
++++ b/sdl/gl/shaders/bgra_cube.frag
+@@ -0,0 +1,10 @@
++#version 300 es
++precision mediump float;
++in vec3 v_tex;
++out vec4 color;
++uniform samplerCube tex_in;
++void main() {
++  vec4 rgba = texture(tex_in, v_tex);
++  color = rgba.bgra;
++}
++
+diff --git a/sdl/gl/shaders/common.vert b/sdl/gl/shaders/common.vert
+new file mode 100644
+index 00000000..b436c6bf
+--- /dev/null
++++ b/sdl/gl/shaders/common.vert
+@@ -0,0 +1,54 @@
++#version 300 es
++const
++float glPI = 3.14159265358979;
++
++/* The simplest way to make z affect w */
++const
++mat4 perspective = mat4(1.0, 0.0,  0.0, 0.0,
++                        0.0, 1.0,  0.0, 0.0,
++                        0.0, 0.0,  1.0, 0.0,
++                        0.0, 0.0, -1.0, 1.0);
++
++mat4 rotatex(float deg)
++{
++    float rad = deg * glPI / 180.f;
++    return mat4(1.0, 0.0, 0.0, 0.0,
++                0.0, cos(rad), -sin(rad), 0.0,
++                0.0, sin(rad),  cos(rad), 0.0,
++                0.0, 0.0,  0.0, 1.0);
++}
++
++mat4 rotatey(float deg)
++{
++    float rad = deg * glPI / 180.f;
++    return mat4(cos(rad), 0.0, -sin(rad), 0.0,
++                0.0, 1.0, 0.0,  0.0,
++                sin(rad), 0.0,  cos(rad), 0.0,
++                0.0, 0.0, 0.0,  1.0);
++}
++
++mat4 rotatez(float deg)
++{
++    float rad = deg * glPI / 180.f;
++    return mat4(cos(rad), -sin(rad), 0.0, 0.0,
++                sin(rad),  cos(rad), 0.0, 0.0,
++                0.0, 0.0,  1.0, 0.0,
++                0.0, 0.0,  0.0, 1.0);
++}
++
++mat4 move_xyz(vec3 m)
++{
++    return mat4(1.0, 0.0, 0.0, m.x,
++                0.0, 1.0, 0.0, m.y,
++                0.0, 0.0, 1.0, m.z,
++                0.0, 0.0, 0.0, 1.0);
++}
++
++mat4 scale_xyz(vec3 s)
++{
++    return mat4(s.x, 0.0, 0.0, 0.0,
++                0.0, s.y, 0.0, 0.0,
++                0.0, 0.0, s.z, 0.0,
++                0.0, 0.0, 0.0, 1.0);
++}
++
+diff --git a/sdl/gl/shaders/cube.vert b/sdl/gl/shaders/cube.vert
+new file mode 100644
+index 00000000..8ceb9975
+--- /dev/null
++++ b/sdl/gl/shaders/cube.vert
+@@ -0,0 +1,17 @@
++in vec4 pos;
++in vec3 tex;
++uniform vec3 rot;
++uniform vec3 vrot;
++uniform vec3 scale;
++uniform vec3 move;
++out vec3 v_tex;
++
++void main() {
++  mat4 rotate = rotatex(rot.x) * rotatey(rot.y)
++    * rotatez(rot.z);
++  mat4 view = rotatex(vrot.x) * rotatey(vrot.y)
++    * rotatez(vrot.z);
++  gl_Position = pos * scale_xyz(scale) * rotate
++    * view * move_xyz(move);
++  v_tex = vec3(pos.x, pos.y, pos.z);
++}
+diff --git a/sdl/gl/shaders/default.vert b/sdl/gl/shaders/default.vert
+new file mode 100644
+index 00000000..79f9b861
+--- /dev/null
++++ b/sdl/gl/shaders/default.vert
+@@ -0,0 +1,22 @@
++in vec4 pos;
++in vec2 tex;
++uniform vec3 offset;
++uniform vec3 rot;
++uniform vec3 vrot;
++uniform vec3 scale;
++uniform vec3 move;
++uniform float alpha;
++out vec2 v_tex;
++out float v_alpha;
++
++void main() {
++  mat4 rotate = rotatex(rot.x) * rotatey(rot.y)
++    * rotatez(rot.z);
++  mat4 view = rotatex(vrot.x) * rotatey(vrot.y)
++    * rotatez(vrot.z);
++  gl_Position = pos * move_xyz(offset) * scale_xyz(scale)
++    * rotate * view * perspective * move_xyz(move);
++  v_tex = tex;
++  v_alpha = alpha;
++}
++
+diff --git a/sdl/gl/shaders/fold.vert b/sdl/gl/shaders/fold.vert
+new file mode 100644
+index 00000000..860eabb2
+--- /dev/null
++++ b/sdl/gl/shaders/fold.vert
+@@ -0,0 +1,21 @@
++in vec4 pos;
++in vec2 tex;
++uniform vec3 scale;
++uniform vec3 offset;
++uniform vec3 rot;
++uniform vec3 move;
++uniform vec3 t_scale;
++uniform vec3 t_move;
++uniform float alpha;
++out vec2 v_tex;
++out float v_alpha;
++void main() {
++  mat4 rotate = rotatey(rot.y);
++  gl_Position = pos * move_xyz(offset)
++    * scale_xyz(scale) * rotate * move_xyz(move);
++  vec4 _tex = vec4(tex, 1.0, 1.0) * scale_xyz(t_scale)
++    * move_xyz(t_move);
++  v_tex = _tex.xy;
++  v_alpha = alpha;
++}
++
+diff --git a/sdl/gl/shaders/rgba.frag b/sdl/gl/shaders/rgba.frag
+new file mode 100644
+index 00000000..a40a5476
+--- /dev/null
++++ b/sdl/gl/shaders/rgba.frag
+@@ -0,0 +1,12 @@
++#version 300 es
++precision mediump float;
++in float v_alpha;
++in vec2 v_tex;
++out vec4 color;
++uniform sampler2D tex_in;
++void main() {
++  vec2 tex_fix = vec2(v_tex.x, 1.0 - v_tex.y);
++  vec4 rgba = texture(tex_in, tex_fix);
++  color = rgba;
++  color.a = rgba.a * v_alpha;
++}
+diff --git a/sdl/gl/shaders/rgba_cube.frag b/sdl/gl/shaders/rgba_cube.frag
+new file mode 100644
+index 00000000..5e68893c
+--- /dev/null
++++ b/sdl/gl/shaders/rgba_cube.frag
+@@ -0,0 +1,10 @@
++#version 300 es
++precision mediump float;
++in vec3 v_tex;
++out vec4 color;
++uniform samplerCube tex_in;
++void main() {
++  vec4 rgba = texture(tex_in, v_tex);
++  color = rgba;
++}
++
+diff --git a/sdl/sdl_gpu.c b/sdl/sdl_gpu.c
+index 4ced2a48..cccb621a 100644
+--- a/sdl/sdl_gpu.c
++++ b/sdl/sdl_gpu.c
+@@ -35,6 +35,8 @@
+ #include <lvgl/src/draw/sdl/lv_draw_sdl.h>
+ #include SDL_INCLUDE_PATH
+ 
++#include "gl/gl.h"
++
+ /*********************
+  *      DEFINES
+  *********************/
+@@ -53,6 +55,9 @@ typedef struct {
+     lv_coord_t d_ver_res;
+     SDL_Window * window;
+     SDL_Texture * texture;
++#if USE_SDL_OPENGL
++    SDL_GLContext context;
++#endif
+     int rotated;
+ }monitor_t;
+ 
+@@ -279,6 +284,9 @@ static void monitor_sdl_clean_up(void)
+ 
+ static void window_create(monitor_t * m)
+ {
++#if USE_SDL_OPENGL
++    SDL_GLContext previousContext;
++#endif
+ //    SDL_SetHint( SDL_HINT_RENDER_SCALE_QUALITY, "1");
+     SDL_Rect rect;
+ 
+@@ -300,21 +308,36 @@ static void window_create(monitor_t * m)
+     m->window = SDL_CreateWindow("TFT Simulator",
+                               SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+                               m->hor_res * SDL_ZOOM, m->ver_res * SDL_ZOOM,
+-                              SDL_WINDOW_FULLSCREEN);
++#ifndef SDL_DIS_FULLSCREEN
++                              SDL_WINDOW_FULLSCREEN |
++#endif
++                              SDL_WINDOW_OPENGL);
+ 
+     m->drv_param.renderer = SDL_CreateRenderer(m->window, -1, SDL_RENDERER_ACCELERATED);
+ 
+     m->texture = lv_draw_sdl_create_screen_texture(m->drv_param.renderer, m->d_hor_res, m->d_ver_res);
+     /* For first frame */
+     SDL_SetRenderTarget(m->drv_param.renderer, m->texture);
++
++#if USE_SDL_OPENGL
++    previousContext = SDL_GL_GetCurrentContext();
++    m->context = SDL_GL_CreateContext(m->window);
++    SDL_GL_MakeCurrent(m->window, m->context);
++    lv_gl_ctx_init();
++    SDL_GL_MakeCurrent(m->window, previousContext);
++#endif
+ }
+ 
+ static void window_update(lv_disp_drv_t *disp_drv, void * buf)
+ {
++#if USE_SDL_OPENGL
++    SDL_GLContext previousContext;
++#endif
+     SDL_Renderer *renderer = ((lv_draw_sdl_drv_param_t *) disp_drv->user_data)->renderer;
+     monitor_t *m = (monitor_t *)disp_drv->user_data;
+     SDL_Texture *texture = buf;
+     SDL_Rect dst;
++
+     SDL_SetRenderTarget(renderer, NULL);
+     SDL_RenderClear(renderer);
+ #if LV_COLOR_SCREEN_TRANSP
+@@ -329,9 +352,18 @@ static void window_update(lv_disp_drv_t *disp_drv, void * buf)
+     dst.w = m->d_hor_res;
+     dst.h = m->d_ver_res;
+     /*Update the renderer with the texture containing the rendered image*/
++
+     SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+     SDL_RenderSetClipRect(renderer, NULL);
+     SDL_RenderCopyEx(renderer, texture, NULL, &dst, 90.0 * m->rotated, NULL, SDL_FLIP_NONE);
++#if USE_SDL_OPENGL
++    SDL_RenderFlush(renderer);
++
++    previousContext = SDL_GL_GetCurrentContext();
++    SDL_GL_MakeCurrent(m->window, m->context);
++    lv_gl_render();
++    SDL_GL_MakeCurrent(m->window, previousContext);
++#endif
+     SDL_RenderPresent(renderer);
+     SDL_SetRenderTarget(renderer, texture);
+ }
+-- 
+2.25.1
+

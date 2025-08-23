@@ -1,0 +1,9 @@
+config BR2_PACKAGE_MUPEN64PLUS_UI_CONSOLE
+        bool "mupen64plus-ui-console"
+	depends on BR2_PACKAGE_MUPEN64PLUS_CORE
+	depends on BR2_PACKAGE_SDL2
+	default y
+        help
+          mupen64plus ui console.
+
+	  https://mupen64plus.org/

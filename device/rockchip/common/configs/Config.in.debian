@@ -1,0 +1,65 @@
+#
+
+config RK_DEBIAN_SUPPORTS
+	bool
+	default y if RK_CHIP_FAMILY = "rk3288" || RK_CHIP_FAMILY = "px30" || \
+		RK_CHIP_FAMILY = "rk3326" || RK_CHIP_FAMILY = "rk3328" || \
+		RK_CHIP_FAMILY = "rk3399" || RK_CHIP_FAMILY = "rk3399pro" || \
+		RK_CHIP_FAMILY = "rk3566_rk3568" || RK_CHIP_FAMILY = "rk3588" || \
+		RK_CHIP_FAMILY = "rk3562" || RK_CHIP_FAMILY = "rk3528" || \
+		RK_CHIP_FAMILY = "rk3576"
+
+comment "Debian is not supported for this chip"
+	depends on !RK_DEBIAN_SUPPORTS
+
+menuconfig RK_DEBIAN
+	bool "Debian"
+	depends on RK_DEBIAN_SUPPORTS
+	default y
+
+if RK_DEBIAN
+
+config RK_DEBIAN_VERSION
+	string
+	default "buster" if RK_DEBIAN_BUSTER
+	default "bullseye" if RK_DEBIAN_BULLSEYE
+	default "bookworm" if RK_DEBIAN_BOOKWORM
+
+choice
+	prompt "distro"
+	default RK_DEBIAN_BOOKWORM
+
+config RK_DEBIAN_BUSTER
+	bool "buster"
+
+config RK_DEBIAN_BULLSEYE
+	bool "bullseye"
+
+config RK_DEBIAN_BOOKWORM
+	bool "bookworm"
+
+endchoice # distro
+
+config RK_DEBIAN_ARCH
+	string
+	default "armhf" if RK_DEBIAN_ARMHF
+	default "arm64" if RK_DEBIAN_ARM64
+
+choice
+	prompt "rootfs arch"
+
+config RK_DEBIAN_ARM64
+	bool "arm64"
+	depends on !RK_CHIP_ARM32
+
+config RK_DEBIAN_ARMHF
+	bool "armhf"
+
+endchoice # rootfs arch
+
+config RK_DEBIAN_MIRROR
+	string "mirror source for APT"
+	default "mirrors.ustc.edu.cn"
+
+endif # Debian
+endmenuconfig # Debian

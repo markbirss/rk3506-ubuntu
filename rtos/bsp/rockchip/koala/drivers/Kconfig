@@ -1,0 +1,155 @@
+source "$BSP_DIR/../common/drivers/Kconfig"
+
+menu "RT-Thread rockchip koala drivers"
+
+config RT_USING_CRU
+    bool "Enable CRU"
+    default n
+
+config RT_USING_DMA
+    bool "Enable General DMA Framework"
+    default n
+
+if RT_USING_DMA
+    config RT_USING_DMA_PL330
+        bool "Enable PL330 DMA Controller"
+        default n
+
+    config RT_USING_DMA0
+        bool "Enable PL330 DMA0 Controller"
+        default n
+endif
+
+menu "Enable DSP"
+    config RT_USING_DSP
+        bool "Enable DSP"
+        default n
+
+    if RT_USING_DSP
+    config RT_USING_DSPFW_LOADER
+        bool "Enable firmware loader to dsp"
+        default n
+
+    choice
+        prompt "Dsp firmware path"
+        default RT_USING_DSPFW_FILE
+        depends on RT_USING_DSPFW_LOADER
+
+        config RT_USING_DSPFW_BUILTIN
+            bool "Store firmware data in builtin"
+
+        config RT_USING_DSPFW_FILE
+            bool "Store firmware data in file"
+    endchoice
+
+    config RT_PATH_DSPFW
+        string "Dsp firmware path"
+        default "/rkdsp.bin"
+        depends on RT_USING_DSPFW_FILE
+
+    config RT_USING_DSP_TRACE
+        bool "Enable dsp send trace to cm4"
+        default n
+
+    config RT_DSP_UART_PORT
+        int "Config dsp debug uart port"
+        range -1 1
+        default -1
+        help
+            set -1, will not set uart port to dsp
+    endif
+endmenu
+
+menu "Enable UART"
+    config RT_USING_UART
+        bool "Enable UART"
+        default n
+
+    if RT_USING_UART
+    config RT_USING_UART0
+        bool "Enable UART0"
+        default n
+
+    config RT_USING_UART1
+        bool "Enable UART1"
+        default n
+    endif
+endmenu
+
+if RT_USING_I2C
+menu "Enable I2C"
+    config RT_USING_I2C0
+        bool "Enable I2C0"
+        default n
+
+    config RT_USING_I2C1
+        bool "Enable I2C1"
+        default n
+
+    config RT_USING_I2C2
+        bool "Enable I2C2"
+        default n
+endmenu
+endif
+
+if RT_USING_SPI
+menu "Enable SPI"
+    config RT_USING_SPI1
+        bool "Enable SPI1"
+        default n
+endmenu
+endif
+
+if RT_USING_AUDIO
+menu "Enable Audio"
+    config RT_USING_PCM
+        bool "Enable PCM"
+        select RT_USING_DMA
+        default y
+
+    config RT_USING_I2STDM
+        bool "Enable I2STDM"
+        default n
+
+    config RT_USING_I2STDM0
+        bool "Enable I2STDM0"
+        depends on RT_USING_I2STDM
+        default n
+
+    config RT_USING_PDM
+        bool "Enable PDM"
+        default n
+
+    config RT_USING_PDM0
+        bool "Enable PDM0"
+        depends on RT_USING_PDM
+        default n
+
+    menu "Enable Audio Card"
+
+    config RT_USING_AUDIO_CARD
+        bool "Audio Cards"
+        select RT_USING_CODEC
+        default n
+
+    config RT_USING_AUDIO_CARD_PDM_MIC
+        depends on RT_USING_AUDIO_CARD
+        select RT_USING_PDM
+        bool "Enable pdm mics audio card"
+        default n
+
+    endmenu
+
+    source "$BSP_DIR/../common/drivers/audio/codecs/Kconfig"
+endmenu
+endif
+
+if RT_USING_PWM
+menu "Enable PWM"
+    config RT_USING_PWM0
+        bool "Enable PWM0"
+        default n
+endmenu
+endif
+
+endmenu

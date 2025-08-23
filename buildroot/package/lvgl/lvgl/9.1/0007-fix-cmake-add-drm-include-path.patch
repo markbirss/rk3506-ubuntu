@@ -1,0 +1,25 @@
+From d0844a0bd1b1a5bb439b6c8ba40d328d2abe5ca0 Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Thu, 24 Oct 2024 19:11:20 +0800
+Subject: [PATCH 07/12] fix(cmake): add drm include path
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ env_support/cmake/custom.cmake | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/env_support/cmake/custom.cmake b/env_support/cmake/custom.cmake
+index d0e82b7..b366a46 100644
+--- a/env_support/cmake/custom.cmake
++++ b/env_support/cmake/custom.cmake
+@@ -44,6 +44,7 @@ endif()
+ target_include_directories(lvgl SYSTEM PUBLIC ${LVGL_ROOT_DIR} ${LV_CONF_DIR})
+ 
+ target_include_directories(lvgl SYSTEM PUBLIC ${CMAKE_SYSROOT}/usr/include/freetype2)
++target_include_directories(lvgl SYSTEM PUBLIC ${CMAKE_SYSROOT}/usr/include/drm)
+ 
+ if(NOT LV_CONF_BUILD_DISABLE_THORVG_INTERNAL)
+     add_library(lvgl_thorvg ${THORVG_SOURCES})
+-- 
+2.25.1
+

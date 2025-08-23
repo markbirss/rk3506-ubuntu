@@ -1,0 +1,11 @@
+# Configuration for rk730 driver
+
+#playback
+CTL{reset}="mixer"
+CTL{name}="OUT1 Switch", CTL{value}="ON"
+CTL{name}="OUT2 Switch", CTL{value}="ON"
+CTL{name}="MIC1 Boost Volume", CTL{value}="2"
+CTL{name}="MIC2 Boost Volume", CTL{value}="2"
+
+RESULT="true", EXIT="return"
+

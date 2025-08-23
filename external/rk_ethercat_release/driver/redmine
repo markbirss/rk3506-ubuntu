@@ -1,0 +1,26 @@
+Obtain the driver ko from the corresponding directory
+
+6.1.84 kernel base on:
+
+
+commit 095e362a8eb1948abd4ac62bd9b569e512a994f8 (origin/develop-6.1)
+Author: Luo Wei <lw@rock-chips.com>
+Date:   Fri Sep 27 16:37:44 2024 +0800
+
+    arm64: dts: rockchip: rk3576-vehicle-evb: close usb otg 5v default
+
+    Signed-off-by: Luo Wei <lw@rock-chips.com>
+    Change-Id: I5360e4609e54359eadfaa39f74409106293e18d4
+
+
+
+5.10 kernel base on:
+
+commit 6507406562ee53a0860a04e9eb01316f8fa7143a
+Author: Zefa Chen <zefa.chen@rock-chips.com>
+Date:   Fri Mar 29 16:31:26 2024 +0800
+
+    media: rockchip: vicap disable dma adapter when use hdmi input
+
+    Signed-off-by: Zefa Chen <zefa.chen@rock-chips.com>
+    Change-Id: I20a47ca718242eb253797c851b85189b5fcf1829

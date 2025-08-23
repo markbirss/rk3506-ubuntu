@@ -1,0 +1,33 @@
+From e1e1f6135f65f231cf1cb6252478bbd9f422ec37 Mon Sep 17 00:00:00 2001
+From: Kevin Zhao <kevin.zhao@linaro.org>
+Date: Thu, 22 Jul 2021 16:00:21 +0800
+Subject: [PATCH 3/5] arm64 front end: add support for 'dc cvac', 'dc cvap',
+ handling it the same as 'dc cvau'.
+
+Signed-off-by: Kevin Zhao <kevin.zhao@linaro.org>
+---
+ VEX/priv/guest_arm64_toIR.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/VEX/priv/guest_arm64_toIR.c b/VEX/priv/guest_arm64_toIR.c
+index c7e395b..42342a3 100644
+--- a/VEX/priv/guest_arm64_toIR.c
++++ b/VEX/priv/guest_arm64_toIR.c
+@@ -7756,9 +7756,13 @@ Bool dis_ARM64_branch_etc(/*MB_OUT*/DisResult* dres, UInt insn,
+    /* ------------------ DC_CVAU ------------------ */
+    /* D5 0B 7B 001 Rt  dc cvau, rT
+       D5 0B 7E 001 Rt  dc civac, rT
++      D5 0B 7A 001 Rt  dc cvac, rT
++      D5 0B 7C 001 Rt  dc cvap, rT
+    */
+    if (   (INSN(31,0) & 0xFFFFFFE0) == 0xD50B7B20
+-       || (INSN(31,0) & 0xFFFFFFE0) == 0xD50B7E20) {
++       || (INSN(31,0) & 0xFFFFFFE0) == 0xD50B7E20
++       || ((INSN(31,0) & 0xFFFFFFE0) == 0xD50B7A20)
++       || ((INSN(31,0) & 0xFFFFFFE0) == 0xD50B7C20)) {
+       /* Exactly the same scheme as for IC IVAU, except we observe the
+          dMinLine size, and request an Ijk_FlushDCache instead of
+          Ijk_InvalICache. */
+-- 
+2.20.1
+

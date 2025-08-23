@@ -1,0 +1,48 @@
+From 10ae60910ca85d7484a5caf2eac712cd4198c004 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Mon, 11 Dec 2023 18:06:01 +0800
+Subject: [PATCH 11/95] HACK: Disable libseat
+
+We are using launcher-direct now.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/launcher-util.c | 1 -
+ libweston/meson.build     | 3 ---
+ 2 files changed, 4 deletions(-)
+
+diff --git a/libweston/launcher-util.c b/libweston/launcher-util.c
+index 64ce420..6ee86ed 100644
+--- a/libweston/launcher-util.c
++++ b/libweston/launcher-util.c
+@@ -37,7 +37,6 @@
+ #include <linux/input.h>
+ 
+ static const struct launcher_interface *ifaces[] = {
+-	&launcher_libseat_iface,
+ 	&launcher_direct_iface,
+ 	NULL,
+ };
+diff --git a/libweston/meson.build b/libweston/meson.build
+index 75dab88..fc904ee 100644
+--- a/libweston/meson.build
++++ b/libweston/meson.build
+@@ -162,15 +162,12 @@ pkgconfig.generate(
+ )
+ 
+ if get_option('backend-drm')
+-	dep_libseat = dependency('libseat', version: '>= 0.4')
+ 	srcs_session_helper = [
+-		'launcher-libseat.c',
+ 		'launcher-direct.c',
+ 		'launcher-util.c',
+ 	]
+ 	deps_session_helper = [
+ 		dep_libdrm,
+-		dep_libseat,
+ 		dep_libweston_private_h,
+ 	]
+ 
+-- 
+2.20.1
+

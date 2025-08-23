@@ -1,0 +1,38 @@
+From 36961e5bf664151b99cdf3f2cd56d483e7bf2bc6 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Mon, 19 Apr 2021 09:40:10 +0800
+Subject: [PATCH 45/95] HACK: gl-renderer: Fix random hang during hotplug
+
+Try to bind to a valid output before attaching buffers for mali.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/renderer-gl/gl-renderer.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/libweston/renderer-gl/gl-renderer.c b/libweston/renderer-gl/gl-renderer.c
+index 9ef67ef..539fa29 100644
+--- a/libweston/renderer-gl/gl-renderer.c
++++ b/libweston/renderer-gl/gl-renderer.c
+@@ -2523,6 +2523,7 @@ gl_format_from_internal(GLenum internal_format)
+ static void
+ gl_renderer_flush_damage(struct weston_paint_node *pnode)
+ {
++	struct weston_output *output = pnode->output;
+ 	struct weston_surface *surface = pnode->surface;
+ 	const struct weston_testsuite_quirks *quirks =
+ 		&surface->compositor->test_data.test_quirks;
+@@ -2548,6 +2549,10 @@ gl_renderer_flush_damage(struct weston_paint_node *pnode)
+ 	if (!buffer->shm_buffer)
+ 		return;
+ 
++	/* HACK: Mali needs a valid context for uploading */
++	if (gr->is_mali_egl && output)
++		use_output(output);
++
+ 	if (!pixman_region32_not_empty(&gb->texture_damage) &&
+ 	    !gb->needs_full_upload)
+ 		goto done;
+-- 
+2.20.1
+

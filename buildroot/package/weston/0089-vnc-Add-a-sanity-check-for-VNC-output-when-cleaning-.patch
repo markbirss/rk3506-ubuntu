@@ -1,0 +1,35 @@
+From 1891442f0a0c437ce45e785ea20c8fdf6574901e Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Tue, 12 Nov 2024 08:27:08 +0800
+Subject: [PATCH 89/95] vnc: Add a sanity check for VNC output when cleaning up
+ VNC clients
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/backend-vnc/vnc.c | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/libweston/backend-vnc/vnc.c b/libweston/backend-vnc/vnc.c
+index bdbc663..eed62ee 100644
+--- a/libweston/backend-vnc/vnc.c
++++ b/libweston/backend-vnc/vnc.c
+@@ -540,10 +540,13 @@ vnc_client_cleanup(struct nvnc_client *client)
+ 	struct timespec now;
+ 	int delay_ms;
+ 
+-	wl_list_remove(&peer->link);
++	/* The output might be destroyed */
++	if (output) {
++		wl_list_remove(&peer->link);
+ 
+-	if (output && wl_list_empty(&output->peers))
+-		weston_output_power_off(&output->base);
++		if (wl_list_empty(&output->peers))
++			weston_output_power_off(&output->base);
++	}
+ 
+ 	weston_log("VNC Client disconnected\n");
+ 
+-- 
+2.20.1
+

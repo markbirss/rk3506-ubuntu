@@ -1,0 +1,38 @@
+
+menuconfig RT_USING_AMPAK
+bool "Enable Ampak WiFi Modules"
+default n
+
+if RT_USING_AMPAK
+	config RT_AMPAK_WIFI
+	bool "Enable Ampak WiFi Module Driver"
+		default y
+		select RT_WLAN_PROT_LWIP_ENABLE
+		select RT_WLAN_PROT_LWIP_PBUF_FORCE
+		select RT_USING_SDIO
+		select RT_USING_SDIO0
+		select RT_USING_DMA
+	if RT_AMPAK_WIFI
+	choice
+		prompt "Ampak WiFi Module Selection"
+		default RT_USING_WLAN_SIP_AP6212A
+
+		config RT_USING_WLAN_SIP_AP6212A
+			 bool "AP6212A"
+
+		config RT_USING_WLAN_SIP_AP6214A
+			 bool "AP6214A"
+
+		config RT_USING_WLAN_SIP_AP6256
+			bool "AP6256"
+
+		config RT_USING_WLAN_SIP_AP6203
+			bool "AP6203"
+	endchoice
+	
+	config RT_USING_MHD_MFG_TEST
+	bool "Select MFG FW Test Feature"
+	default n
+
+	endif
+endif

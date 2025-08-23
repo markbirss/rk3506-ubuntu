@@ -1,0 +1,89 @@
+From bf4f7a77b3b1f61322b962f66d8a8e6aa70649f7 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Tue, 23 Mar 2021 22:34:54 +0800
+Subject: [PATCH 41/95] desktop-shell: Disable fullscreen black background by
+ default
+
+There's a force black background for fullscreen views.
+
+Let's disable it by default, set this env to enable:
+"WESTON_FULLSCREEN_BLACK_BACKGROUND"
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ desktop-shell/shell.c | 44 ++++++++++++++++++++++++-------------------
+ 1 file changed, 25 insertions(+), 19 deletions(-)
+
+diff --git a/desktop-shell/shell.c b/desktop-shell/shell.c
+index 971f07c..621cbbf 100644
+--- a/desktop-shell/shell.c
++++ b/desktop-shell/shell.c
+@@ -1908,16 +1908,6 @@ shell_set_view_fullscreen(struct shell_surface *shsurf)
+ 	struct weston_surface *surface =
+ 		weston_desktop_surface_get_surface(shsurf->desktop_surface);
+ 	struct weston_compositor *ec = surface->compositor;
+-	struct weston_output *output = shsurf->fullscreen_output;
+-	struct weston_curtain_params curtain_params = {
+-		.r = 0.0, .g = 0.0, .b = 0.0, .a = 1.0,
+-		.pos = output->pos,
+-		.width = output->width, .height = output->height,
+-		.surface_committed = black_surface_committed,
+-		.get_label = black_surface_get_label,
+-		.surface_private = shsurf->view,
+-		.capture_input = true,
+-	};
+ 
+ 	assert(weston_desktop_surface_get_fullscreen(shsurf->desktop_surface));
+ 
+@@ -1927,15 +1917,29 @@ shell_set_view_fullscreen(struct shell_surface *shsurf)
+ 
+ 	weston_shell_utils_center_on_output(shsurf->view, shsurf->output);
+ 
+-	if (!shsurf->fullscreen.black_view) {
+-		shsurf->fullscreen.black_view =
+-			weston_shell_utils_curtain_create(ec, &curtain_params);
+-	}
++	if (shsurf->fullscreen_output &&
++	    getenv("WESTON_FULLSCREEN_BLACK_BACKGROUND")) {
++		struct weston_output *output = shsurf->fullscreen_output;
++		struct weston_curtain_params curtain_params = {
++			.r = 0.0, .g = 0.0, .b = 0.0, .a = 1.0,
++			.pos = output->pos,
++			.width = output->width, .height = output->height,
++			.surface_committed = black_surface_committed,
++			.get_label = black_surface_get_label,
++			.surface_private = shsurf->view,
++			.capture_input = true,
++		};
++		if (!shsurf->fullscreen.black_view) {
++			shsurf->fullscreen.black_view =
++				weston_shell_utils_curtain_create(ec,
++								  &curtain_params);
++		}
+ 
+-	weston_view_set_output(shsurf->fullscreen.black_view->view,
+-			       shsurf->fullscreen_output);
+-	weston_view_move_to_layer(shsurf->fullscreen.black_view->view,
+-				  &shsurf->view->layer_link);
++		weston_view_set_output(shsurf->fullscreen.black_view->view,
++				       shsurf->fullscreen_output);
++		weston_view_move_to_layer(shsurf->fullscreen.black_view->view,
++					  &shsurf->view->layer_link);
++	}
+ }
+ 
+ static void
+@@ -4387,7 +4391,9 @@ switcher_next(struct switcher *switcher)
+ 		weston_view_set_alpha(view, 1.0);
+ 
+ 	shsurf = get_shell_surface(switcher->current->surface);
+-	if (shsurf && weston_desktop_surface_get_fullscreen(shsurf->desktop_surface))
++	if (shsurf &&
++	    weston_desktop_surface_get_fullscreen(shsurf->desktop_surface) &&
++	    shsurf->fullscreen.black_view)
+ 		weston_view_set_alpha(shsurf->fullscreen.black_view->view, 1.0);
+ }
+ 
+-- 
+2.20.1
+

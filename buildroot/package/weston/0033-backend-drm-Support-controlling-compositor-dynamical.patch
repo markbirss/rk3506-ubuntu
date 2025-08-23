@@ -1,0 +1,212 @@
+From bdfe1a667783a90032eb55f4a622782a01853a83 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 3 Jul 2020 12:37:37 +0800
+Subject: [PATCH 33/97] backend-drm: Support controlling compositor dynamically
+
+Use config file to control compositor's state.
+
+Default config file is "/tmp/.weston_drm.conf", can override with
+"WESTON_DRM_CONFIG" environment.
+
+Supported configs format is "compositor:<key>:<value>", for
+example:
+echo "compositor:state:sleep" > /tmp/.weston_drm.conf
+echo "compositor:state:block" > /tmp/.weston_drm.conf
+echo "compositor:state:freeze" > /tmp/.weston_drm.conf
+echo "compositor:state:offscreen" > /tmp/.weston_drm.conf
+echo "compositor:state:off" > /tmp/.weston_drm.conf
+echo "compositor:state:on" > /tmp/.weston_drm.conf
+echo "compositor:hotplug:off" > /tmp/.weston_drm.conf
+echo "compositor:hotplug:on" > /tmp/.weston_drm.conf
+echo "compositor:hotplug:force" > /tmp/.weston_drm.conf
+echo "compositor:cursor:hide" > /tmp/.weston_drm.conf
+echo "compositor:cursor:show" > /tmp/.weston_drm.conf
+echo "compositor:output:pin" > /tmp/.weston_drm.conf
+echo "compositor:output:unpin" > /tmp/.weston_drm.conf
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/backend-drm/drm.c | 91 ++++++++++++++++++++++++++++++-------
+ libweston/compositor.c      |  7 ++-
+ libweston/libinput-seat.c   |  4 ++
+ 3 files changed, 84 insertions(+), 18 deletions(-)
+
+diff --git a/libweston/backend-drm/drm.c b/libweston/backend-drm/drm.c
+index e75524051..d1f341f2b 100644
+--- a/libweston/backend-drm/drm.c
++++ b/libweston/backend-drm/drm.c
+@@ -213,32 +213,28 @@ close_src:
+ static void
+ drm_backend_update_outputs(struct drm_backend *b)
+ {
+-	struct weston_output *primary;
++	struct weston_output *base, *primary;
+ 
+ 	if (!b->primary_head)
+ 		return;
+ 
+ 	primary = b->primary_head->base.output;
+ 
+-	if (b->mirror_mode) {
+-		struct weston_output *base;
+-
+-		wl_list_for_each(base, &b->compositor->output_list, link) {
+-			struct drm_output *output = to_drm_output(base);
+-			bool is_mirror = base != primary;
++	wl_list_for_each(base, &b->compositor->output_list, link) {
++		struct drm_output *output = to_drm_output(base);
++		bool is_mirror = b->mirror_mode && (base != primary);
+ 
+-			if (!output || output->is_mirror == is_mirror)
+-				continue;
++		if (!output || output->is_mirror == is_mirror)
++			continue;
+ 
+-			/* Make mirrors unavailable for normal views */
+-			output->base.unavailable = is_mirror;
++		/* Make mirrors unavailable for normal views */
++		output->base.unavailable = is_mirror;
+ 
+-			output->is_mirror = is_mirror;
+-			output->state_invalid = true;
++		output->is_mirror = is_mirror;
++		output->state_invalid = true;
+ 
+-			weston_log("Output %s changed to %s output\n",
+-				   base->name, is_mirror ? "mirror" : "main");
+-		}
++		weston_log("Output %s changed to %s output\n",
++			   base->name, is_mirror ? "mirror" : "main");
+ 	}
+ 
+ 	if (!primary)
+@@ -4705,6 +4701,63 @@ config_handle_output(struct drm_backend *b, const char *name,
+ 	}
+ }
+ 
++static void
++config_handle_compositor(struct drm_backend *b, const char *key,
++			 const char *value)
++{
++	if (!strcmp(key, "state")) {
++		if (!strcmp(value, "sleep")) {
++			weston_compositor_sleep(b->compositor);
++		} else if (!strcmp(value, "block")) {
++			udev_input_disable(&b->input);
++		} else if (!strcmp(value, "freeze")) {
++			udev_input_disable(&b->input);
++			weston_compositor_offscreen(b->compositor);
++		} else if (!strcmp(value, "offscreen")) {
++			/* HACK: offscreen + DPMS off */
++			weston_compositor_sleep(b->compositor);
++			weston_compositor_offscreen(b->compositor);
++			udev_input_enable(&b->input);
++		} else if (!strcmp(value, "off")) {
++			udev_input_disable(&b->input);
++			weston_compositor_sleep(b->compositor);
++		} else {
++			/* HACK: Force waking from offscreen */
++			if (b->compositor->state == WESTON_COMPOSITOR_OFFSCREEN)
++				b->compositor->state = WESTON_COMPOSITOR_IDLE;
++
++			weston_compositor_wake(b->compositor);
++			weston_compositor_damage_all(b->compositor);
++			udev_input_enable(&b->input);
++		}
++	} else if (!strcmp(key, "hotplug")) {
++		if (!strcmp(value, "off"))
++			wl_event_source_fd_update(b->udev_drm_source, 0);
++		else if (!strcmp(value, "on"))
++			wl_event_source_fd_update(b->udev_drm_source,
++						  WL_EVENT_READABLE);
++		else if (!strcmp(value, "force"))
++			hotplug_timer_handler(b->drm);
++	} else if (!strcmp(key, "cursor")) {
++		if (!strcmp(value, "hide"))
++			b->compositor->hide_cursor = true;
++		else if (!strcmp(value, "show"))
++			b->compositor->hide_cursor = false;
++
++		weston_compositor_damage_all(b->compositor);
++	} else if (!strcmp(key, "mirror")) {
++		b->mirror_mode = !strcmp(value, "on");
++		drm_backend_update_outputs(b);
++	} else if (!strcmp(key, "output")) {
++		if (!strcmp(value, "pin"))
++			b->compositor->pin_output = true;
++		else if (!strcmp(value, "unpin"))
++			b->compositor->pin_output = false;
++
++		weston_compositor_damage_all(b->compositor);
++	}
++}
++
+ static int
+ config_timer_handler(void *data)
+ {
+@@ -4746,7 +4799,9 @@ config_timer_handler(void *data)
+ 
+ 	/**
+ 	 * Parse configs, formated with <type>:<key>:<value>
+-	 * For example: "output:all:rotate90"
++	 * For example:
++	 *	output:all:rotate90
++	 *	compositor:state:off
+ 	 */
+ 	while (3 == fscanf(conf_fp,
+ 			   "%" STR(MAX_CONF_LEN) "[^:]:"
+@@ -4754,6 +4809,8 @@ config_timer_handler(void *data)
+ 			   "%" STR(MAX_CONF_LEN) "[^\n]%*c", type, key, value)) {
+ 		if (!strcmp(type, "output"))
+ 			config_handle_output(b, key, value);
++		else if (!strcmp(type, "compositor"))
++			config_handle_compositor(b, key, value);
+ 	}
+ 
+ 	fclose(conf_fp);
+diff --git a/libweston/compositor.c b/libweston/compositor.c
+index af1915738..cf4e2b7a1 100644
+--- a/libweston/compositor.c
++++ b/libweston/compositor.c
+@@ -6206,6 +6206,10 @@ weston_compositor_wake(struct weston_compositor *compositor)
+ {
+ 	uint32_t old_state = compositor->state;
+ 
++	/* HACK: Avoid waking up by input */
++	if (old_state == WESTON_COMPOSITOR_OFFSCREEN)
++		return;
++
+ 	/* The state needs to be changed before emitting the wake
+ 	 * signal because that may try to schedule a repaint which
+ 	 * will not work if the compositor is still sleeping */
+@@ -6213,10 +6217,11 @@ weston_compositor_wake(struct weston_compositor *compositor)
+ 
+ 	switch (old_state) {
+ 	case WESTON_COMPOSITOR_SLEEPING:
++		wl_signal_emit(&compositor->wake_signal, compositor);
++		/* fall through */
+ 	case WESTON_COMPOSITOR_IDLE:
+ 	case WESTON_COMPOSITOR_OFFSCREEN:
+ 		weston_compositor_dpms(compositor, WESTON_DPMS_ON);
+-		wl_signal_emit(&compositor->wake_signal, compositor);
+ 		/* fall through */
+ 	default:
+ 		wl_event_source_timer_update(compositor->idle_source,
+diff --git a/libweston/libinput-seat.c b/libweston/libinput-seat.c
+index 4f33f9bb8..aaefe6cfc 100644
+--- a/libweston/libinput-seat.c
++++ b/libweston/libinput-seat.c
+@@ -319,6 +319,10 @@ udev_input_enable(struct udev_input *input)
+ 	struct udev_seat *seat;
+ 	int devices_found = 0;
+ 
++	/* Already enabled */
++	if (input->libinput_source && !input->suspended)
++		return 0;
++
+ 	loop = wl_display_get_event_loop(c->wl_display);
+ 	fd = libinput_get_fd(input->libinput);
+ 	input->libinput_source =
+-- 
+2.20.1
+

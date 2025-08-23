@@ -1,0 +1,5 @@
+bootanim (Boot-time animation)
+
+A service to run animation scripts under /etc/bootanim.d/.
+
+Set global tag file environment("WESTON_FREEZE_DISPLAY" and "XSERVER_FREEZE_DISPLAY") to freeze the hacked display service during animation.

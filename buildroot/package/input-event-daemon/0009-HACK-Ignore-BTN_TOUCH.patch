@@ -1,0 +1,30 @@
+From d3e05e192c2b12bb5d6c9744d31498dba8e647d0 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Thu, 26 Sep 2024 12:02:08 +0800
+Subject: [PATCH 9/9] HACK: Ignore BTN_TOUCH
+
+Which might confuse other keys.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ input-event-daemon.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/input-event-daemon.c b/input-event-daemon.c
+index 9e02cf8..6c444e4 100644
+--- a/input-event-daemon.c
++++ b/input-event-daemon.c
+@@ -373,6 +373,10 @@ static void input_parse_event(struct input_event *event, const char *src) {
+ 
+     switch(event->type) {
+         case EV_KEY:
++            // HACK: Ignore BTN_TOUCH
++            if (event->code == BTN_TOUCH)
++                break;
++
+             fired_key_event = key_event_parse(event->code, event->value, src);
+ 
+             if(fired_key_event != NULL) {
+-- 
+2.20.1
+

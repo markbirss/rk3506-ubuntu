@@ -1,0 +1,8 @@
+config RK960
+       tristate "RK960 WLAN support"
+       select MAC80211
+       select CFG80211
+       help
+
+           Rockchip RK960 Wireless drivers
+

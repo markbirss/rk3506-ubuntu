@@ -1,0 +1,21 @@
+config RT_USING_FWANALYSIS
+    bool "Enable firmware analysis"
+    default n
+    help
+        Select this option to enable firmware analysis
+config RT_USING_VENDOR_STORAGE
+    bool "Enable vendor storage support"
+    default n
+    help
+        Select this option to enable vendor storage support
+config RT_USING_USER_DATA_PART
+    bool "Enable userdata partition support"
+    default n
+    help
+        Select this option to enable userdata partition support
+
+config RT_USING_AVB_LIBAVB_AB
+    bool "Use uboot libavb ab system"
+    default n
+    help
+        Select this option to boot ab system using uboot

@@ -1,0 +1,48 @@
+From 3d7b1617afb49a0615e10a898356218ab7ba3723 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Thu, 8 Aug 2024 08:54:43 +0800
+Subject: [PATCH 94/95] desktop-shell: Support disabling keyboard process
+
+Set env WESTON_NO_KEYBOARD=1 to disable it.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ desktop-shell/shell.c | 14 +++++++++-----
+ 1 file changed, 9 insertions(+), 5 deletions(-)
+
+diff --git a/desktop-shell/shell.c b/desktop-shell/shell.c
+index b9f39bb..75547d7 100644
+--- a/desktop-shell/shell.c
++++ b/desktop-shell/shell.c
+@@ -4938,8 +4938,10 @@ shell_destroy(struct wl_listener *listener, void *data)
+ 	wl_list_remove(&shell->wake_listener.link);
+ 	wl_list_remove(&shell->transform_listener.link);
+ 
+-	text_backend_destroy(shell->text_backend);
+-	input_panel_destroy(shell);
++	if (!getenv("WESTON_NO_KEYBOARD")) {
++		text_backend_destroy(shell->text_backend);
++		input_panel_destroy(shell);
++	}
+ 
+ 	wl_list_remove(&shell->kill_focus_listener.link);
+ 
+@@ -5178,10 +5180,12 @@ wet_shell_init(struct weston_compositor *ec,
+ 	weston_layer_init(&shell->minimized_layer, ec);
+ 	weston_layer_init(&shell->workspace.layer, ec);
+ 
+-	if (input_panel_setup(shell) < 0)
+-		return -1;
++	if (!getenv("WESTON_NO_KEYBOARD")) {
++		if (input_panel_setup(shell) < 0)
++			return -1;
+ 
+-	shell->text_backend = text_backend_init(ec);
++		shell->text_backend = text_backend_init(ec);
++	}
+ 
+ 	if (!shell_configuration(shell))
+ 		return -1;
+-- 
+2.20.1
+

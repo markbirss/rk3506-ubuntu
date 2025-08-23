@@ -1,0 +1,28 @@
+From 4fa67e9c7620fba1fac27209960bcde3bca94067 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Mon, 1 Apr 2024 16:24:09 +0800
+Subject: [PATCH 3/5] render: egl: Fallback to gbm device fd
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ render/egl.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/render/egl.c b/render/egl.c
+index 162634b..651525a 100644
+--- a/render/egl.c
++++ b/render/egl.c
+@@ -957,6 +957,10 @@ static char *get_render_name(const char *name) {
+ static int dup_egl_device_drm_fd(struct wlr_egl *egl) {
+ 	if (egl->device == EGL_NO_DEVICE_EXT || (!egl->exts.EXT_device_drm &&
+ 			!egl->exts.EXT_device_drm_render_node)) {
++		/* Fallback to gbm device fd */
++		if (egl->gbm_device)
++			return dup(gbm_device_get_fd(egl->gbm_device));
++
+ 		return -1;
+ 	}
+ 
+-- 
+2.20.1
+

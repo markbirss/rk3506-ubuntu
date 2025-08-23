@@ -1,0 +1,178 @@
+source "$BSP_DIR/../common/drivers/Kconfig"
+
+menu "RT-Thread rockchip rk1808 drivers"
+
+config RT_USING_CRU
+    bool "Enable CRU"
+    default n
+
+config RT_USING_DMA
+    bool "Enable General DMA Framework"
+    default n
+
+if RT_USING_DMA
+    config RT_USING_DMA_PL330
+        bool "Enable PL330 DMA Controller"
+        default n
+
+    config RT_USING_DMA0
+        bool "Enable PL330 DMA0 Controller"
+        default n
+endif
+
+config RT_USING_RGB
+    bool "Enable RGB"
+    default n
+
+config RT_USING_VOP
+    bool "Enable VOP"
+    default n
+
+config RT_USING_DSI
+     bool "Enable MIPI DSI"
+     default n
+
+menu "Enable UART"
+    config RT_USING_UART
+        bool "Enable UART"
+        default n
+
+    if RT_USING_UART
+    config RT_USING_UART0
+        bool "Enable UART0"
+        default n
+
+    config RT_USING_UART1
+        bool "Enable UART1"
+        default n
+
+    config RT_USING_UART2
+        bool "Enable UART2"
+        default n
+
+    config RT_USING_UART3
+        bool "Enable UART3"
+        default n
+
+    config RT_USING_UART4
+        bool "Enable UART4"
+        default n
+
+    config RT_USING_UART5
+        bool "Enable UART5"
+        default n
+
+    config RT_USING_UART6
+        bool "Enable UART6"
+        default n
+
+    config RT_USING_UART7
+        bool "Enable UART7"
+        default n
+    endif
+endmenu
+
+if RT_USING_I2C
+menu "Enable I2C"
+    config RT_USING_I2C0
+        bool "Enable I2C0"
+        default n
+
+    config RT_USING_I2C1
+        bool "Enable I2C1"
+        default n
+
+    config RT_USING_I2C2
+        bool "Enable I2C2"
+        default n
+
+    config RT_USING_I2C3
+        bool "Enable I2C3"
+        default n
+
+    config RT_USING_I2C4
+        bool "Enable I2C4"
+        default n
+
+    config RT_USING_I2C5
+        bool "Enable I2C5"
+        default n
+endmenu
+endif
+
+if RT_USING_SPI
+menu "Enable SPI"
+    config RT_USING_SPI2APB
+        bool "Enable SPI0 (SPI2APB)"
+        default n
+
+    config RT_USING_SPI1
+        bool "Enable SPI1"
+        default n
+
+    config RT_USING_SPI2
+        bool "Enable SPI2"
+        default n
+endmenu
+endif
+
+if RT_USING_AUDIO
+menu "Enable Audio"
+    config RT_USING_PCM
+        bool "Enable PCM"
+        select RT_USING_DMA
+        default y
+
+    config RT_USING_I2S
+        bool "Enable I2S"
+        default n
+
+    if RT_USING_I2S
+    config RT_USING_I2S0
+        bool "Enable I2S0"
+        default n
+    endif
+
+    config RT_USING_I2STDM
+        bool "Enable I2STDM"
+        default n
+
+    config RT_USING_I2STDM0
+        bool "Enable I2STDM0"
+        depends on RT_USING_I2STDM
+        default n
+
+    config RT_USING_PDM
+        bool "Enable PDM"
+        default n
+
+    config RT_USING_PDM0
+        bool "Enable PDM0"
+        depends on RT_USING_PDM
+        default n
+
+    config RT_USING_VAD
+        bool "Enable VAD"
+        default n
+endmenu
+endif
+
+config RT_USING_GICV3
+    bool "Enable Gic-v3"
+    default n
+
+config RT_USING_SARADC
+    bool "Enable SARADC"
+    default n
+
+if RT_USING_SDIO
+menu "Enable SDIO/SDMMC/eMMC"
+    config RT_USING_SDIO0
+        bool "Enable SDIO controller"
+        default n
+    config RT_USING_SDIO1
+        bool "Enable SDMMC controller"
+        default n
+endmenu
+endif
+endmenu

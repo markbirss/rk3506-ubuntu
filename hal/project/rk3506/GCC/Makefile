@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: BSD-3-Clause */
+
+# Copyright (c) 2024 Rockchip Electronics Co., Ltd.
+
+PROJECT		:= RK3506
+SOC		:= RK3506
+CPU		:= -mcpu=cortex-a7
+
+CFLAGS := -O2 -mfloat-abi=hard
+
+FIRMWARE_CPU_BASE ?= 0x03e00000
+DRAM_SIZE ?= 0x00100000
+SHMEM_BASE ?= 0x03b00000
+SHMEM_SIZE ?= 0x00100000
+DSMC_SLAVE_MEM_BASE ?= 0x06000000
+DSMC_SLAVE_MEM_SIZE ?= 0x02000000
+
+CFLAGS += -DFIRMWARE_BASE=$(FIRMWARE_CPU_BASE) -DDRAM_SIZE=$(DRAM_SIZE) -DSHMEM_BASE=$(SHMEM_BASE) -DSHMEM_SIZE=$(SHMEM_SIZE) -DLINUX_RPMSG_BASE=$(LINUX_RPMSG_BASE) -DLINUX_RPMSG_SIZE=$(LINUX_RPMSG_SIZE)
+CFLAGS += -DDSMC_SLAVE_MEM_BASE=$(DSMC_SLAVE_MEM_BASE) -DDSMC_SLAVE_MEM_SIZE=$(DSMC_SLAVE_MEM_SIZE)
+
+ifeq ($(CUR_CPU), 1)
+        CFLAGS += -DPRIMARY_CPU
+endif
+ifeq ($(CUR_CPU), 0)
+        CFLAGS += -DCPU0
+endif
+ifeq ($(CUR_CPU), 2)
+        CFLAGS += -DCPU2
+endif
+
+LINKER_SCRIPT := gcc_arm.ld
+CLEAN_FILES += $(LINKER_SCRIPT)
+
+-include ../../../middleware/benchmark/benchmark.mk
+include ../../common/GCC/Cortex-A.mk

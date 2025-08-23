@@ -1,0 +1,15 @@
+config BR2_PACKAGE_LOCKFILE_PROGS
+	bool "lockfile programs"
+	depends on BR2_USE_MMU # liblockfile
+	select BR2_PACKAGE_LIBLOCKFILE
+	help
+	  Build lockfile utility programs.
+
+if BR2_PACKAGE_LOCKFILE_PROGS
+
+config BR2_PACKAGE_LOCKFILE_PROGS_STATIC
+	bool "Enable static"
+	depends on BR2_PACKAGE_LIBLOCKFILE_STATIC
+	default y if BR2_STATIC_LIBS
+
+endif

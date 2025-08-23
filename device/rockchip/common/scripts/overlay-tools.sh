@@ -1,0 +1,1 @@
+../overlays/rootfs/tools/install.sh

@@ -1,0 +1,160 @@
+From bbd0f72d15b65d4961d7ce7b2d7da2a9c3062aa9 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Thu, 7 Dec 2023 16:14:14 +0800
+Subject: [PATCH] HACK: ldso: Speed up dlopen with large libraries
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ ldso/ldso/dl-hash.c | 101 +++++++++++++++++++++++++++++---------------
+ 1 file changed, 67 insertions(+), 34 deletions(-)
+
+diff --git a/ldso/ldso/dl-hash.c b/ldso/ldso/dl-hash.c
+index 0fede84..72551bb 100644
+--- a/ldso/ldso/dl-hash.c
++++ b/ldso/ldso/dl-hash.c
+@@ -275,6 +275,51 @@ _dl_lookup_sysv_hash(struct elf_resolve *tpnt, ElfW(Sym) *symtab, unsigned long
+ 	return NULL;
+ }
+ 
++static __inline__ const ElfW(Sym) *
++__dl_find_hash(const char *name, struct elf_resolve *tpnt,
++	int type_class, unsigned long gnu_hash_number)
++{
++	ElfW(Sym) *symtab;
++
++	unsigned long elf_hash_number = 0xffffffff;
++	const ElfW(Sym) *sym = NULL;
++
++	/* Don't search the executable when resolving a copy reloc. */
++	if ((type_class &  ELF_RTYPE_CLASS_COPY) && tpnt->libtype == elf_executable)
++		return NULL;
++
++	/* If the hash table is empty there is nothing to do here.  */
++	if (tpnt->nbucket == 0)
++		return NULL;
++
++	symtab = (ElfW(Sym) *) (intptr_t) (tpnt->dynamic_info[DT_SYMTAB]);
++
++#ifdef __LDSO_GNU_HASH_SUPPORT__
++	/* Prefer GNU hash style, if any */
++	if (tpnt->l_gnu_bitmask) {
++		sym = _dl_lookup_gnu_hash(tpnt, symtab, gnu_hash_number, name, type_class);
++		if (sym != NULL)
++			/* If sym has been found, do not search further */
++			return sym;
++	} else {
++#endif
++		/* Use the old SysV-style hash table */
++
++		/* Calculate the old sysv hash number only once */
++		if (elf_hash_number == 0xffffffff)
++			elf_hash_number = _dl_elf_hash((const unsigned char *)name);
++
++		sym = _dl_lookup_sysv_hash(tpnt, symtab, elf_hash_number, name, type_class);
++		if (sym != NULL) {
++			/* If sym has been found, do not search further */
++			return sym;
++		}
++#ifdef __LDSO_GNU_HASH_SUPPORT__
++	}
++#endif
++	return NULL;
++}
++
+ /*
+  * This function resolves externals, and this is either called when we process
+  * relocations or when we call an entry in the PLT table for the first time.
+@@ -282,18 +327,21 @@ _dl_lookup_sysv_hash(struct elf_resolve *tpnt, ElfW(Sym) *symtab, unsigned long
+ char *_dl_find_hash(const char *name, struct r_scope_elem *scope, struct elf_resolve *mytpnt,
+ 	int type_class, struct symbol_ref *sym_ref)
+ {
++	static struct r_scope_elem *last_scope = NULL;
++	static int last_type_class = -1;
++	static struct elf_resolve *last_tpnt = NULL;
++
+ 	struct elf_resolve *tpnt = NULL;
+-	ElfW(Sym) *symtab;
+ 	int i = 0;
+ 
+-	unsigned long elf_hash_number = 0xffffffff;
+ 	const ElfW(Sym) *sym = NULL;
+ 
+ 	char *weak_result = NULL;
+ 	struct r_scope_elem *loop_scope;
++	unsigned long gnu_hash_number = 0;
+ 
+ #ifdef __LDSO_GNU_HASH_SUPPORT__
+-	unsigned long gnu_hash_number = _dl_gnu_hash((const unsigned char *)name);
++	gnu_hash_number = _dl_gnu_hash((const unsigned char *)name);
+ #endif
+ 
+ 	if ((sym_ref) && (sym_ref->sym) && (ELF32_ST_VISIBILITY(sym_ref->sym->st_other) == STV_PROTECTED)) {
+@@ -301,6 +349,14 @@ char *_dl_find_hash(const char *name, struct r_scope_elem *scope, struct elf_res
+ 		if (mytpnt)
+ 			tpnt = mytpnt;
+ 	} else
++
++	/* HACK: Try the last resolver of same scope */
++	if (!sym && scope == last_scope && type_class == last_type_class) {
++		sym = __dl_find_hash(name, last_tpnt, type_class, gnu_hash_number);
++		if (sym)
++			tpnt = last_tpnt;
++	}
++
+ 	for (loop_scope = scope; loop_scope && !sym; loop_scope = loop_scope->next) {
+ 		for (i = 0; i < loop_scope->r_nlist; i++) {
+ 			tpnt = loop_scope->r_list[i];
+@@ -319,42 +375,19 @@ char *_dl_find_hash(const char *name, struct r_scope_elem *scope, struct elf_res
+ 						continue;
+ 				}
+ 			}
+-			/* Don't search the executable when resolving a copy reloc. */
+-			if ((type_class &  ELF_RTYPE_CLASS_COPY) && tpnt->libtype == elf_executable)
+-				continue;
+-
+-			/* If the hash table is empty there is nothing to do here.  */
+-			if (tpnt->nbucket == 0)
+-				continue;
+ 
+-			symtab = (ElfW(Sym) *) (intptr_t) (tpnt->dynamic_info[DT_SYMTAB]);
+-
+-#ifdef __LDSO_GNU_HASH_SUPPORT__
+-			/* Prefer GNU hash style, if any */
+-			if (tpnt->l_gnu_bitmask) {
+-				sym = _dl_lookup_gnu_hash(tpnt, symtab, gnu_hash_number, name, type_class);
+-				if (sym != NULL)
+-					/* If sym has been found, do not search further */
+-					break;
+-			} else {
+-#endif
+-				/* Use the old SysV-style hash table */
+-
+-				/* Calculate the old sysv hash number only once */
+-				if (elf_hash_number == 0xffffffff)
+-					elf_hash_number = _dl_elf_hash((const unsigned char *)name);
+-
+-				sym = _dl_lookup_sysv_hash(tpnt, symtab, elf_hash_number, name, type_class);
+-				if (sym != NULL)
+-					/* If sym has been found, do not search further */
+-					break;
+-#ifdef __LDSO_GNU_HASH_SUPPORT__
+-			}
+-#endif
++			sym = __dl_find_hash(name, tpnt, type_class, gnu_hash_number);
++			if (sym)
++				break;
+ 		} /* End of inner for */
+ 	}
+ 
+ 	if (sym) {
++		/* HACK: Record the last result */
++		last_scope = scope;
++		last_tpnt = tpnt;
++		last_type_class = type_class;
++
+ 		if (sym_ref) {
+ 			sym_ref->sym = sym;
+ 			sym_ref->tpnt = tpnt;
+-- 
+2.20.1
+

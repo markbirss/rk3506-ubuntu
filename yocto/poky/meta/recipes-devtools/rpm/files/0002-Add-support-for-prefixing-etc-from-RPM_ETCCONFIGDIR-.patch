@@ -1,0 +1,69 @@
+From d7143dc4e75c8bcc5cc4c852a4b972942b7e4d07 Mon Sep 17 00:00:00 2001
+From: Alexander Kanavin <alex.kanavin@gmail.com>
+Date: Fri, 20 Jan 2017 13:33:05 +0200
+Subject: [PATCH] Add support for prefixing /etc from RPM_ETCCONFIGDIR
+ environment variable
+
+This is needed so that rpm can pick up target-specific configuration
+from target rootfs instead of its own native sysroot.
+
+Upstream-Status: Inappropriate [oe-core specific]
+Signed-off-by: Alexander Kanavin <alex.kanavin@gmail.com>
+---
+ lib/rpmrc.c | 19 ++++++++++++++-----
+ 1 file changed, 14 insertions(+), 5 deletions(-)
+
+diff --git a/lib/rpmrc.c b/lib/rpmrc.c
+index 483585ae4..ea858c290 100644
+--- a/lib/rpmrc.c
++++ b/lib/rpmrc.c
+@@ -456,10 +456,14 @@ const char * lookupInDefaultTable(const char * name,
+ static void setDefaults(void)
+ {
+     const char *confdir = rpmConfigDir();
++    const char *etcconfdir = getenv("RPM_ETCCONFIGDIR");
++    if (etcconfdir == NULL)
++        etcconfdir = "";
++
+     if (!defrcfiles) {
+ 	defrcfiles = rstrscat(NULL, confdir, "/rpmrc", ":",
+ 				confdir, "/" RPM_VENDOR "/rpmrc", ":",
+-				SYSCONFDIR "/rpmrc", NULL);
++				etcconfdir, SYSCONFDIR "/rpmrc", NULL);
+     }
+ 
+ #ifndef MACROFILES
+@@ -469,9 +473,9 @@ static void setDefaults(void)
+ 				confdir, "/platform/%{_target}/macros", ":",
+ 				confdir, "/fileattrs/*.attr", ":",
+   				confdir, "/" RPM_VENDOR "/macros", ":",
+-				SYSCONFDIR "/rpm/macros.*", ":",
+-				SYSCONFDIR "/rpm/macros", ":",
+-				SYSCONFDIR "/rpm/%{_target}/macros", NULL);
++				etcconfdir, SYSCONFDIR "/rpm/macros.*", ":",
++				etcconfdir, SYSCONFDIR "/rpm/macros", ":",
++				etcconfdir, SYSCONFDIR "/rpm/%{_target}/macros", NULL);
+     }
+ #else
+     macrofiles = MACROFILES;
+@@ -1115,7 +1119,11 @@ static void read_auxv(void)
+  */
+ static void defaultMachine(rpmrcCtx ctx, const char ** arch, const char ** os)
+ {
+-    const char * const platform_path = SYSCONFDIR "/rpm/platform";
++    const char *etcconfdir = getenv("RPM_ETCCONFIGDIR");
++    if (etcconfdir == NULL)
++        etcconfdir = "";
++
++    const char * const platform_path = rstrscat(NULL, etcconfdir, SYSCONFDIR "/rpm/platform", NULL);
+     static struct utsname un;
+     char * chptr;
+     canonEntry canon;
+@@ -1435,6 +1443,7 @@ static void defaultMachine(rpmrcCtx ctx, const char ** arch, const char ** os)
+ 
+     if (arch) *arch = un.machine;
+     if (os) *os = un.sysname;
++    free(platform_path);
+ }
+ 
+ static

@@ -1,0 +1,4 @@
+iface wlan0 inet manual
+	dhcp-up /sbin/dhcpcd
+	dhcp-down /sbin/dhcpcd -k
+	wpa-conf /var/run/wpa_supplicant/wpa_supplicant.conf

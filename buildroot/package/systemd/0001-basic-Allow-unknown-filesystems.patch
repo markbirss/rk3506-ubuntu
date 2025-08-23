@@ -1,0 +1,28 @@
+From 91b3346252f7c09ae19164d408bc3b25bc18c3aa Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Fri, 8 Mar 2024 18:26:37 +0800
+Subject: [PATCH] basic: Allow unknown filesystems
+
+Allow unused custom filesystems(e.g. sdcardfs).
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ src/basic/meson.build | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/basic/meson.build b/src/basic/meson.build
+index 3af013b..9046720 100644
+--- a/src/basic/meson.build
++++ b/src/basic/meson.build
+@@ -231,7 +231,7 @@ filesystem_includes = ['linux/magic.h',
+ check_filesystems = find_program('check-filesystems.sh')
+ r = run_command([check_filesystems, cpp, files('filesystems-gperf.gperf')] + filesystem_includes, check: false)
+ if r.returncode() != 0
+-        error('Unknown filesystems defined in kernel headers:\n\n' + r.stdout())
++        warning('Unknown filesystems defined in kernel headers:\n\n' + r.stdout())
+ endif
+ 
+ filesystems_gperf_h = custom_target(
+-- 
+2.20.1
+

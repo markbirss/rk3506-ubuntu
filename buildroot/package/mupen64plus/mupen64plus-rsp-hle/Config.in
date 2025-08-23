@@ -1,0 +1,7 @@
+config BR2_PACKAGE_MUPEN64PLUS_RSP_HLE
+        bool "mupen64plus-video-rsp-hle"
+	depends on BR2_PACKAGE_MUPEN64PLUS_CORE
+        help
+          mupen64plus rsp hle.
+
+	  https://mupen64plus.org/

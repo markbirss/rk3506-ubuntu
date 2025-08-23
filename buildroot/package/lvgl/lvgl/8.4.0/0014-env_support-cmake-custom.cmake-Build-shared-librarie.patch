@@ -1,0 +1,70 @@
+From bc216ae0f19df11ef8453ad133a607c5f7772a11 Mon Sep 17 00:00:00 2001
+From: Jiajian Wu <jair.wu@rock-chips.com>
+Date: Tue, 27 Sep 2022 16:00:50 +0800
+Subject: [PATCH 14/35] env_support: cmake: custom.cmake: Build shared
+ libraries ON
+
+Signed-off-by: Jiajian Wu <jair.wu@rock-chips.com>
+---
+ env_support/cmake/custom.cmake | 30 +++++++++++++++---------------
+ 1 file changed, 15 insertions(+), 15 deletions(-)
+
+diff --git a/env_support/cmake/custom.cmake b/env_support/cmake/custom.cmake
+index 15367103a..d851f7f7a 100644
+--- a/env_support/cmake/custom.cmake
++++ b/env_support/cmake/custom.cmake
+@@ -12,11 +12,11 @@ option(LV_CONF_PATH "Path defined for lv_conf.h")
+ get_filename_component(LV_CONF_DIR ${LV_CONF_PATH} DIRECTORY)
+ 
+ # Option to build shared libraries (as opposed to static), default: OFF
+-option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
++option(BUILD_SHARED_LIBS "Build shared libraries" ON)
+ 
+-file(GLOB_RECURSE SOURCES ${LVGL_ROOT_DIR}/src/*.c)
+-file(GLOB_RECURSE EXAMPLE_SOURCES ${LVGL_ROOT_DIR}/examples/*.c)
+-file(GLOB_RECURSE DEMO_SOURCES ${LVGL_ROOT_DIR}/demos/*.c)
++file(GLOB_RECURSE SOURCES ${LVGL_ROOT_DIR}/src/*.c ${LVGL_ROOT_DIR}/demos/*.c)
++#file(GLOB_RECURSE EXAMPLE_SOURCES ${LVGL_ROOT_DIR}/examples/*.c)
++#file(GLOB_RECURSE DEMO_SOURCES ${LVGL_ROOT_DIR}/demos/*.c)
+ 
+ if (BUILD_SHARED_LIBS)
+   add_library(lvgl SHARED ${SOURCES})
+@@ -25,10 +25,10 @@ else()
+ endif()
+ 
+ add_library(lvgl::lvgl ALIAS lvgl)
+-add_library(lvgl_examples STATIC ${EXAMPLE_SOURCES})
+-add_library(lvgl::examples ALIAS lvgl_examples)
+-add_library(lvgl_demos STATIC ${DEMO_SOURCES})
+-add_library(lvgl::demos ALIAS lvgl_demos)
++#add_library(lvgl_examples STATIC ${EXAMPLE_SOURCES})
++#add_library(lvgl::examples ALIAS lvgl_examples)
++#add_library(lvgl_demos STATIC ${DEMO_SOURCES})
++#add_library(lvgl::demos ALIAS lvgl_demos)
+ 
+ target_compile_definitions(
+   lvgl PUBLIC $<$<BOOL:${LV_LVGL_H_INCLUDE_SIMPLE}>:LV_LVGL_H_INCLUDE_SIMPLE>
+@@ -38,13 +38,13 @@ target_compile_definitions(
+ target_include_directories(lvgl SYSTEM PUBLIC ${LVGL_ROOT_DIR} ${LV_CONF_DIR})
+ 
+ # Include /examples folder
+-target_include_directories(lvgl_examples SYSTEM
+-                           PUBLIC ${LVGL_ROOT_DIR}/examples)
+-target_include_directories(lvgl_demos SYSTEM
+-                           PUBLIC ${LVGL_ROOT_DIR}/demos)
+-
+-target_link_libraries(lvgl_examples PUBLIC lvgl)
+-target_link_libraries(lvgl_demos PUBLIC lvgl)
++#target_include_directories(lvgl_examples SYSTEM
++#                           PUBLIC ${LVGL_ROOT_DIR}/examples)
++#target_include_directories(lvgl_demos SYSTEM
++#                           PUBLIC ${LVGL_ROOT_DIR}/demos)
++#
++#target_link_libraries(lvgl_examples PUBLIC lvgl)
++#target_link_libraries(lvgl_demos PUBLIC lvgl)
+ 
+ # Lbrary and headers can be installed to system using make install
+ file(GLOB LVGL_PUBLIC_HEADERS "${CMAKE_SOURCE_DIR}/lv_conf.h"
+-- 
+2.25.1
+

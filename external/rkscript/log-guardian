@@ -1,0 +1,161 @@
+#!/bin/sh -e
+#
+# Truncate log files when no space left on device
+#
+# Usage:
+# log-guardian [OPTION...]
+#   --interval=<time[s|m|h|d]>
+#   --reserved-log-size=<size[K|M|G]>
+#   --min-avail-size=<size[K|M|G]>
+#   --log-dirs=<path1,path2,...>
+#   --quit
+
+PID_FILE=/var/run/log-guardian.pid
+
+INTERVAL="60s"
+RESERVED_LOG_SIZE="10M"
+MIN_AVAIL_SIZE="100M"
+LOG_DIRS="/var/log/,/tmp/"
+
+log() {
+	if which logger >/dev/null; then
+		logger -t log-guardian $@
+	fi
+	echo "log-guardian: $@"
+}
+
+PID=$(cat $PID_FILE 2>/dev/null || true)
+if [ "$PID" ]; then
+	log "Stopping log-guardian ($PID)..."
+	kill -9 -$PID 2>/dev/null || true
+	rm -f "$PID_FILE"
+fi
+
+for opt in $@; do
+	case "$opt" in
+		--interval=*) INTERVAL="${opt#--interval=}" ;;
+		--reserved-log-size=*)
+			RESERVED_LOG_SIZE="${opt#--reserved-log-size=}"
+			;;
+		--min-avail-size=*)
+			MIN_AVAIL_SIZE="${opt#--min-avail-size=}"
+			;;
+		--log-dirs=*) LOG_DIRS="${opt#--log-dirs=}" ;;
+		*) exit 0 ;;
+	esac
+done
+
+case "$RESERVED_LOG_SIZE" in
+	*K) RESERVED_LOG_SIZE=$(( ${RESERVED_LOG_SIZE%K} * 1024)) ;;
+	*M) RESERVED_LOG_SIZE=$(( ${RESERVED_LOG_SIZE%M} * 1024 * 1024)) ;;
+	*G) RESERVED_LOG_SIZE=$(( ${RESERVED_LOG_SIZE%G} * 1024 * 1024 * 1024)) ;;
+esac
+
+case "$MIN_AVAIL_SIZE" in
+	*K) MIN_AVAIL_SIZE=$(( ${MIN_AVAIL_SIZE%K} * 1024)) ;;
+	*M) MIN_AVAIL_SIZE=$(( ${MIN_AVAIL_SIZE%M} * 1024 * 1024)) ;;
+	*G) MIN_AVAIL_SIZE=$(( ${MIN_AVAIL_SIZE%G} * 1024 * 1024 * 1024)) ;;
+esac
+
+total_size() {
+	echo $(($(df "$1" -k | tail -n 1 | awk '{print $2}') * 1024))
+}
+
+avail_size() {
+	echo $(($(df "$1" -k | tail -n 1 | awk '{print $4}') * 1024))
+}
+
+is_full() {
+	[ "$(avail_size "$1")" -lt "$MIN_AVAIL_SIZE" ]
+}
+
+collect_files() {
+	find "$1" -type f ${2:+-size +$2} | xargs -r ls -dS
+}
+
+rotate_file() {
+	FILE="$1"
+
+	NEW_SIZE="$(avail_size "$FILE")"
+	if [ "$NEW_SIZE" -gt "$RESERVED_LOG_SIZE" ]; then
+		NEW_SIZE="$RESERVED_LOG_SIZE"
+	fi
+	[ "$NEW_SIZE" -gt 0 ] || return 0
+
+	SIZE="$(du -b "$FILE" | cut -f 1)"
+
+	log "Rotating \"$FILE\"($SIZE) to \"$FILE.1\"($NEW_SIZE)..."
+
+	SKIP="$(( ($SIZE - $NEW_SIZE) / 1024 ))"
+	dd if="$FILE" of="$FILE.1" skip="$SKIP" bs=1024 >/dev/null 2>&1 || true
+	truncate -s 0 "$FILE"
+}
+
+process_dir() {
+	LOG_DIR="$1"
+
+	log "Processing \"$LOG_DIR\"..."
+
+	# 1/ Try to remove backup logs
+	for suffix in "~" $(find "$LOG_DIR" -type f -name "*.*" | \
+		grep -oE "[0-9]+$" | sort -rh | uniq); do
+		log "Removing \"*.$suffix\"..."
+		find "$LOG_DIR" -type f -name "*.$suffix" -exec rm {} +
+		is_full "$LOG_DIR" || return 0
+	done
+
+	# 2/ Try to rotate logs
+	for f in $(collect_files "$LOG_DIR" "${RESERVED_LOG_SIZE}c"); do
+		rotate_file "$f"
+		is_full "$LOG_DIR" || return 0
+	done
+
+	# 3/ Try to truncate logs
+	for f in $(collect_files "$LOG_DIR" 0); do
+		log "Truncating \"$f\"..."
+		truncate -s 0 "$f"
+		is_full "$LOG_DIR" || return 0
+	done
+
+	# Should not reach here!
+	log "Unable to get more free space for \"$LOG_DIR\"..."
+	return 1
+}
+
+LOG_DIRS="$(echo "$LOG_DIRS" | tr ',' ' ')"
+for dir in $LOG_DIRS; do
+	if [ ! -d "$dir" ]; then
+		log "[WARN] Not a dir: \"$dir\""
+	elif [ "$(total_size "$dir")" -le "$MIN_AVAIL_SIZE" ]; then
+		log "[WARN] No enough space for \"$dir\"!"
+	fi
+done
+
+[ "$LOG_DIRS" ] || exit 0
+
+log "Guarding logs in: \"$LOG_DIRS\"..."
+
+{
+	trap 'rm -f "$PID_FILE"' EXIT QUIT TERM INT
+	echo $$ > $PID_FILE
+
+	while true; do
+		for dir in $LOG_DIRS; do
+			[ -d "$dir" ] || continue
+			is_full "$dir" || continue
+			[ "$(total_size "$dir")" -gt "$MIN_AVAIL_SIZE" ] || \
+				continue
+
+			log "[WARN] \"$dir\" is almost full:"
+			log "$(df -h "$dir" | head -n 1)"
+			log "$(df -h "$dir" | tail -n 1)"
+
+			process_dir "$dir" || continue
+
+			log "Now \"$dir\" is:"
+			log "$(df -h "$dir" | head -n 1)"
+			log "$(df -h "$dir" | tail -n 1)"
+		done
+		sleep $INTERVAL
+	done
+}&

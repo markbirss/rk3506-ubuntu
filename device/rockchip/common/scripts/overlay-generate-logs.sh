@@ -1,0 +1,1 @@
+../overlays/rootfs/generate-logs/install.sh

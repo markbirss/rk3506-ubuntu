@@ -1,0 +1,14 @@
+config BR2_PACKAGE_DHRYSTONE
+	bool "dhrystone"
+	help
+	  easy-to-use integer benchmark
+
+	  http://www.netlib.org/benchmark/dhry-c
+
+if BR2_PACKAGE_DHRYSTONE
+
+config BR2_PACKAGE_DHRYSTONE_STATIC
+	bool "Enable static"
+	default y if BR2_STATIC_LIBS
+
+endif

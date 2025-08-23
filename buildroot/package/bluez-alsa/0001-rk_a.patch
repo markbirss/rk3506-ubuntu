@@ -1,0 +1,155 @@
+From 70efa0dc8ac9c84951e81a1bcb1d0317b1540940 Mon Sep 17 00:00:00 2001
+From: Yao Xiao <xiaoyao@rock-chips.com>
+Date: Tue, 22 Oct 2024 17:27:18 +0800
+Subject: [PATCH 1/1] rk_a
+
+---
+ configure.ac       |  8 ++++++++
+ src/ba-rfcomm.c    |  5 +++++
+ src/ba-transport.c |  6 ++++++
+ src/sco.c          | 28 ++++++++++++++++++++++++++++
+ 4 files changed, 47 insertions(+)
+
+diff --git a/configure.ac b/configure.ac
+index 025ff56..eac235b 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -211,6 +211,14 @@ AM_COND_IF([ENABLE_MSBC], [
+ 	AC_DEFINE([ENABLE_MSBC], [1], [Define to 1 if mSBC is enabled.])
+ ])
+ 
++AC_ARG_ENABLE([sco2pcm],
++	[AS_HELP_STRING([--enable-sco2pcm], [enable sco over pcm support])])
++AM_CONDITIONAL([ENABLE_SCO2PCM], [test "x$enable_sco2pcm" = "xyes"])
++AM_COND_IF([ENABLE_SCO2PCM], [
++	PKG_CHECK_MODULES([SPANDSP], [spandsp >= 0.0.6])
++	AC_DEFINE([ENABLE_SCO2PCM], [1], [Define to 1 if sco2pcm is enabled.])
++])
++
+ AC_ARG_ENABLE([ofono],
+ 	AS_HELP_STRING([--enable-ofono], [enable HFP over oFono]))
+ AM_CONDITIONAL([ENABLE_OFONO], [test "x$enable_ofono" = "xyes"])
+diff --git a/src/ba-rfcomm.c b/src/ba-rfcomm.c
+index 483156c..428263b 100644
+--- a/src/ba-rfcomm.c
++++ b/src/ba-rfcomm.c
+@@ -1020,9 +1020,11 @@ static int rfcomm_hfp_setup_codec_connection(struct ba_rfcomm *r) {
+ 	/* Only AG can initialize codec connection. So, for HF we need to request
+ 	 * codec selection from AG by sending AT+BCC command. */
+ 	if (t_sco->profile & BA_TRANSPORT_PROFILE_HFP_HF) {
++		/*
+ 		if ((rv = rfcomm_write_at(fd, AT_TYPE_CMD, "+BCC", NULL)) == -1)
+ 			return -1;
+ 		r->handler = &rfcomm_handler_resp_ok;
++		*/
+ 		return 0;
+ 	}
+ 
+@@ -1170,6 +1172,8 @@ static void rfcomm_thread_cleanup(struct ba_rfcomm *r) {
+ 
+ }
+ 
++/* external RFCOMM handler */
++volatile int g_sco_handler_fd = -1;
+ static void *rfcomm_thread(struct ba_rfcomm *r) {
+ 
+ 	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+@@ -1407,6 +1411,7 @@ process:
+ 
+ 		r->idle = false;
+ 		pfds[2].fd = r->handler_fd;
++		g_sco_handler_fd = r->handler_fd;
+ 
+ 		pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+ 		int poll_rv = poll(pfds, ARRAYSIZE(pfds), timeout);
+diff --git a/src/ba-transport.c b/src/ba-transport.c
+index b983291..d086948 100644
+--- a/src/ba-transport.c
++++ b/src/ba-transport.c
+@@ -898,10 +898,16 @@ fail:
+ 	return -1;
+ }
+ 
++extern volatile int g_sco_handler_fd;
+ static int transport_release_bt_sco(struct ba_transport *t) {
+ 
+ 	debug("Releasing SCO link: %d", t->bt_fd);
+ 
++	//notify incoming sco link
++	if (write(g_sco_handler_fd, "Releasing SCO link",
++		  strlen("Releasing SCO link")) == -1)
++		error("Couldn't forward sco: %s", strerror(errno));
++
+ 	shutdown(t->bt_fd, SHUT_RDWR);
+ 	close(t->bt_fd);
+ 	t->bt_fd = -1;
+diff --git a/src/sco.c b/src/sco.c
+index 857a28e..20c72b0 100644
+--- a/src/sco.c
++++ b/src/sco.c
+@@ -56,6 +56,7 @@ static void sco_dispatcher_cleanup(struct sco_data *data) {
+ 		close(data->pfd.fd);
+ }
+ 
++extern volatile int g_sco_handler_fd;
+ static void *sco_dispatcher_thread(struct ba_adapter *a) {
+ 
+ 	struct sco_data data = { .a = a, .pfd = { -1, POLLIN, 0 } };
+@@ -116,6 +117,11 @@ static void *sco_dispatcher_thread(struct ba_adapter *a) {
+ 		ba2str(&addr.sco_bdaddr, addrstr);
+ 		debug("New incoming SCO link: %s: %d", addrstr, fd);
+ 
++		//notify incoming sco link
++		if (write(g_sco_handler_fd, "New incoming SCO link",
++			  strlen("New incoming SCO link")) == -1)
++			error("Couldn't forward sco: %s", strerror(errno));
++
+ 		if ((d = ba_device_lookup(data.a, &addr.sco_bdaddr)) == NULL) {
+ 			error("Couldn't lookup device: %s", addrstr);
+ 			goto cleanup;
+@@ -133,6 +139,26 @@ static void *sco_dispatcher_thread(struct ba_adapter *a) {
+ 			error("Couldn't setup transparent voice: %s", strerror(errno));
+ 			goto cleanup;
+ 		}
++
++#if ENABLE_SCO2PCM
++		if (a->chip.manufacturer == BT_COMPID_BROADCOM) {
++			//Broadcom WBS
++			system("hcitool cmd 0x3f 0x7e 01 02 00");
++
++			//I2SPCM PARAM
++			system("hcitool cmd 0x3f 0x6d 00 01 01 02");
++
++			//Voice Setting
++			system("hcitool cmd 0x03 0x0026 0x63 0x00");
++
++			//Broadcom SCO PCM PARAM: host master, bt slave
++			system("hcitool cmd 0x3f 0x1c 00 02 00 00 00");
++
++			//Broadcom SCO PCM PARAM: bt master, host slave
++			//system("hcitool cmd 0x3f 0x1c 00 02 00 01 01");
++		}
++#endif
++
+ 		if (read(fd, &voice, 1) == -1) {
+ 			error("Couldn't authorize SCO connection: %s", strerror(errno));
+ 			goto cleanup;
+@@ -174,6 +200,7 @@ int sco_setup_connection_dispatcher(struct ba_adapter *a) {
+ 	if (!pthread_equal(a->sco_dispatcher, config.main_thread))
+ 		return 0;
+ 
++	#if !ENABLE_SCO2PCM
+ 	/* XXX: It is a known issue with Broadcom chips, that by default, the SCO
+ 	 *      packets are routed via the chip's PCM interface. However, the IO
+ 	 *      thread expects data to be available via the transport interface. */
+@@ -201,6 +228,7 @@ int sco_setup_connection_dispatcher(struct ba_adapter *a) {
+ 			hci_close_dev(dd);
+ 
+ 	}
++	#endif
+ 
+ 	int ret;
+ 
+-- 
+2.34.1
+

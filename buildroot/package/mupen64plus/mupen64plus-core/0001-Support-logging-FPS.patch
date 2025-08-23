@@ -1,0 +1,69 @@
+From 7ffb5e489282b7c8f184a2d24a897ca83830a69c Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Wed, 25 Sep 2024 11:59:01 +0800
+Subject: [PATCH] Support logging FPS
+
+Set env MUPEN64PLUS_LOG_FPS=1 to enable.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ src/main/main.c | 29 +++++++++++++++++++++++++++++
+ 1 file changed, 29 insertions(+)
+
+diff --git a/src/main/main.c b/src/main/main.c
+index e317570..5c32031 100644
+--- a/src/main/main.c
++++ b/src/main/main.c
+@@ -117,6 +117,8 @@ m64p_media_loader g_media_loader;
+ 
+ int g_gs_vi_counter = 0;
+ 
++static int log_fps = 0;
++
+ /** static (local) variables **/
+ static int   l_CurrentFrame = 0;         // frame counter
+ static int   l_TakeScreenshot = 0;       // Tell OSD Rendering callback to take a screenshot just before drawing the OSD
+@@ -959,6 +961,31 @@ void new_frame(void)
+         l_FrameAdvance = 0;
+         StateChanged(M64CORE_EMU_STATE, M64EMU_PAUSED);
+     }
++
++#define FPS_UPDATE_INTERVAL     120
++    if (log_fps) {
++        static uint64_t last_fps_time = 0;
++        struct timeval tv;
++        uint64_t curr_time;
++        float fps;
++
++        if (!last_fps_time) {
++            gettimeofday(&tv, NULL);
++            last_fps_time = tv.tv_sec * 1000 + tv.tv_usec / 1000;
++        }
++
++        if (l_CurrentFrame % FPS_UPDATE_INTERVAL)
++            return;
++
++        gettimeofday(&tv, NULL);
++        curr_time = tv.tv_sec * 1000 + tv.tv_usec / 1000;
++
++        fps = 1000.0f * FPS_UPDATE_INTERVAL / (curr_time - last_fps_time);
++        last_fps_time = curr_time;
++
++        printf("[Mupen64plus]: FPS: %6.1f || Frames : %" PRIu64 "\n",
++               fps, l_CurrentFrame);
++    }
+ }
+ 
+ static void apply_speed_limiter(void)
+@@ -1968,6 +1995,8 @@ m64p_error main_run(void)
+     g_EmulatorRunning = 1;
+     StateChanged(M64CORE_EMU_STATE, M64EMU_RUNNING);
+ 
++    log_fps = getenv("MUPEN64PLUS_LOG_FPS") != NULL;
++
+     poweron_device(&g_dev);
+     pif_bootrom_hle_execute(&g_dev.r4300);
+     run_device(&g_dev);
+-- 
+2.20.1
+

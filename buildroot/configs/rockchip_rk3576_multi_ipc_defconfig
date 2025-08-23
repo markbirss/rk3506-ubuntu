@@ -1,0 +1,3 @@
+#include "rockchip_rk3576_ipc_defconfig"
+BR2_PACKAGE_AVS=y
+BR2_PACKAGE_RKIPC_RK3576_MULTI_IPC=y

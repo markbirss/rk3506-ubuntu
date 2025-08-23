@@ -1,0 +1,75 @@
+From f274db7fc3656110b33054f695cc8dc2de8a222f Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Tue, 12 May 2020 15:35:40 +0800
+Subject: [PATCH 04/95] input: Fix losing focus during re-attaching keyboard
+
+Launch the weston-terminal and begin typing into it. Afterward, detach
+and then re-attach the last keyboard. The keyboard focus is lost.
+
+Call notify_keyboard_focus_out() when releasing the last keyboard to
+save the keyboard focus, and try to restore it when attaching new
+keyboard.
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ libweston/input.c         | 17 +++++++++++------
+ libweston/libinput-seat.c |  4 ++++
+ 2 files changed, 15 insertions(+), 6 deletions(-)
+
+diff --git a/libweston/input.c b/libweston/input.c
+index 3faa6be..d1f2aef 100644
+--- a/libweston/input.c
++++ b/libweston/input.c
+@@ -2801,9 +2801,11 @@ notify_keyboard_focus_out(struct weston_seat *seat)
+ 		weston_pointer_cancel_grab(pointer);
+ 
+ 	if (focus) {
++		if (seat->saved_kbd_focus)
++			wl_list_remove(&seat->saved_kbd_focus_listener.link);
++
+ 		seat->use_saved_kbd_focus = true;
+ 		seat->saved_kbd_focus = focus;
+-		assert(seat->saved_kbd_focus_listener.notify == NULL);
+ 		seat->saved_kbd_focus_listener.notify =
+ 			destroy_device_saved_kbd_focus;
+ 		wl_signal_add(&focus->destroy_signal,
+@@ -4161,13 +4163,16 @@ weston_keyboard_reset_state(struct weston_keyboard *keyboard)
+ WL_EXPORT void
+ weston_seat_release_keyboard(struct weston_seat *seat)
+ {
+-	seat->keyboard_device_count--;
+-	assert(seat->keyboard_device_count >= 0);
+-	if (seat->keyboard_device_count == 0) {
+-		weston_keyboard_set_focus(seat->keyboard_state, NULL);
+-		weston_keyboard_cancel_grab(seat->keyboard_state);
++	assert(seat->keyboard_device_count > 0);
++
++	if (seat->keyboard_device_count == 1) {
++		notify_keyboard_focus_out(seat);
++		seat->keyboard_device_count = 0;
++
+ 		weston_keyboard_reset_state(seat->keyboard_state);
+ 		seat_send_updated_caps(seat);
++	} else {
++		seat->keyboard_device_count--;
+ 	}
+ }
+ 
+diff --git a/libweston/libinput-seat.c b/libweston/libinput-seat.c
+index 5ecb974..b7f09ba 100644
+--- a/libweston/libinput-seat.c
++++ b/libweston/libinput-seat.c
+@@ -145,6 +145,10 @@ device_added(struct udev_input *input, struct libinput_device *libinput_device)
+ 			seat->led_update(seat, seat->keyboard_state->xkb_state.leds);
+ 	}
+ 
++	if (device->seat_caps & EVDEV_SEAT_KEYBOARD &&
++	    seat->keyboard_device_count == 1)
++		evdev_notify_keyboard_focus(seat, &udev_seat->devices_list);
++
+ 	return 0;
+ }
+ 
+-- 
+2.20.1
+

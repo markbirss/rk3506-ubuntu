@@ -1,0 +1,19 @@
+config BR2_PACKAGE_MUPEN64PLUS
+	bool "mupen64plus"
+        help
+	  https://mupen64plus.org/
+
+if BR2_PACKAGE_MUPEN64PLUS
+	source "package/mupen64plus/mupen64plus-core/Config.in"
+	source "package/mupen64plus/mupen64plus-ui-console/Config.in"
+	source "package/mupen64plus/mupen64plus-audio-sdl/Config.in"
+	source "package/mupen64plus/mupen64plus-input-sdl/Config.in"
+	source "package/mupen64plus/mupen64plus-rsp-cxd4/Config.in"
+	source "package/mupen64plus/mupen64plus-rsp-hle/Config.in"
+	source "package/mupen64plus/mupen64plus-rsp-parallel/Config.in"
+	source "package/mupen64plus/mupen64plus-rsp-z64/Config.in"
+	source "package/mupen64plus/mupen64plus-video-gles2n64/Config.in"
+	source "package/mupen64plus/mupen64plus-video-glide64mk2/Config.in"
+	source "package/mupen64plus/mupen64plus-video-gliden64/Config.in"
+	source "package/mupen64plus/mupen64plus-video-rice/Config.in"
+endif

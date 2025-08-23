@@ -1,0 +1,54 @@
+/* SPDX-License-Identifier: BSD-3-Clause */
+/*
+ * Copyright (c) 2023 Rockchip Electronics Co., Ltd.
+ */
+
+/dts-v1/;
+/ {
+	description = "FIT source file for rockchip AMP";
+	#address-cells = <1>;
+
+	images {
+
+		amp0 {
+			description  = "bare-mental-core0";
+			data         = /incbin/("rtt0.bin");
+			type         = "firmware";
+			compression  = "none";
+			arch         = "arm64";	 // "arm64" or "arm"
+			cpu          = <0x000>;  // mpidr
+			thumb        = <0>;      // 0: arm or thumb2; 1: thumb
+			hyp          = <0>;      // 0: el1/svc; 1: el2/hyp
+			load         = <0x44000000>;
+			size         = <0x00800000>;
+			srambase     = <0x3ff80000>;
+			sramsize     = <0x00080000>;
+			udelay       = <10000>;
+			hash {
+				algo = "sha256";
+			};
+		};
+
+	};
+
+	share_memory {
+		base         = <0x47800000>;
+		size         = <0x00400000>;
+	};
+
+	configurations {
+		default = "conf";
+		conf {
+			description = "Rockchip AMP images";
+			rollback-index = <0x0>;
+			loadables = "amp0";
+
+			signature {
+				algo = "sha256,rsa2048";
+				padding = "pss";
+				key-name-hint = "dev";
+				sign-images = "loadables";
+			};
+		};
+	};
+};

@@ -1,0 +1,72 @@
+/* SPDX-License-Identifier: BSD-3-Clause */
+/*
+ * Copyright (c) 2024 Rockchip Electronics Co., Ltd.
+ */
+
+/dts-v1/;
+/ {
+	description = "FIT source file for rockchip AMP";
+	#address-cells = <1>;
+
+	images {
+		amp2 {
+			description  = "rtos-core2";
+			data         = /incbin/("rtt2.bin");
+			type         = "firmware";
+			compression  = "none";
+			arch         = "arm";	 // "arm64" or "arm"
+			cpu          = <0xf02>;  // mpidr
+			thumb        = <0>;      // 0: arm or thumb2; 1: thumb
+			hyp          = <0>;      // 0: el1/svc; 1: el2/hyp
+			load         = <0x03e00000>;
+			srambase     = <0xfff80000>;
+			sramsize     = <0x0000c000>;
+			compile {
+				size     = <0x00100000>;
+				sys      = "rtt";
+				core     = "ap";
+				rtt_config = "board/evb1/defconfig";
+			};
+			udelay       = <10000>;
+			hash {
+				algo = "sha256";
+			};
+		};
+	};
+
+	share {
+		rpmsg_base       = <0x03c00000>;
+		rpmsg_size       = <0x00200000>;
+	};
+
+	configurations {
+		default = "conf";
+		conf {
+			description = "Rockchip AMP images";
+			rollback-index = <0x0>;
+			loadables = "amp2";
+
+			signature {
+				algo = "sha256,rsa2048";
+				padding = "pss";
+				key-name-hint = "dev";
+				sign-images = "loadables";
+			};
+
+			/* - run linux on cpu0
+			 * - it is brought up by amp(that run on U-Boot)
+			 * - it is boot entry depends on U-Boot
+			 */
+			linux {
+				description  = "linux-os";
+				arch         = "arm";
+				cpu          = <0xf00>;
+				thumb        = <0>;
+				hyp          = <0>;
+				load         = <0x00900000>;
+				udelay       = <0>;
+			};
+		};
+	};
+};
+

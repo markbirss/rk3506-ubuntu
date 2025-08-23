@@ -1,0 +1,22 @@
+menuconfig RT_USING_AUPIPE
+    bool "Enable Audio Pipeline for rt-thread"
+    default n
+
+if RT_USING_AUPIPE
+
+    config RT_USING_AUPIPE_AUDIOSRC
+        bool "Enable audiosrc"
+        depends on RT_USING_AUPIPE
+        default n
+
+    config RT_USING_AUPIPE_AUDIOSINK
+        bool "Enable audiosink"
+        depends on RT_USING_AUPIPE
+        default n
+
+    config RT_USING_AUPIPE_QUEUE
+        bool "Enable queue"
+        depends on RT_USING_AUPIPE
+        default n
+
+endif

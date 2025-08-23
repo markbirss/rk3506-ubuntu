@@ -1,0 +1,242 @@
+From 66ee227b7ebacaacbc141f8e26e0c6cfbb9a03c0 Mon Sep 17 00:00:00 2001
+From: Jeffy Chen <jeffy.chen@rock-chips.com>
+Date: Sat, 7 Oct 2023 17:08:03 +0800
+Subject: [PATCH 8/8] adb: daemon: Fix build issue with musl and uclibc
+
+Signed-off-by: Jeffy Chen <jeffy.chen@rock-chips.com>
+---
+ adb/adbd_auth.cpp                      | 131 ++++++++++++++++++++++++-
+ adb/file_sync_service.cpp              |   2 +
+ adb/transport.cpp                      |   2 +
+ base/include/android-base/quick_exit.h |   8 +-
+ base/logging.cpp                       |   2 +-
+ meson.build                            |   1 -
+ 6 files changed, 139 insertions(+), 7 deletions(-)
+
+diff --git a/adb/adbd_auth.cpp b/adb/adbd_auth.cpp
+index da64a0c..03bd54b 100644
+--- a/adb/adbd_auth.cpp
++++ b/adb/adbd_auth.cpp
+@@ -46,6 +46,135 @@ static bool needs_retry = false;
+ 
+ bool auth_required = true;
+ 
++#ifndef b64_pton
++
++/* Based on glibc-2.37-2: resolv/base64.c */
++
++static const char Base64[] =
++	"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
++static const char Pad64 = '=';
++
++int
++b64_pton (char const *src, u_char *target, size_t targsize)
++{
++	int tarindex, state, ch;
++	char *pos;
++
++	state = 0;
++	tarindex = 0;
++
++	while ((ch = *src++) != '\0') {
++		if (isspace(ch))	/* Skip whitespace anywhere. */
++			continue;
++
++		if (ch == Pad64)
++			break;
++
++		pos = strchr(Base64, ch);
++		if (pos == 0) 		/* A non-base64 character. */
++			return (-1);
++
++		switch (state) {
++		case 0:
++			if (target) {
++				if ((size_t)tarindex >= targsize)
++					return (-1);
++				target[tarindex] = (pos - Base64) << 2;
++			}
++			state = 1;
++			break;
++		case 1:
++			if (target) {
++				if ((size_t)tarindex + 1 >= targsize)
++					return (-1);
++				target[tarindex]   |=  (pos - Base64) >> 4;
++				target[tarindex+1]  = ((pos - Base64) & 0x0f)
++							<< 4 ;
++			}
++			tarindex++;
++			state = 2;
++			break;
++		case 2:
++			if (target) {
++				if ((size_t)tarindex + 1 >= targsize)
++					return (-1);
++				target[tarindex]   |=  (pos - Base64) >> 2;
++				target[tarindex+1]  = ((pos - Base64) & 0x03)
++							<< 6;
++			}
++			tarindex++;
++			state = 3;
++			break;
++		case 3:
++			if (target) {
++				if ((size_t)tarindex >= targsize)
++					return (-1);
++				target[tarindex] |= (pos - Base64);
++			}
++			tarindex++;
++			state = 0;
++			break;
++		default:
++			abort();
++		}
++	}
++
++	/*
++	 * We are done decoding Base-64 chars.  Let's see if we ended
++	 * on a byte boundary, and/or with erroneous trailing characters.
++	 */
++
++	if (ch == Pad64) {		/* We got a pad char. */
++		ch = *src++;		/* Skip it, get next. */
++		switch (state) {
++		case 0:		/* Invalid = in first position */
++		case 1:		/* Invalid = in second position */
++			return (-1);
++
++		case 2:		/* Valid, means one byte of info */
++			/* Skip any number of spaces. */
++			for ((void)NULL; ch != '\0'; ch = *src++)
++				if (!isspace(ch))
++					break;
++			/* Make sure there is another trailing = sign. */
++			if (ch != Pad64)
++				return (-1);
++			ch = *src++;		/* Skip the = */
++			/* Fall through to "single trailing =" case. */
++			/* FALLTHROUGH */
++
++		case 3:		/* Valid, means two bytes of info */
++			/*
++			 * We know this char is an =.  Is there anything but
++			 * whitespace after it?
++			 */
++			for ((void)NULL; ch != '\0'; ch = *src++)
++				if (!isspace(ch))
++					return (-1);
++
++			/*
++			 * Now make sure for cases 2 and 3 that the "extra"
++			 * bits that slopped past the last full byte were
++			 * zeros.  If we don't check them, they become a
++			 * subliminal channel.
++			 */
++			if (target && target[tarindex] != 0)
++				return (-1);
++		}
++	} else {
++		/*
++		 * We ended by seeing the end of the string.  Make sure we
++		 * have no partial bytes lying around.
++		 */
++		if (state != 0)
++			return (-1);
++	}
++
++	return (tarindex);
++}
++
++#endif
++
+ bool adbd_auth_verify(const char* token, size_t token_size, const char* sig, int sig_len) {
+     static constexpr const char* key_paths[] = { "/adb_keys", "/data/misc/adb/adb_keys", nullptr };
+ 
+@@ -67,7 +196,7 @@ bool adbd_auth_verify(const char* token, size_t token_size, const char* sig, int
+                 // b64_pton requires one additional byte in the target buffer for
+                 // decoding to succeed. See http://b/28035006 for details.
+                 uint8_t keybuf[ANDROID_PUBKEY_ENCODED_SIZE + 1];
+-                if (__b64_pton(line.c_str(), keybuf, sizeof(keybuf)) != ANDROID_PUBKEY_ENCODED_SIZE) {
++                if (b64_pton(line.c_str(), keybuf, sizeof(keybuf)) != ANDROID_PUBKEY_ENCODED_SIZE) {
+                     LOG(ERROR) << "Invalid base64 key " << line.c_str() << " in " << path;
+                     continue;
+                 }
+diff --git a/adb/file_sync_service.cpp b/adb/file_sync_service.cpp
+index f8bd529..bd1a9ce 100644
+--- a/adb/file_sync_service.cpp
++++ b/adb/file_sync_service.cpp
+@@ -21,7 +21,9 @@
+ 
+ #include <dirent.h>
+ #include <errno.h>
++#ifndef __UCLIBC__
+ #include <linux/xattr.h>
++#endif
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
+diff --git a/adb/transport.cpp b/adb/transport.cpp
+index c644893..ba60895 100644
+--- a/adb/transport.cpp
++++ b/adb/transport.cpp
+@@ -779,8 +779,10 @@ const std::string atransport::connection_state_name() const {
+             return "host";
+         case kCsRecovery:
+             return "recovery";
++#if ADB_HOST
+         case kCsNoPerm:
+             return UsbNoPermissionsShortHelpText();
++#endif
+         case kCsSideload:
+             return "sideload";
+         case kCsUnauthorized:
+diff --git a/base/include/android-base/quick_exit.h b/base/include/android-base/quick_exit.h
+index a03b14f..55b542d 100644
+--- a/base/include/android-base/quick_exit.h
++++ b/base/include/android-base/quick_exit.h
+@@ -23,12 +23,12 @@ namespace android {
+ namespace base {
+ 
+ // Bionic and glibc have quick_exit, Darwin and Windows don't.
+-#if !defined(__linux__)
+-  void quick_exit(int exit_code) __attribute__((noreturn));
+-  int at_quick_exit(void (*func)());
+-#else
++#if defined(__BIONIC__) || (defined(__GLIBC__) && !defined(__UCLIBC__))
+   using ::at_quick_exit;
+   using ::quick_exit;
++#else
++  void quick_exit(int exit_code) __attribute__((noreturn));
++  int at_quick_exit(void (*func)());
+ #endif
+ }
+ }
+diff --git a/base/logging.cpp b/base/logging.cpp
+index 5a5ab8e..ae2fcb4 100644
+--- a/base/logging.cpp
++++ b/base/logging.cpp
+@@ -90,7 +90,7 @@ static thread_id GetThreadId() {
+ }
+ 
+ namespace {
+-#if defined(__GLIBC__)
++#if defined(__GNUC__)
+ const char* getprogname() {
+   return program_invocation_short_name;
+ }
+diff --git a/meson.build b/meson.build
+index 28c8b94..ab687d8 100644
+--- a/meson.build
++++ b/meson.build
+@@ -26,7 +26,6 @@ adbd_srcs = [
+   'adb/adb_trace.cpp',
+   'adb/adb_listeners.cpp',
+   'adb/adbd_auth.cpp',
+-  'adb/diagnose_usb.cpp',
+   'adb/fdevent.cpp',
+   'adb/transport.cpp',
+   'adb/transport_usb.cpp',
+-- 
+2.20.1
+
