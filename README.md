@@ -49,7 +49,7 @@ adb shell nmcli dev wifi list
 
 ```
 
-Refer to the [SDK Environment Deployment(x86_64 platform) for build depedancy ](https://wiki.luckfox.com/Luckfox-Lyra/SDK/#2-compiling-images-in-ubuntu-2204-environment) but instead of 3. Download the lastest SDK ...follow the below build instructions
+Refer to the [SDK Environment Deployment(x86_64 platform) for build depedancy steps  ](https://wiki.luckfox.com/Luckfox-Lyra/SDK/#2-compiling-images-in-ubuntu-2204-environment) but instead of 3. Download the lastest SDK ...follow the below build instructions then flash to your sbc using the rockchip flash tools ie upgrade_tool
 
 ```
 [build instructions]
