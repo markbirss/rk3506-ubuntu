@@ -59,6 +59,9 @@ cd ../../../../
 
 d6f58545b0b9c679665a8ff58dd2a7a75aa2b2648871e4be5a2c2288b4261545  ubuntu_24.04.3.tar.gz
 
+Refer to the [SDK Environment Deployment(x86_64 platform) for build depedancy ](https://wiki.luckfox.com/Luckfox-Lyra/SDK/#2-compiling-images-in-ubuntu-2204-environment) but instead of 3. Download the lastest SDK ...follow the below build instructions
+
+[build instructions]
 git clone https://github.com/markbirss/ubuntu_24.04.3.git
 cd ubuntu_24.04.3
 rm -fr .git
