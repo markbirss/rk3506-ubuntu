@@ -53,7 +53,7 @@ SDK Usage
 
 ```
 [prepare]
-Use either a docer Ubuntu 22.04 or Ubuntu 22.04 environment
+Use either a docker Ubuntu 22.04 or Ubuntu 22.04 environment
 
 Install dependency environments.
 
