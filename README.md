@@ -55,7 +55,7 @@ SDK Usage
 [prepare]
 Use either a docker Ubuntu 22.04 or Ubuntu 22.04 environment
 
-Install dependency environments.
+Install dependency packages.
 
 sudo apt update
 
@@ -66,11 +66,6 @@ cmake gcc-multilib g++-multilib unzip device-tree-compiler ncurses-dev \
 libgucharmap-2-90-dev bzip2 expat gpgv2 cpp-aarch64-linux-gnu libgmp-dev \
 libmpc-dev bc python-is-python3 python2 
 
-# By default, it links to python3
-$ python --version
-Python 3.10.12
-
-which python2
 sudo ln -sf /usr/bin/python2 /usr/bin/python 
 
 [build instructions]
