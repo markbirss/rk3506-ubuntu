@@ -32,7 +32,7 @@ Password: root
 User:     lyra
 Password: luckfox
 
-ADB shell required no password and can be used to set or change existing passwords
+ADB shell requires no password and can be used to set or change existing passwords
 ```
 
 <img width="1044" height="810" alt="Screenshot_20250811_221618" src="https://github.com/user-attachments/assets/6ddc87d3-118e-4c18-bd1b-7213a583ea9d" />
