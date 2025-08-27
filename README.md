@@ -49,9 +49,30 @@ adb shell nmcli dev wifi list
 
 ```
 
-Refer to the [SDK Environment Deployment(x86_64 platform) for build depedancy steps  ](https://wiki.luckfox.com/Luckfox-Lyra/SDK/#2-compiling-images-in-ubuntu-2204-environment) but instead of 3. Download the lastest SDK ...follow the below build instructions then flash to your sbc using the rockchip flash tools ie upgrade_tool
+SDK Usage
 
 ```
+[prepare]
+Use either a docer Ubuntu 22.04 or Ubuntu 22.04 environment
+
+Install dependency environments.
+
+sudo apt update
+
+sudo apt-get update && sudo apt-get install git ssh make gcc libssl-dev \
+liblz4-tool expect expect-dev g++ patchelf chrpath gawk texinfo chrpath \
+diffstat binfmt-support qemu-user-static live-build bison flex fakeroot \
+cmake gcc-multilib g++-multilib unzip device-tree-compiler ncurses-dev \
+libgucharmap-2-90-dev bzip2 expat gpgv2 cpp-aarch64-linux-gnu libgmp-dev \
+libmpc-dev bc python-is-python3 python2 
+
+# By default, it links to python3
+$ python --version
+Python 3.10.12
+
+which python2
+sudo ln -sf /usr/bin/python2 /usr/bin/python 
+
 [build instructions]
 git clone https://github.com/markbirss/rk3506-ubuntu.git
 
