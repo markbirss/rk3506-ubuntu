@@ -54,10 +54,11 @@ adb shell nmcli dev wifi list
 Example Hardware running DSI display and Luckfox Lyra Pi
 
 Front
-<img width="576" height="1066" alt="image" src="https://github.com/user-attachments/assets/2a4f456a-59c4-4997-867b-6c9f8f29027d" />
+<img width="1848" height="4000" alt="image" src="https://github.com/user-attachments/assets/88bd6d05-3c2c-4b7e-97df-c2ff23c6cf2c" />
 
 Back
-<img width="1848" height="4000" alt="image" src="https://github.com/user-attachments/assets/88bd6d05-3c2c-4b7e-97df-c2ff23c6cf2c" />
+<img width="576" height="1188" alt="image" src="https://github.com/user-attachments/assets/9ac3e177-f7fe-4e58-b193-923bd2253adf" />
+
 
 Display
 https://www.waveshare.com/5-dsi-touch-a.htm
