@@ -51,6 +51,17 @@ adb shell nmcli dev wifi list
 
 ```
 
+Example Hardware running DSI display and Luckfox Lyra Pi
+
+Front
+<img width="576" height="1066" alt="image" src="https://github.com/user-attachments/assets/2a4f456a-59c4-4997-867b-6c9f8f29027d" />
+
+Back
+<img width="1848" height="4000" alt="image" src="https://github.com/user-attachments/assets/88bd6d05-3c2c-4b7e-97df-c2ff23c6cf2c" />
+
+Display
+https://www.waveshare.com/5-dsi-touch-a.htm
+
 SDK Usage
 
 ```
