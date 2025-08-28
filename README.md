@@ -55,6 +55,202 @@ Forge1 RM_IO pinout
 Key: Green=GPIO, Blue=RM_IO, Red=Power, Black=GND
 
 ```
+root@forge1:~# cat /sys/kernel/debug/gpio
+gpiochip0: GPIOs 0-31, parent: platform/ff940000.gpio, gpio0:
+ gpio-1   (                    |vcc3v3-lcd0-n       ) out hi 
+ gpio-3   (                    |cd                  ) in  lo IRQ ACTIVE LOW
+ gpio-24  (                    |hp-det              ) in  lo IRQ 
+
+gpiochip1: GPIOs 32-63, parent: platform/ff870000.gpio, gpio1:
+ gpio-54  (                    |spk-con             ) out lo 
+ gpio-56  (                    |vcc5v0-otg1-regulato) out hi 
+
+gpiochip2: GPIOs 64-95, parent: platform/ff1c0000.gpio, gpio2:
+
+gpiochip3: GPIOs 96-127, parent: platform/ff1d0000.gpio, gpio3:
+
+gpiochip4: GPIOs 128-159, parent: platform/ff1e0000.gpio, gpio4:
+ gpio-139 (                    |rockchip:work_led:sy) out lo
+
+cat /sys/firmware/devicetree/base/model
+Rockchip RK3506J(BGA) ArmSoM Forge1
+
+gpiodetect 
+gpiochip0 [gpio0] (32 lines)
+gpiochip1 [gpio1] (32 lines)
+gpiochip2 [gpio2] (32 lines)
+gpiochip3 [gpio3] (32 lines)
+gpiochip4 [gpio4] (32 lines)
+
+gpioinfo 
+gpiochip0 - 32 lines:
+        line   0:      unnamed       unused   input  active-high 
+        line   1:      unnamed "vcc3v3-lcd0-n" output active-high [used]
+        line   2:      unnamed       unused   input  active-high 
+        line   3:      unnamed         "cd"   input   active-low [used]
+        line   4:      unnamed       unused   input  active-high 
+        line   5:      unnamed       unused   input  active-high 
+        line   6:      unnamed       unused   input  active-high 
+        line   7:      unnamed       unused   input  active-high 
+        line   8:      unnamed       unused   input  active-high 
+        line   9:      unnamed       unused   input  active-high 
+        line  10:      unnamed       unused   input  active-high 
+        line  11:      unnamed       unused   input  active-high 
+        line  12:      unnamed       unused   input  active-high 
+        line  13:      unnamed       unused   input  active-high 
+        line  14:      unnamed       unused   input  active-high 
+        line  15:      unnamed       unused   input  active-high 
+        line  16:      unnamed       unused   input  active-high 
+        line  17:      unnamed       unused   input  active-high 
+        line  18:      unnamed       unused  output  active-high 
+        line  19:      unnamed       unused   input  active-high 
+        line  20:      unnamed       unused   input  active-high 
+        line  21:      unnamed       unused   input  active-high 
+        line  22:      unnamed       unused   input  active-high 
+        line  23:      unnamed       unused   input  active-high 
+        line  24:      unnamed     "hp-det"   input  active-high [used]
+        line  25:      unnamed       unused   input  active-high 
+        line  26:      unnamed       unused   input  active-high 
+        line  27:      unnamed       unused   input  active-high 
+        line  28:      unnamed       unused   input  active-high 
+        line  29:      unnamed       unused   input  active-high 
+        line  30:      unnamed       unused   input  active-high 
+        line  31:      unnamed       unused   input  active-high 
+gpiochip1 - 32 lines:
+        line   0:      unnamed       unused   input  active-high 
+        line   1:      unnamed       unused   input  active-high 
+        line   2:      unnamed       unused   input  active-high 
+        line   3:      unnamed       unused   input  active-high 
+        line   4:      unnamed       unused   input  active-high 
+        line   5:      unnamed       unused   input  active-high 
+        line   6:      unnamed       unused   input  active-high 
+        line   7:      unnamed       unused   input  active-high 
+        line   8:      unnamed       unused   input  active-high 
+        line   9:      unnamed       unused   input  active-high 
+        line  10:      unnamed       unused   input  active-high 
+        line  11:      unnamed       unused   input  active-high 
+        line  12:      unnamed       unused   input  active-high 
+        line  13:      unnamed       unused   input  active-high 
+        line  14:      unnamed       unused   input  active-high 
+        line  15:      unnamed       unused   input  active-high 
+        line  16:      unnamed       unused   input  active-high 
+        line  17:      unnamed       unused   input  active-high 
+        line  18:      unnamed       unused   input  active-high 
+        line  19:      unnamed       unused   input  active-high 
+        line  20:      unnamed       unused   input  active-high 
+        line  21:      unnamed       unused   input  active-high 
+        line  22:      unnamed    "spk-con"  output  active-high [used]
+        line  23:      unnamed       unused  output  active-high 
+        line  24:      unnamed "vcc5v0-otg1-regulator" output active-high [used]
+        line  25:      unnamed       unused   input  active-high 
+        line  26:      unnamed       unused   input  active-high 
+        line  27:      unnamed       unused   input  active-high 
+        line  28:      unnamed       unused   input  active-high 
+        line  29:      unnamed       unused   input  active-high 
+        line  30:      unnamed       unused   input  active-high 
+        line  31:      unnamed       unused   input  active-high 
+gpiochip2 - 32 lines:
+        line   0:      unnamed       unused   input  active-high 
+        line   1:      unnamed       unused   input  active-high 
+        line   2:      unnamed       unused   input  active-high 
+        line   3:      unnamed       unused   input  active-high 
+        line   4:      unnamed       unused   input  active-high 
+        line   5:      unnamed       unused   input  active-high 
+        line   6:      unnamed       unused   input  active-high 
+        line   7:      unnamed       unused   input  active-high 
+        line   8:      unnamed       unused   input  active-high 
+        line   9:      unnamed       unused   input  active-high 
+        line  10:      unnamed       unused   input  active-high 
+        line  11:      unnamed       unused   input  active-high 
+        line  12:      unnamed       unused   input  active-high 
+        line  13:      unnamed       unused   input  active-high 
+        line  14:      unnamed       unused   input  active-high 
+        line  15:      unnamed       unused   input  active-high 
+        line  16:      unnamed       unused   input  active-high 
+        line  17:      unnamed       unused   input  active-high 
+        line  18:      unnamed       unused   input  active-high 
+        line  19:      unnamed       unused   input  active-high 
+        line  20:      unnamed       unused   input  active-high 
+        line  21:      unnamed       unused   input  active-high 
+        line  22:      unnamed       unused   input  active-high 
+        line  23:      unnamed       unused   input  active-high 
+        line  24:      unnamed       unused   input  active-high 
+        line  25:      unnamed       unused   input  active-high 
+        line  26:      unnamed       unused   input  active-high 
+        line  27:      unnamed       unused   input  active-high 
+        line  28:      unnamed       unused   input  active-high 
+        line  29:      unnamed       unused   input  active-high 
+        line  30:      unnamed       unused   input  active-high 
+        line  31:      unnamed       unused   input  active-high 
+gpiochip3 - 32 lines:
+        line   0:      unnamed       unused   input  active-high 
+        line   1:      unnamed       unused   input  active-high 
+        line   2:      unnamed       unused   input  active-high 
+        line   3:      unnamed       unused   input  active-high 
+        line   4:      unnamed       unused   input  active-high 
+        line   5:      unnamed       unused   input  active-high 
+        line   6:      unnamed       unused   input  active-high 
+        line   7:      unnamed       unused   input  active-high 
+        line   8:      unnamed       unused   input  active-high 
+        line   9:      unnamed       unused   input  active-high 
+        line  10:      unnamed       unused   input  active-high 
+        line  11:      unnamed       unused   input  active-high 
+        line  12:      unnamed       unused   input  active-high 
+        line  13:      unnamed       unused   input  active-high 
+        line  14:      unnamed       unused   input  active-high 
+        line  15:      unnamed       unused   input  active-high 
+        line  16:      unnamed       unused   input  active-high 
+        line  17:      unnamed       unused   input  active-high 
+        line  18:      unnamed       unused   input  active-high 
+        line  19:      unnamed       unused   input  active-high 
+        line  20:      unnamed       unused   input  active-high 
+        line  21:      unnamed       unused   input  active-high 
+        line  22:      unnamed       unused   input  active-high 
+        line  23:      unnamed       unused   input  active-high 
+        line  24:      unnamed       unused   input  active-high 
+        line  25:      unnamed       unused   input  active-high 
+        line  26:      unnamed       unused   input  active-high 
+        line  27:      unnamed       unused   input  active-high 
+        line  28:      unnamed       unused   input  active-high 
+        line  29:      unnamed       unused   input  active-high 
+        line  30:      unnamed       unused   input  active-high 
+        line  31:      unnamed       unused   input  active-high 
+gpiochip4 - 32 lines:
+        line   0:      unnamed       unused   input  active-high 
+        line   1:      unnamed       unused   input  active-high 
+        line   2:      unnamed       unused   input  active-high 
+        line   3:      unnamed       unused   input  active-high 
+        line   4:      unnamed       unused   input  active-high 
+        line   5:      unnamed       unused   input  active-high 
+        line   6:      unnamed       unused   input  active-high 
+        line   7:      unnamed       unused   input  active-high 
+        line   8:      unnamed       unused   input  active-high 
+        line   9:      unnamed       unused   input  active-high 
+        line  10:      unnamed       unused   input  active-high 
+        line  11:      unnamed "rockchip:work_led:system" output active-high [used]
+        line  12:      unnamed       unused   input  active-high 
+        line  13:      unnamed       unused   input  active-high 
+        line  14:      unnamed       unused   input  active-high 
+        line  15:      unnamed       unused   input  active-high 
+        line  16:      unnamed       unused   input  active-high 
+        line  17:      unnamed       unused   input  active-high 
+        line  18:      unnamed       unused   input  active-high 
+        line  19:      unnamed       unused   input  active-high 
+        line  20:      unnamed       unused   input  active-high 
+        line  21:      unnamed       unused   input  active-high 
+        line  22:      unnamed       unused   input  active-high 
+        line  23:      unnamed       unused   input  active-high 
+        line  24:      unnamed       unused   input  active-high 
+        line  25:      unnamed       unused   input  active-high 
+        line  26:      unnamed       unused   input  active-high 
+        line  27:      unnamed       unused   input  active-high 
+        line  28:      unnamed       unused   input  active-high 
+        line  29:      unnamed       unused   input  active-high 
+        line  30:      unnamed       unused   input  active-high 
+        line  31:      unnamed       unused   input  active-high 
+```
+
+```
 [Wireless still requires wifi kernel modules installed]
 adb shell "cd /home/lyra/aic800/ && make install; reboot"
 
