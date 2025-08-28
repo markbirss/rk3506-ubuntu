@@ -319,6 +319,6 @@ mv ubuntu_24.04.3.tar.gz ubuntu
 # sudo ./rkflash.sh update
 
 ```
-Support my work and considder **buying  me a coffee**
+Support my work and consider **buying  me a coffee**
 
 https://buymeacoffee.com/mark.birss
