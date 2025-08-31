@@ -16,15 +16,7 @@ BOARD | Tested OK with luckfox-config |
 | ArmSoM Forge 1 | Still need to modify luckfox-config for the availabe RM_IO gpio for this board - see below *|
 
 Supported Boards
-1. luckfox_lyra_pi-w_ubuntu_emmc_defconfig
-2. luckfox_lyra_pi-w_ubuntu_sdmmc_defconfig
-3. luckfox_lyra_plus_ubuntu_sdmmc_defconfig
-4. luckfox_lyra_ubuntu_sdmmc_defconfig
-5. luckfox_lyra_ultra-w_ubuntu_emmc_defconfig
-6. luckfox_lyra_zero-w_ubuntu_sdmmc_defconfig
-7. rk3506-armsom-forge1_ubuntu_sdmmc_defconfig
-
-Supported Boards | Storage SDCard/EMMC |  Defconfig |
+Board Name | Storage SDCard/EMMC |  Defconfig |
 |:--|:--|:--|
 | Luckfox Lyra | SDCard | 4. luckfox_lyra_ubuntu_sdmmc_defconfig |
 | Luckfox Lyra PLUS | SDCard | 3. luckfox_lyra_plus_ubuntu_sdmmc_defconfig |
@@ -33,8 +25,9 @@ Supported Boards | Storage SDCard/EMMC |  Defconfig |
 | Luckfox Lyra Pi W | SDCard | 2. luckfox_lyra_pi-w_ubuntu_sdmmc_defconfig |
 | Luckfox Lyra Pi W | eMMC | 1. luckfox_lyra_pi-w_ubuntu_emmc_defconfig |
 | ArmSom Forge (BPI Forge1) | SDCard | 7. rk3506-armsom-forge1_ubuntu_sdmmc_defconfig |
+
 ```
-Default Login
+Default User Login Credentials
 
 User:     root
 Password: root
