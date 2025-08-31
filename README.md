@@ -320,6 +320,40 @@ mv ubuntu_24.04.3.tar.gz ubuntu
 # sudo ./rkflash.sh update
 
 ```
+
+Docker Notes
+```
+mkdir ~/sdk
+
+docker run --platform linux/amd64 -it -v /media/user/storage/sdk:/sdk --rm ubuntu:22.04 bash
+```
+
+```
+apt update;
+
+apt -y dist-upgrade;
+
+apt-get -y install git ssh make gcc libssl-dev \
+liblz4-tool expect expect-dev g++ patchelf chrpath gawk texinfo chrpath \
+diffstat binfmt-support qemu-user-static live-build bison flex fakeroot \
+cmake gcc-multilib g++-multilib unzip device-tree-compiler ncurses-dev \
+libgucharmap-2-90-dev bzip2 expat gpgv2 cpp-aarch64-linux-gnu libgmp-dev \
+libmpc-dev bc python-is-python3 python2 rsync sudo bsdmainutils nano;
+
+ln -sf /usr/bin/python2 /usr/bin/python
+
+#1. Africa
+#Geographic area: 1
+
+#25. Johannesburg
+#Time zone: 24
+
+adduser user
+
+usermod -aG sudo user
+su user
+```
+
 Support my work and consider **buying  me a coffee**
 
 https://buymeacoffee.com/mark.birss
