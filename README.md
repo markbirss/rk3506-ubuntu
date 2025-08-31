@@ -24,6 +24,15 @@ Supported Boards
 6. luckfox_lyra_zero-w_ubuntu_sdmmc_defconfig
 7. rk3506-armsom-forge1_ubuntu_sdmmc_defconfig
 
+Supported Boards | Storage SDCard/EMMC | | Defconfig
+|:--|:--| |
+| Luckfox Lyra | SDCard | 4. luckfox_lyra_ubuntu_sdmmc_defconfig |
+| Luckfox Lyra PLUS | SDCard | 3. luckfox_lyra_plus_ubuntu_sdmmc_defconfig |
+| Luckfox Lyra Ultra W | eMMC | 5. luckfox_lyra_ultra-w_ubuntu_emmc_defconfig |
+| Luckfox Zero W | SDCard | 6. luckfox_lyra_zero-w_ubuntu_sdmmc_defconfig |
+| Luckfox Lyra Pi W | SDCard | 2. luckfox_lyra_pi-w_ubuntu_sdmmc_defconfig |
+| Luckfox Lyra Pi W | eMMC | 1. luckfox_lyra_pi-w_ubuntu_emmc_defconfig |
+| ArmSom Forge (BPI Forge1) | SDCard | 7. rk3506-armsom-forge1_ubuntu_sdmmc_defconfig |
 ```
 Default Login
 
