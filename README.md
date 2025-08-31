@@ -49,6 +49,7 @@ Luckfox Lyra pinout
 https://wiki.luckfox.com/Luckfox-Lyra/Pinout/
 
 Forge1 RM_IO pinout
+
 Board cator more for CanBus/Flexibus use than RM_IO gpio
 
 <img width="599" height="456" alt="ArmSoM-Forge1-RockChip-RK3506J-SBC" src="https://github.com/user-attachments/assets/0cdb2628-1c2d-4dca-ab5a-171c4b9258f1" />
