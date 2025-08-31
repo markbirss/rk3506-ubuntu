@@ -16,7 +16,7 @@ BOARD | Tested OK with luckfox-config |
 | ArmSoM Forge 1 | Still need to modify luckfox-config for the availabe RM_IO gpio for this board - see below *|
 
 Supported Boards
-Board Name | Storage SDCard/EMMC |  Defconfig |
+Board Name | SDCard/EMMC |  Defconfig |
 |:--|:--|:--|
 | Luckfox Lyra | SDCard | 4. luckfox_lyra_ubuntu_sdmmc_defconfig |
 | Luckfox Lyra PLUS | SDCard | 3. luckfox_lyra_plus_ubuntu_sdmmc_defconfig |
