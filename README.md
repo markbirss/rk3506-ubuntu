@@ -325,7 +325,7 @@ Docker Notes
 ```
 mkdir ~/sdk
 
-docker run --platform linux/amd64 -it -v /media/user/storage/sdk:/sdk --rm ubuntu:22.04 bash
+docker run --platform linux/amd64 -it -v ~/sdk:/sdk --rm ubuntu:22.04 bash
 ```
 
 ```
