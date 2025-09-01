@@ -279,7 +279,9 @@ https://www.waveshare.com/5-dsi-touch-a.htm
 
 
 XFCE4 Desktop
-<img width="739" height="1292" alt="20250901_132307" src="https://github.com/user-attachments/assets/5c3bd76c-02f8-4f5e-ba9f-35410e4c020f" />
+
+<img width="720" height="1280" alt="image" src="https://github.com/user-attachments/assets/34296bcb-434e-4f23-b10a-1991d2b2ece3" />
+
 
 
 SDK Usage
