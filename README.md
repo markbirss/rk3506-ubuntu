@@ -267,7 +267,8 @@ adb shell nmcli dev wifi list
 Example Hardware running DSI 5" 720x1280 display and Luckfox Lyra Pi
 
 Front
-<img width="1848" height="4000" alt="image" src="https://github.com/user-attachments/assets/88bd6d05-3c2c-4b7e-97df-c2ff23c6cf2c" />
+<img width="924" height="1731" alt="image" src="https://github.com/user-attachments/assets/11ce59f7-f726-40e7-8af3-f55c63c593ad" />
+
 
 Back
 <img width="576" height="1188" alt="image" src="https://github.com/user-attachments/assets/9ac3e177-f7fe-4e58-b193-923bd2253adf" />
