@@ -38,6 +38,11 @@ Password: luckfox
 ADB shell requires no password and can be used to set or change existing passwords
 ```
 
+Luckfox Lyra boards Specifications
+
+<img width="2069" height="589" alt="image" src="https://github.com/user-attachments/assets/83f69150-153a-47c7-aff1-520b722be1f4" />
+
+
 <img width="1044" height="810" alt="Screenshot_20250811_221618" src="https://github.com/user-attachments/assets/6ddc87d3-118e-4c18-bd1b-7213a583ea9d" />
 
 <img width="1044" height="810" alt="Screenshot_20250811_221640" src="https://github.com/user-attachments/assets/243fcbed-6f48-4417-ba7e-6a6203df4d14" />
