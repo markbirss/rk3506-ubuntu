@@ -38,9 +38,8 @@ Password: luckfox
 ADB shell requires no password and can be used to set or change existing passwords
 ```
 
-# IMPORTANT NOTE for wifi
+# IMPORTANT NOTE FOR LYRA BOARDS WITH WIFI
 ```
-[Wireless still requires wifi kernel modules installed]
 adb shell "cd /home/lyra/aic800/ && make install; reboot"
 
 test
