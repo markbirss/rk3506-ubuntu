@@ -42,9 +42,11 @@ ADB shell requires no password and can be used to set or change existing passwor
 ```
 adb shell "cd /home/lyra/aic800/ && make install; reboot"
 
-test
+#test
 adb shell nmcli dev wifi list
 
+#connect
+nmtui
 ```
 Luckfox Lyra boards Specifications
 
