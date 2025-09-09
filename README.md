@@ -38,6 +38,15 @@ Password: luckfox
 ADB shell requires no password and can be used to set or change existing passwords
 ```
 
+# IMPORTANT NOTE for wifi
+```
+[Wireless still requires wifi kernel modules installed]
+adb shell "cd /home/lyra/aic800/ && make install; reboot"
+
+test
+adb shell nmcli dev wifi list
+
+```
 Luckfox Lyra boards Specifications
 
 <img width="2069" height="589" alt="image" src="https://github.com/user-attachments/assets/83f69150-153a-47c7-aff1-520b722be1f4" />
@@ -258,15 +267,6 @@ gpiochip4 - 32 lines:
         line  29:      unnamed       unused   input  active-high 
         line  30:      unnamed       unused   input  active-high 
         line  31:      unnamed       unused   input  active-high 
-```
-
-```
-[Wireless still requires wifi kernel modules installed]
-adb shell "cd /home/lyra/aic800/ && make install; reboot"
-
-test
-adb shell nmcli dev wifi list
-
 ```
 
 Example Hardware running DSI 5" 720x1280 display and Luckfox Lyra Pi
