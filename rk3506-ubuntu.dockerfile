@@ -3,7 +3,7 @@ SHELL ["/bin/bash", "-c"]
 ENTRYPOINT echo -e "\033[0;32m Entered docker environment \033[0m" && /bin/bash
 
 ENV DEBIAN_FRONTEND=non-interactive
-ENV TZ=Etc/SAST
+ENV TZ=Europe/Berlin
 RUN apt update && \
       apt -y install sudo tzdata
 
