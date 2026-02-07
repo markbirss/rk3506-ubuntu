@@ -28,12 +28,12 @@ case "$(findmnt -fnu -o FSTYPE -T "$RK_SCRIPTS_DIR")" in
 		;;
 esac
 
-if grep -iwq Microsoft /proc/version; then
-	echo -e "\e[35m"
-	echo "WSL is not supported!"
-	echo -e "\e[0m"
-	exit 1
-fi
+# if grep -iwq Microsoft /proc/version; then
+#	echo -e "\e[35m"
+# 	echo "WSL is not supported!"
+#	echo -e "\e[0m"
+#	exit 1
+# fi
 
 if ! which python3 >/dev/null 2>&1; then
 	echo -e "\e[35m"
