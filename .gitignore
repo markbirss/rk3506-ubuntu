@@ -60,9 +60,11 @@ modules.builtin
 node_modules/
 .npm
 
-# Directory exclusions for common untracked folders
+# Directory exclusions (and symbolic links) for common untracked folders
 common/
 rockdev/
+common
+rockdev
 ubuntu/
 device/rockchip/.chip
 device/rockchip/rk3506
