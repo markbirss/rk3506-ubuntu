@@ -1,5 +1,13 @@
 #!/bin/bash
 # Script to compile Device Tree Overlays for PCM5102A
+#
+# NOTE: This script must be run MANUALLY after kernel build!
+# The overlays are NOT automatically built during normal kernel compilation.
+#
+# To integrate into image build:
+#   1. Run this script: ./build-overlays.sh
+#   2. Run install script: ./install-overlays.sh
+#   3. Or manually copy .dtbo files to your boot partition
 
 set -e
 

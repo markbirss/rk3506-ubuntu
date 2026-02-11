@@ -71,3 +71,10 @@
 		};
 	};
 };
+
+/*
+ * Pimoroni Pins:
+ * rm_io18_sai0_sdo
+ * rm_io14_sai0_sclk
+ * rm_io16_sai0_lrck
+ */
