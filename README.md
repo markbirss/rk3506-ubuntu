@@ -39,6 +39,7 @@ ADB shell requires no password and can be used to set or change existing passwor
 ```
 
 # IMPORTANT NOTE FOR LYRA BOARDS WITH WIFI
+
 ```
 adb shell "cd /home/lyra/aic800/ && make install; reboot"
 
@@ -48,6 +49,7 @@ adb shell nmcli dev wifi list
 #connect
 nmtui
 ```
+
 Luckfox Lyra boards Specifications
 
 <img width="2069" height="589" alt="image" src="https://github.com/user-attachments/assets/83f69150-153a-47c7-aff1-520b722be1f4" />
@@ -62,6 +64,7 @@ Luckfox Lyra boards Specifications
 <img width="960" height="686" alt="image" src="https://github.com/user-attachments/assets/750a08c5-6305-41ad-ace7-5f2db111cbc3" />
 
 4G LTE howto
+
 ```
 nmcli connection add type gsm ifname '*' apn 'internet' connection.autoconnect yes
 nmcli conn up gsm --ask
@@ -329,6 +332,7 @@ mv ubuntu_24.04.3.tar.gz ubuntu
 ```
 
 Docker Notes
+
 ```
 mkdir ~/sdk
 
@@ -371,6 +375,7 @@ docker run --rm -it -v $PWD:/build -w /build --user $(id -u):$(id -g) lyra:rk350
 ```
 
 Related Repo's
+
 ```
 WiFi Dongles
 https://github.com/markbirss/rtw88
@@ -397,3 +402,59 @@ Use at your own risk
 Support my work and consider **buying  me a coffee**
 
 https://buymeacoffee.com/mark.birss
+
+# How-To build
+
+In WSL, create a containing folder (e.g. lyra-build), and get all needed repos:
+
+```shell
+mkdir lyra-build
+cd lyra-build
+git clone --depth=1 https://github.com/cnadler86/rk3506-ubuntu
+git clone --depth=1 https://github.com/markbirss/ubuntu_24.04.3.git
+cd ubuntu_24.04.3
+rm -fr .git
+7z x ubuntu_24.04.3.7z.001
+sha256sum ubuntu_24.04.3.tar.gz
+rm -f ubuntu_24.04.3.7z.*
+mkdir ../rk3506-ubuntu/ubuntu/
+mv ubuntu_24.04.3.tar.gz ../rk3506-ubuntu/ubuntu/
+cd ..
+rm -rf ubuntu_24.04.3
+cd rk3506-ubuntu/device/rockchip/.chips/rk3506
+ln -s .chips/rk3506 ../../rk3506
+ln -s .chips/rk3506 ../../.chip
+cd ../../../../
+```
+
+Check sha256sum of the ubuntu_24.04.3.tar.gz file matches the expected value (d6f58545b0b9c679665a8ff58dd2a7a75aa2b2648871e4be5a2c2288b4261545) to ensure the integrity of the file.
+
+Then build the docker image:
+
+```shell
+docker build -f rk3506-ubuntu.dockerfile -t lyra:rk3506-ubuntu-build .
+```
+
+Then run the docker container:
+
+```shell
+docker run --platform linux/amd64 \
+  --privileged \
+  --mount type=bind,source=$(pwd),target=/build \
+  -it lyra:rk3506-ubuntu-build /bin/bash
+```
+
+In the docker container, you can then run the build commands:
+
+```shell
+cd /build
+./build.sh lunch
+./build.sh
+```
+
+If kernel build fails, probably a new user need to be added to the docker container with sudo permissions, and then run the build commands again:
+
+```shell
+adduser user
+usermod -aG sudo user
+```
