@@ -1,0 +1,68 @@
+# Build Artifacts - Kernel Module, Device Tree
+*.ko
+*.dtb
+
+# Object Files and Libraries
+*.o
+*.o.d
+*.a
+*.so*
+*.so.*.d
+
+# Executable Files
+*.elf
+*.bin
+*.hex
+*.axf
+*.lis
+*.map
+
+# Build Output Directories
+output/
+build/
+dist/
+.build/
+
+# Logs and Temporary Files
+*.log
+*.log.*
+*.tmp
+*.bak
+*~
+*.swp
+*.swo
+.*.swp
+
+# IDE and Editor Configuration
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
+.project
+.cproject
+.settings/
+.pytest_cache/
+.coverage
+*.pyc
+__pycache__/
+
+# Build System Artifacts
+.config
+.config.old
+modules.order
+modules.builtin
+
+# Development Tools
+.env
+.env.local
+node_modules/
+.npm
+
+# Directory exclusions for common untracked folders
+common/
+rockdev/
+ubuntu/
+device/rockchip/.chip
+device/rockchip/rk3506
