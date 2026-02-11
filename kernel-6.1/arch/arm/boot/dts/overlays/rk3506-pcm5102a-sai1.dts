@@ -1,0 +1,73 @@
+// SPDX-License-Identifier: MIT
+/*
+ * Device Tree Overlay for PCM5102A DAC on SAI1
+ * Copyright (c) 2024 Christopher Nadler
+ *
+ * Pin connections:
+ * SAI1_MCLK (GPIO0_B0) -> PCM5102A SCK (System Clock)
+ * SAI1_LRCK (GPIO0_B2) -> PCM5102A LRCK (Left/Right Clock)
+ * SAI1_SCLK (GPIO0_B1) -> PCM5102A BCK (Bit Clock)
+ * SAI1_SDO0 (GPIO0_B4) -> PCM5102A DIN (Data Input)
+ *
+ * PCM5102A additional pins (connect manually):
+ * VDD  -> 3.3V
+ * GND  -> GND
+ * FLT  -> GND (Normal latency, can be tied to VCC for low latency)
+ * FMT  -> GND (I2S format, can be tied to VCC for left justified)
+ * DEMP -> GND (De-emphasis off)
+ * XSMT -> 3.3V (Soft mute control, can be tied to VCC or GND)
+ *
+ * Overlay usage:
+ * 1. Compile: dtc -@ -I dts -O dtb -o rk3506-pcm5102a-sai1.dtbo rk3506-pcm5102a-sai1.dts
+ * 2. Copy to /boot/overlays/
+ * 3. Add to config: overlays=rk3506-pcm5102a-sai1
+ */
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "rockchip,rk3506";
+
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			pcm5102a_codec: pcm5102a-codec {
+				#sound-dai-cells = <0>;
+				compatible = "ti,pcm5102a";
+				status = "okay";
+			};
+
+			pcm5102a_sound: pcm5102a-sound {
+				compatible = "simple-audio-card";
+				simple-audio-card,name = "PCM5102A-SAI1";
+				simple-audio-card,format = "i2s";
+				simple-audio-card,mclk-fs = <256>;
+				simple-audio-card,bitclock-master = <&dailink_master>;
+				simple-audio-card,frame-master = <&dailink_master>;
+				status = "okay";
+
+				dailink_master: simple-audio-card,cpu {
+					sound-dai = <&sai1>;
+				};
+
+				simple-audio-card,codec {
+					sound-dai = <&pcm5102a_codec>;
+				};
+			};
+		};
+	};
+
+	fragment@1 {
+		target = <&sai1>;
+		__overlay__ {
+			#sound-dai-cells = <0>;
+			status = "okay";
+			pinctrl-names = "default";
+			pinctrl-0 = <&sai1_lrck_pins
+				     &sai1_sclk_pins
+				     &sai1_mclk_pins
+				     &sai1_sdo0_pins>;
+		};
+	};
+};
