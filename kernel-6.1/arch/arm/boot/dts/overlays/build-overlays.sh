@@ -14,7 +14,9 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 KERNEL_DIR="$(cd "${SCRIPT_DIR}/../../../../.." && pwd)"
 DTC="${KERNEL_DIR}/scripts/dtc/dtc"
-DTC_FLAGS="-@ -I dts -O dtb -Wno-unit_address_vs_reg"
+DTC_FLAGS="-@ -O dtb -Wno-unit_address_vs_reg"
+CPP="cpp"
+CPP_FLAGS="-nostdinc -I${KERNEL_DIR}/scripts/dtc/include-prefixes -I${KERNEL_DIR}/arch/arm/boot/dts -undef -D__DTS__ -x assembler-with-cpp"
 
 # Check if dtc exists
 if [ ! -f "${DTC}" ]; then
@@ -25,14 +27,17 @@ fi
 
 echo "Compiling PCM5102A Device Tree Overlays..."
 echo "Using DTC: ${DTC}"
+echo "Using CPP: ${CPP}"
 
 # Compile SAI0 overlay
 echo "Building rk3506-pcm5102a-sai0.dtbo..."
-"${DTC}" ${DTC_FLAGS} -o "${SCRIPT_DIR}/rk3506-pcm5102a-sai0.dtbo" "${SCRIPT_DIR}/rk3506-pcm5102a-sai0.dts"
+${CPP} ${CPP_FLAGS} "${SCRIPT_DIR}/rk3506-pcm5102a-sai0.dts" | \
+"${DTC}" ${DTC_FLAGS} -o "${SCRIPT_DIR}/rk3506-pcm5102a-sai0.dtbo" -
 
 # Compile SAI1 overlay
 echo "Building rk3506-pcm5102a-sai1.dtbo..."
-"${DTC}" ${DTC_FLAGS} -o "${SCRIPT_DIR}/rk3506-pcm5102a-sai1.dtbo" "${SCRIPT_DIR}/rk3506-pcm5102a-sai1.dts"
+${CPP} ${CPP_FLAGS} "${SCRIPT_DIR}/rk3506-pcm5102a-sai1.dts" | \
+"${DTC}" ${DTC_FLAGS} -o "${SCRIPT_DIR}/rk3506-pcm5102a-sai1.dtbo" -
 
 echo ""
 echo "Build complete! Overlay files created:"

@@ -1,30 +1,32 @@
 // SPDX-License-Identifier: MIT
 /*
- * Device Tree Overlay for PCM5102A DAC on SAI0
+ * Device Tree Overlay for Pimoroni Audio DAC SHIM (PCM5100A) on SAI0
  * Copyright (c) 2024 Christopher Nadler
  *
- * Pin connections:
- * SAI0_MCLK (GPIO0_A2) -> PCM5102A SCK (System Clock)
- * SAI0_LRCK (GPIO0_A0) -> PCM5102A LRCK (Left/Right Clock)
- * SAI0_SCLK (GPIO0_A1) -> PCM5102A BCK (Bit Clock)
- * SAI0_SDO  (GPIO0_A3) -> PCM5102A DIN (Data Input)
+ * Pimoroni Audio DAC SHIM Pin connections (using rm_io pins):
+ * rm_io16 (SAI0_LRCK) -> PCM5100A LRCK (Left/Right Clock / WS)
+ * rm_io14 (SAI0_SCLK) -> PCM5100A BCK (Bit Clock)
+ * rm_io18 (SAI0_SDO)  -> PCM5100A DIN (Data Input)
+ * rm_io11 (GPIO)      -> PCM5100A Enable (Active High)
  *
- * PCM5102A additional pins (connect manually):
- * VDD  -> 3.3V
- * GND  -> GND
- * FLT  -> GND (Normal latency, can be tied to VCC for low latency)
- * FMT  -> GND (I2S format, can be tied to VCC for left justified)
- * DEMP -> GND (De-emphasis off)
- * XSMT -> 3.3V (Soft mute control, can be tied to VCC or GND)
+ * Note: Pimoroni Audio DAC SHIM doesn't require MCLK - the PCM5100A
+ * generates the system clock internally from BCK.
+ *
+ * Pimoroni Audio DAC SHIM additional connections:
+ * VDD  -> 3.3V (via GPIO header)
+ * GND  -> GND (via GPIO header)
  *
  * Overlay usage:
- * 1. Compile: dtc -@ -I dts -O dtb -o rk3506-pcm5102a-sai0.dtbo rk3506-pcm5102a-sai0.dts
+ * 1. Compile: dtc -@ -I dts -O dtb -o rk3506-pimoroni-audio-dac-shim.dtbo rk3506-pcm5102a-sai0.dts
  * 2. Copy to /boot/overlays/
- * 3. Add to config: overlays=rk3506-pcm5102a-sai0
+ * 3. Add to config: overlays=rk3506-pimoroni-audio-dac-shim
  */
 
 /dts-v1/;
 /plugin/;
+
+#include <dt-bindings/clock/rockchip,rk3506-cru.h>
+#include <dt-bindings/gpio/gpio.h>
 
 / {
 	compatible = "rockchip,rk3506";
@@ -32,27 +34,37 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			pcm5102a_codec: pcm5102a-codec {
+			pimoroni_dac_enable: pimoroni-dac-enable {
+				compatible = "regulator-fixed";
+				regulator-name = "pimoroni-dac-enable";
+				regulator-min-microvolt = <3300000>;
+				regulator-max-microvolt = <3300000>;
+				gpio = <&gpio0 11 GPIO_ACTIVE_HIGH>; /* rm_io11 = GPIO0_B3 */
+				enable-active-high;
+				regulator-always-on;
+			};
+
+			pcm5100a_codec: pcm5100a-codec {
 				#sound-dai-cells = <0>;
-				compatible = "ti,pcm5102a";
+				compatible = "ti,pcm5102a"; /* PCM5100A is compatible */
 				status = "okay";
 			};
 
-			pcm5102a_sound: pcm5102a-sound {
+			pimoroni_sound: pimoroni-sound {
 				compatible = "simple-audio-card";
-				simple-audio-card,name = "PCM5102A-SAI0";
+				simple-audio-card,name = "Pimoroni-Audio-DAC";
 				simple-audio-card,format = "i2s";
-				simple-audio-card,mclk-fs = <256>;
-				simple-audio-card,bitclock-master = <&dailink_master>;
-				simple-audio-card,frame-master = <&dailink_master>;
+				simple-audio-card,bitclock-master = <&sound_cpu>;
+				simple-audio-card,frame-master = <&sound_cpu>;
 				status = "okay";
 
-				dailink_master: simple-audio-card,cpu {
+				sound_cpu: simple-audio-card,cpu {
 					sound-dai = <&sai0>;
+					system-clock-frequency = <12288000>;
 				};
 
-				simple-audio-card,codec {
-					sound-dai = <&pcm5102a_codec>;
+				sound_codec: simple-audio-card,codec {
+					sound-dai = <&pcm5100a_codec>;
 				};
 			};
 		};
@@ -64,17 +76,25 @@
 			#sound-dai-cells = <0>;
 			status = "okay";
 			pinctrl-names = "default";
-			pinctrl-0 = <&sai0_lrck_pins
-				     &sai0_sclk_pins
-				     &sai0_mclk_pins
-				     &sai0_sdo_pins>;
+			pinctrl-0 = <&rm_io16_sai0_lrck
+				     &rm_io14_sai0_sclk
+				     &rm_io18_sai0_sdo>;
+			assigned-clocks = <&cru MCLK_SAI0>;
+			assigned-clock-rates = <12288000>;
+			dai-tdm-slot-num = <2>;
+			dai-tdm-slot-width = <32>;
+		};
+	};
+
+	fragment@2 {
+		target = <&gpio0>;
+		__overlay__ {
+			pimoroni_enable_pin: pimoroni-enable-pin {
+				gpio-hog;
+				gpios = <11 GPIO_ACTIVE_HIGH>; /* GPIO0_B3 = rm_io11 */
+				output-high;
+				line-name = "pimoroni-dac-enable";
+			};
 		};
 	};
 };
-
-/*
- * Pimoroni Pins:
- * rm_io18_sai0_sdo
- * rm_io14_sai0_sclk
- * rm_io16_sai0_lrck
- */

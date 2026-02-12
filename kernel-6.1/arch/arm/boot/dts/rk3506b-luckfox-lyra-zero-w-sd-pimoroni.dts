@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
  * Copyright (c) 2024 Rockchip Electronics Co., Ltd.
+ * Modified for Pimoroni Audio DAC SHIM support
  */
 
 /dts-v1/;
@@ -8,7 +9,7 @@
 #include "rk3506-luckfox-lyra-ultra.dtsi"
 
 / {
-	model = "Luckfox Lyra Zero W";
+	model = "Luckfox Lyra Zero W with Pimoroni Audio DAC SHIM";
 	compatible = "rockchip,rk3506g-demo-display-control", "rockchip,rk3506";
 
 	chosen {
@@ -30,27 +31,41 @@
 		regulator-always-on;
 	};
 
-	pcm5102a_codec: pcm5102a-codec {
+	/* Pimoroni Audio DAC SHIM Enable Regulator */
+	pimoroni_dac_enable: pimoroni-dac-enable {
+		compatible = "regulator-fixed";
+		regulator-name = "pimoroni-dac-enable";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&gpio0 RK_PB3 GPIO_ACTIVE_HIGH>; /* rm_io11 = GPIO0_B3 */
+		enable-active-high;
+		regulator-always-on;
+		startup-delay-us = <10000>;
+	};
+
+	/* PCM5100A DAC Codec (Pimoroni compatible with PCM5102A driver) */
+	pcm5100a_codec: pcm5100a-codec {
 		#sound-dai-cells = <0>;
-		compatible = "ti,pcm5102a";
+		compatible = "ti,pcm5102a"; /* PCM5100A is compatible */
 		status = "okay";
 	};
 
-	pcm5102a_sound: pcm5102a-sound {
+	/* Pimoroni Audio Card */
+	pimoroni_sound: pimoroni-sound {
 		compatible = "simple-audio-card";
-		simple-audio-card,name = "PCM5102A-SAI1";
+		simple-audio-card,name = "Pimoroni-Audio-DAC";
 		simple-audio-card,format = "i2s";
-		simple-audio-card,bitclock-master = <&sound_cpu>;
-		simple-audio-card,frame-master = <&sound_cpu>;
+		simple-audio-card,bitclock-master = <&pimoroni_cpu>;
+		simple-audio-card,frame-master = <&pimoroni_cpu>;
 		status = "okay";
 
-		sound_cpu: simple-audio-card,cpu {
-			sound-dai = <&sai1>;
+		pimoroni_cpu: simple-audio-card,cpu {
+			sound-dai = <&sai0>;
 			system-clock-frequency = <12288000>;
 		};
 
-		sound_codec: simple-audio-card,codec {
-			sound-dai = <&pcm5102a_codec>;
+		pimoroni_codec: simple-audio-card,codec {
+			sound-dai = <&pcm5100a_codec>;
 		};
 	};
 };
@@ -127,16 +142,17 @@
 	status = "okay";
 };
 
-/**********audio**********/
-&sai1 {
+/**********audio - Pimoroni Audio DAC SHIM **********/
+&sai0 {
 	#sound-dai-cells = <0>;
 	status = "okay";
 	pinctrl-names = "default";
-	pinctrl-0 = <&rm_io8_sai1_mclk
-		     &rm_io7_sai1_sclk
-		     &rm_io6_sai1_lrck
-		     &rm_io4_sai1_sdo0>;
-	assigned-clocks = <&cru MCLK_SAI1>;
+	/* Pimoroni uses rm_io pins: LRCK=16, SCLK=14, SDO=18 */
+	/* Note: No MCLK needed - PCM5100A generates it internally */
+	pinctrl-0 = <&rm_io16_sai0_lrck
+		     &rm_io14_sai0_sclk
+		     &rm_io18_sai0_sdo>;
+	assigned-clocks = <&cru MCLK_SAI0>;
 	assigned-clock-rates = <12288000>;
 	dai-tdm-slot-num = <2>;
 	dai-tdm-slot-width = <32>;
@@ -147,6 +163,12 @@
 	lcd {
 		lcd_pwren_h: lcd-pwren-h {
 			rockchip,pins = <1 RK_PC4 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+	};
+
+	pimoroni_dac {
+		pimoroni_enable_pin: pimoroni-enable-pin {
+			rockchip,pins = <0 RK_PB3 RK_FUNC_GPIO &pcfg_pull_up>;
 		};
 	};
 };
