@@ -50,6 +50,35 @@ adb shell nmcli dev wifi list
 nmtui
 ```
 
+# AUDIO DAC SUPPORT (PCM5102A/PCM5100A)
+
+Audio DAC support for I2S audio output using PCM5102A or Pimoroni Audio DAC SHIM (PCM5100A).
+
+**Supported Configurations:**
+- **SAI1**: Generic PCM5102A with MCLK (pins: rm_io8, rm_io7, rm_io6, rm_io4)
+- **SAI0**: Pimoroni Audio DAC SHIM without MCLK (pins: rm_io16, rm_io14, rm_io18, rm_io11)
+
+**Quick Start:**
+```bash
+# Verify audio card
+cat /proc/asound/cards
+
+# Test playback
+speaker-test -D hw:0,0 -t sine -f 1000 -c 2
+```
+
+**Detailed Documentation:**
+See [audio-config/README.md](audio-config/README.md) for:
+- Pin mappings and wiring diagrams
+- Build instructions with overlay support
+- Device tree modifications
+- ALSA configuration
+- Testing and troubleshooting
+
+**Status:** 
+- ✅ SAI1 (Generic PCM5102A) - Tested working
+- ⏳ SAI0 (Pimoroni SHIM) - Configuration ready, untested
+
 Luckfox Lyra boards Specifications
 
 <img width="2069" height="589" alt="image" src="https://github.com/user-attachments/assets/83f69150-153a-47c7-aff1-520b722be1f4" />

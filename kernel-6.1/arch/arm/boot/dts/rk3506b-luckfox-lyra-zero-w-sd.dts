@@ -40,6 +40,7 @@
 		compatible = "simple-audio-card";
 		simple-audio-card,name = "PCM5102A-SAI1";
 		simple-audio-card,format = "i2s";
+		simple-audio-card,mclk-fs = <256>;
 		simple-audio-card,bitclock-master = <&sound_cpu>;
 		simple-audio-card,frame-master = <&sound_cpu>;
 		status = "okay";
@@ -47,6 +48,8 @@
 		sound_cpu: simple-audio-card,cpu {
 			sound-dai = <&sai1>;
 			system-clock-frequency = <12288000>;
+			dai-tdm-slot-num = <32>;
+			dai-tdm-slot-width = <64>;
 		};
 
 		sound_codec: simple-audio-card,codec {
@@ -138,8 +141,9 @@
 		     &rm_io4_sai1_sdo0>;
 	assigned-clocks = <&cru MCLK_SAI1>;
 	assigned-clock-rates = <12288000>;
-	dai-tdm-slot-num = <2>;
-	dai-tdm-slot-width = <32>;
+	rockchip,clk-trcm = <1>;
+	dai-tdm-slot-num = <32>;
+	dai-tdm-slot-width = <64>;
 };
 
 /**********pinctrl**********/
