@@ -2,6 +2,29 @@
 
 This directory contains the configuration files and overlays for using PCM5102A/PCM5100A audio DACs with the Luckfox Lyra Zero W board.
 
+## Quick Start
+
+After flashing the image with correct device tree:
+
+```bash
+# 1. Setup audio system (from host machine)
+cd audio-config/scripts
+./setup-audio-system.sh                    # Default: lyra@192.168.123.100
+# or: ./setup-audio-system.sh user@IP      # Custom target
+
+# 2. Reboot board or logout/login for audio group to take effect
+
+# 3. Verify configuration
+./verify-audio-remote.sh                   # Comprehensive diagnostics
+
+# 4. Test audio
+ssh lyra@192.168.123.100 'speaker-test -D hw:0,0 -t sine -f 1000 -c 2'
+```
+
+**Scripts accept optional SSH target as first argument. Default: `lyra@192.168.123.100`**
+
+---
+
 ## Hardware Configurations
 
 ### SAI1 - Generic PCM5102A
@@ -37,14 +60,20 @@ Pimoroni Audio DAC SHIM with PCM5100A (no external MCLK needed).
 
 ```
 audio-config/
-├── asound.conf              # ALSA default device configuration
+├── asound.conf                  # ALSA default device configuration
+├── DIAGNOSIS.md                 # Detailed diagnostic report
+├── QUICKSTART.md                # Quick rebuild guide
+├── MODIFICATIONS.md             # SDK changes log
 ├── overlays/
 │   ├── rk3506-pcm5102a-sai0.dts  # Pimoroni SHIM overlay source
 │   └── rk3506-pcm5102a-sai1.dts  # Generic PCM5102A overlay source
 └── scripts/
-    ├── build-overlays.sh    # Compile overlays to .dtbo
-    ├── load-overlay.sh      # Load overlay at runtime
-    └── test-audio.sh        # Test audio playback
+    ├── setup-audio-system.sh     # Configure user & ALSA on board (via SSH)
+    ├── verify-audio-remote.sh    # Verify configuration remotely (via SSH)
+    ├── verify-audio-config.sh    # Verify locally on board
+    ├── build-overlays.sh         # Compile overlays to .dtbo
+    ├── load-overlay.sh           # Load overlay at runtime
+    └── test-audio.sh             # Test audio playback
 ```
 
 ## Build Instructions
@@ -156,22 +185,35 @@ sudo ./rkflash.sh update
 
 ## System Configuration
 
-### 1. User Permissions
+### Quick Setup (Automated via SSH)
 
-Add user to audio group:
+Run the setup script from your host machine:
+```bash
+cd audio-config/scripts
+
+# Setup user permissions and ALSA config (default: lyra@192.168.123.100)
+./setup-audio-system.sh
+
+# Or specify custom SSH target:
+./setup-audio-system.sh user@192.168.123.50
+```
+
+This script automatically:
+- Adds user to audio group
+- Deploys /etc/asound.conf
+- Verifies configuration
+
+### Manual Setup
+
+If you prefer manual setup on the board:
+
+#### 1. User Permissions
 ```bash
 sudo usermod -aG audio lyra
 # Logout and login for changes to take effect
 ```
 
-### 2. ALSA Configuration
-
-Copy `asound.conf` to device:
-```bash
-sudo cp asound.conf /etc/asound.conf
-```
-
-Or create manually:
+#### 2. ALSA Configuration
 ```bash
 cat | sudo tee /etc/asound.conf > /dev/null <<'EOF'
 # Default ALSA configuration for PCM5102A-SAI1
@@ -190,8 +232,33 @@ EOF
 
 ## Testing
 
-### 1. Verify Sound Card
+### Automated Verification (via SSH)
 
+Run comprehensive diagnostics from your host machine:
+```bash
+cd audio-config/scripts
+
+# Verify configuration (default: lyra@192.168.123.100)
+./verify-audio-remote.sh
+
+# Or specify custom SSH target:
+./verify-audio-remote.sh user@192.168.123.50
+```
+
+This checks:
+- ✓ Sound card registration
+- ✓ Device tree properties (all required properties present)
+- ✓ Pin configuration (4 pins including MCLK)
+- ✓ TDM values (32 slots × 64 bits)
+- ✓ User permissions (audio group)
+- ✓ ALSA configuration
+- ✓ Audio device access (tests if speaker-test hangs)
+
+### Manual Testing
+
+If connected to the board directly:
+
+#### 1. Verify Sound Card
 ```bash
 # Check if card is registered
 cat /proc/asound/cards
@@ -204,27 +271,16 @@ cat /proc/asound/cards
 aplay -l
 ```
 
-### 2. Test Audio Playback
-
-Using provided test script:
-```bash
-scp scripts/test-audio.sh lyra@192.168.123.100:/tmp/
-ssh lyra@192.168.123.100
-chmod +x /tmp/test-audio.sh
-/tmp/test-audio.sh
-```
-
-Or manually:
+#### 2. Test Audio Playback
 ```bash
 # Play 1kHz sine wave for 5 seconds
 speaker-test -D hw:0,0 -t sine -f 1000 -c 2 -l 5
 
-# Check hardware capabilities
-aplay -D hw:0,0 --dump-hw-params < /dev/zero 2>&1 | head -20
+# Or use provided test script
+/tmp/test-audio.sh
 ```
 
-### 3. Play Audio File
-
+#### 3. Play Audio File
 ```bash
 # WAV file
 aplay -D hw:0,0 audiofile.wav
