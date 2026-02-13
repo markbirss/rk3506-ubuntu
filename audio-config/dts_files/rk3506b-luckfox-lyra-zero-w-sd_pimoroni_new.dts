@@ -1,0 +1,176 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright (c) 2024 Rockchip Electronics Co., Ltd.
+ */
+
+/dts-v1/;
+
+#include "rk3506-luckfox-lyra-ultra.dtsi"
+
+/ {
+	model = "Luckfox Lyra Zero W";
+	compatible = "rockchip,rk3506g-demo-display-control", "rockchip,rk3506";
+
+	chosen {
+		bootargs = "earlycon=uart8250,mmio32,0xff0a0000 console=tty1 console=ttyFIQ0 root=/dev/mmcblk0p3 rootfstype=ext4 rootwait snd_aloop.index=7 snd_aloop.use_raw_jiffies=1";
+	};
+
+	wireless_bluetooth: wireless-bluetooth {
+		compatible = "bluetooth-platdata";
+		BT,power_gpio = <&gpio1 RK_PC5 GPIO_ACTIVE_HIGH>;
+		status = "okay";
+	};
+
+	vcc3v3_lcd: vcc3v3-lcd {
+		status = "okay";
+		compatible = "regulator-fixed";
+		pinctrl-names = "default";
+		pinctrl-0 = <&lcd_pwren_h>;
+		regulator-name = "vcc3v3_lcd";
+		regulator-always-on;
+	};
+
+	/* Pimoroni Audio DAC SHIM Enable Regulator */
+	pimoroni_dac_enable: pimoroni-dac-enable {
+		compatible = "regulator-fixed";
+		regulator-name = "pimoroni-dac-enable";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&gpio0 RK_PB3 GPIO_ACTIVE_HIGH>; /* rm_io11 = GPIO0_B3 */
+		enable-active-high;
+		regulator-always-on;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pimoroni_enable_pin>;
+		startup-delay-us = <10000>;
+	};
+
+	/* PCM5100A DAC Codec (Pimoroni compatible with PCM5102A driver) */
+	pcm5102a_codec: pcm5102a-codec {
+		#sound-dai-cells = <0>;
+		compatible = "ti,pcm5102a";
+		status = "okay";
+	};
+
+	pcm5102a_sound: pcm5102a-sound {
+		status = "okay";
+		compatible = "simple-audio-card";
+		simple-audio-card,name = "Pimoroni-Audio-DAC";
+		simple-audio-card,format = "i2s";
+		simple-audio-card,mclk-fs = <256>;
+		simple-audio-card,bitclock-master = <&sound_cpu>;
+		simple-audio-card,frame-master = <&sound_cpu>;
+		
+		sound_cpu: simple-audio-card,cpu {
+			sound-dai = <&sai0>;
+			system-clock-frequency = <12288000>;
+			dai-tdm-slot-num = <32>;
+			dai-tdm-slot-width = <64>;
+		};
+		
+		sound_codec: simple-audio-card,codec {
+			sound-dai = <&pcm5102a_codec>;
+		};
+	};
+};
+
+/**********media**********/
+&mmc {
+	/* For SDMMC */
+	max-frequency = <52000000>;
+	bus-width = <4>;
+	no-sdio;
+	no-mmc;
+	cap-mmc-highspeed;
+	cap-sd-highspeed;
+	cd-gpios = <&gpio1 RK_PB6 GPIO_ACTIVE_LOW>; //det
+	disable-wp;
+	//sd-uhs-sdr104;
+	pinctrl-names = "default";
+	pinctrl-0 = <&sdmmc_clk_pins &sdmmc_cmd_pins &sdmmc_bus4_pins &sdmmc_det &sdmmc_pwren>;
+	vqmmc-supply = <&vcc_3v3>;
+	vmmc-supply = <&vcc_3v3>;
+	status = "okay";
+};
+
+&fspi {
+	status = "okay";
+
+	flash@0 {
+		compatible = "spi-nand";
+		reg = <0>;
+		spi-max-frequency = <80000000>;
+		spi-rx-bus-width = <4>;
+		spi-tx-bus-width = <1>;
+	};
+};
+
+/**********display**********/
+&cma {
+	size = <0x2000000>;
+};
+
+&dsi {
+	status = "okay";
+};
+
+&dsi_dphy {
+	status = "okay";
+};
+
+&dsi_in_vop {
+	status = "okay";
+};
+
+&route_dsi {
+	status = "okay";
+};
+
+&dsi_panel {
+	power-supply = <&vcc3v3_lcd>;
+};
+
+/**********ethernet**********/
+&gmac1 {
+	status = "disabled";
+};
+
+/**********usb**********/
+&usb20_otg0 {
+	dr_mode = "peripheral";
+	status = "okay";
+};
+
+&usb20_otg1 {
+	dr_mode = "host";
+	status = "okay";
+};
+
+/**********audio**********/
+&sai0 {
+	#sound-dai-cells = <0>;
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&rm_io14_sai0_sclk
+		     &rm_io16_sai0_lrck
+		     &rm_io18_sai0_sdo>;
+	assigned-clocks = <&cru MCLK_SAI0>;
+	assigned-clock-rates = <12288000>;
+	rockchip,clk-trcm = <1>;
+	dai-tdm-slot-num = <32>;
+	dai-tdm-slot-width = <64>;
+};
+
+/**********pinctrl**********/
+&pinctrl {
+	lcd {
+		lcd_pwren_h: lcd-pwren-h {
+			rockchip,pins = <1 RK_PC4 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+	};
+
+	pimoroni_dac {
+		pimoroni_enable_pin: pimoroni-enable-pin {
+			rockchip,pins = <0 RK_PB3 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+	};
+};
