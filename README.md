@@ -1,21 +1,21 @@
 # rk3506-ubuntu
-<img width="1024" height="576" alt="image" src="https://github.com/user-attachments/assets/6295b83a-7a8e-4d2b-b0ba-6c5242364663" />
 
+<img width="1024" height="576" alt="image" src="https://github.com/user-attachments/assets/6295b83a-7a8e-4d2b-b0ba-6c5242364663" />
 
 Ubuntu 24.04.3 OS image builder for various RK3506 SBC
 
-(based off the Luckfox Lyra SDK when it could still build Ubuntu 22.04 OS Images but further modified to include updated Ubuntu 24.04.3 OS and support for the later Luckfox Lyra SBC boards with ability to run luckfox-config) 
-
+(based off the Luckfox Lyra SDK when it could still build Ubuntu 22.04 OS Images but further modified to include updated Ubuntu 24.04.3 OS and support for the later Luckfox Lyra SBC boards with ability to run luckfox-config)
 
 BOARD | Tested OK with luckfox-config |
 |:--|:--|
 | Luckfox Lyra | Yes |
-| Luckfox Lyra PLUS | Yes | 
+| Luckfox Lyra PLUS | Yes |
 | Luckfox Lyra Zero W | Yes |
 | Luckfox Lyra Pi W emmc| Yes |
-| ArmSoM Forge 1 | Solved with https://github.com/markbirss/rk3506-ubuntu/releases/tag/1.1 |
+| ArmSoM Forge 1 | Solved with <https://github.com/markbirss/rk3506-ubuntu/releases/tag/1.1> |
 
 Supported Boards
+
 Board Name | SD/EMMC |  Defconfig |
 |:--|:--|:--|
 | Luckfox Lyra | SDCard | 4. luckfox_lyra_ubuntu_sdmmc |
@@ -50,39 +50,9 @@ adb shell nmcli dev wifi list
 nmtui
 ```
 
-# AUDIO DAC SUPPORT (PCM5102A/PCM5100A)
-
-Audio DAC support for I2S audio output using PCM5102A or Pimoroni Audio DAC SHIM (PCM5100A).
-
-**Supported Configurations:**
-- **SAI1**: Generic PCM5102A with MCLK (pins: rm_io8, rm_io7, rm_io6, rm_io4)
-- **SAI0**: Pimoroni Audio DAC SHIM without MCLK (pins: rm_io16, rm_io14, rm_io18, rm_io11)
-
-**Quick Start:**
-```bash
-# Verify audio card
-cat /proc/asound/cards
-
-# Test playback
-speaker-test -D hw:0,0 -t sine -f 1000 -c 2
-```
-
-**Detailed Documentation:**
-See [audio-config/README.md](audio-config/README.md) for:
-- Pin mappings and wiring diagrams
-- Build instructions with overlay support
-- Device tree modifications
-- ALSA configuration
-- Testing and troubleshooting
-
-**Status:** 
-- ✅ SAI1 (Generic PCM5102A) - Tested working
-- ⏳ SAI0 (Pimoroni SHIM) - Configuration ready, untested
-
 Luckfox Lyra boards Specifications
 
 <img width="2069" height="589" alt="image" src="https://github.com/user-attachments/assets/83f69150-153a-47c7-aff1-520b722be1f4" />
-
 
 <img width="1044" height="810" alt="Screenshot_20250811_221618" src="https://github.com/user-attachments/assets/6ddc87d3-118e-4c18-bd1b-7213a583ea9d" />
 
@@ -168,11 +138,9 @@ root@luckfox:~# lsusb -tv
             ID 1e0e:9001 Qualcomm / Option
 ```
 
-
-
 Luckfox Lyra pinout
 
-https://wiki.luckfox.com/Luckfox-Lyra/Pinout/
+<https://wiki.luckfox.com/Luckfox-Lyra/Pinout/>
 
 <img width="960" height="491" alt="image" src="https://github.com/user-attachments/assets/1165ee4a-bf58-4776-9caa-3a51aacdc886" />
 
@@ -182,11 +150,9 @@ Board cator more for CanBus/Flexibus use than RM_IO gpio
 
 <img width="599" height="456" alt="ArmSoM-Forge1-RockChip-RK3506J-SBC" src="https://github.com/user-attachments/assets/0cdb2628-1c2d-4dca-ab5a-171c4b9258f1" />
 
-
 <img width="1178" height="985" alt="Screenshot_20250822_114824" src="https://github.com/user-attachments/assets/567eced2-b9ec-4428-b498-12ce52f47dac" />
 
 Key: Green=GPIO, Blue=RM_IO, Red=Power, Black=GND
-
 
 ```
 RMIO pins and GPIO pins
@@ -216,19 +182,18 @@ GPIO pins larger than 32 still require you to subract 32 (gpiochip1)
 -         -      GND | 39 40 | 32       -         -
                      + - + - +
                      
-RM_IO4		4		4	
-RM_IO5		5		5
-RM_IO22		22		22
-RM_IO23		23		23
-RM_IO25		42		42-32=10
-RM_IO26		43		43-32=11
-RM_IO27		50		50-32-18
-RM_IO28		51		51-32=19
-RM_IO29		57		57-32=25
-RM_IO30		58		58-32=26
-RM_IO31		59		59-32=27
+RM_IO4  4  4 
+RM_IO5  5  5
+RM_IO22  22  22
+RM_IO23  23  23
+RM_IO25  42  42-32=10
+RM_IO26  43  43-32=11
+RM_IO27  50  50-32-18
+RM_IO28  51  51-32=19
+RM_IO29  57  57-32=25
+RM_IO30  58  58-32=26
+RM_IO31  59  59-32=27
 ```
-
 
 ```
 root@forge1:~# cat /sys/kernel/debug/gpio
@@ -274,14 +239,11 @@ Example Hardware running DSI 5" 720x1280 display and Luckfox Lyra Pi
 Front
 <img width="924" height="1731" alt="image" src="https://github.com/user-attachments/assets/11ce59f7-f726-40e7-8af3-f55c63c593ad" />
 
-
 Back
 <img width="576" height="1188" alt="image" src="https://github.com/user-attachments/assets/9ac3e177-f7fe-4e58-b193-923bd2253adf" />
 
-
 Display
-https://www.waveshare.com/5-dsi-touch-a.htm
-
+<https://www.waveshare.com/5-dsi-touch-a.htm>
 
 XFCE4 Desktop
 
@@ -420,7 +382,7 @@ Flash Erase and switch storage
 https://github.com/markbirss/rkdeveloptool
 ```
 
-#IMPORTANT NOTE
+# IMPORTANT NOTE
 This SDK is provided for non commercial use only
 
 UBUNTU require official autorization for commerical use
@@ -430,7 +392,7 @@ Use at your own risk
 
 Support my work and consider **buying  me a coffee**
 
-https://buymeacoffee.com/mark.birss
+<https://buymeacoffee.com/mark.birss>
 
 # How-To build
 
