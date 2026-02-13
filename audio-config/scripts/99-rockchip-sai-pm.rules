@@ -1,0 +1,18 @@
+# udev rule to disable Runtime PM for Rockchip SAI devices
+# This ensures audio clocks stay active
+#
+# Installation:
+#   sudo cp 99-rockchip-sai-pm.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules
+#   sudo udevadm trigger
+#
+# Or use the setup-sai-pm.sh script
+
+# Rockchip SAI0 (ff300000.sai)
+SUBSYSTEM=="platform", KERNEL=="ff300000.sai", ATTR{power/control}="on"
+
+# Rockchip SAI1 (ff310000.sai)
+SUBSYSTEM=="platform", KERNEL=="ff310000.sai", ATTR{power/control}="on"
+
+# Generic rule for all SAI devices (fallback)
+SUBSYSTEM=="platform", KERNEL=="ff3[0-9]0000.sai", ATTR{power/control}="on"
