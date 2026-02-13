@@ -38,7 +38,6 @@
 		regulator-max-microvolt = <3300000>;
 		gpio = <&gpio0 RK_PB3 GPIO_ACTIVE_HIGH>; /* rm_io11 = GPIO0_B3 */
 		enable-active-high;
-		regulator-always-on;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pimoroni_enable_pin>;
 		startup-delay-us = <10000>;
