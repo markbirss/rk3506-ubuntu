@@ -4,7 +4,7 @@
 
 set -e
 
-SSH_TARGET="${1:-lyra@192.168.123.100}"
+SSH_TARGET="${1:-root@192.168.123.100}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ASOUND_CONF="$(dirname "$SCRIPT_DIR")/asound.conf"
 
@@ -29,10 +29,32 @@ fi
 echo "✓ SSH connection successful"
 echo ""
 
-# Add user to audio group
-echo "2. Adding user to audio group..."
+# Check if passwordless sudo works
+echo "2. Checking sudo permissions..."
 USERNAME=$(echo "$SSH_TARGET" | cut -d'@' -f1)
-ssh "$SSH_TARGET" "sudo usermod -aG audio $USERNAME 2>/dev/null && echo '✓ User added to audio group' || echo '✓ User already in audio group'"
+if ssh "$SSH_TARGET" "sudo -n true" >/dev/null 2>&1; then
+    echo "✓ Passwordless sudo available"
+    SUDO_CMD="sudo"
+else
+    echo "⚠ Passwordless sudo not configured"
+    echo ""
+    echo "Enter sudo password for $USERNAME on target board:"
+    read -s -p "Password: " SUDO_PASS
+    echo ""
+    
+    # Test password
+    if ! ssh "$SSH_TARGET" "echo '$SUDO_PASS' | sudo -S -v" >/dev/null 2>&1; then
+        echo "ERROR: Incorrect password or sudo access denied"
+        exit 1
+    fi
+    echo "✓ Sudo password accepted"
+    SUDO_CMD="echo '$SUDO_PASS' | sudo -S"
+fi
+echo ""
+
+# Add user to audio group
+echo "3. Adding user to audio group..."
+ssh "$SSH_TARGET" "$SUDO_CMD usermod -aG audio $USERNAME 2>/dev/null && echo '✓ User added to audio group' || echo '✓ User already in audio group'"
 echo ""
 
 # Check if asound.conf exists locally
@@ -55,13 +77,13 @@ EOF
 fi
 
 # Deploy ALSA configuration
-echo "3. Deploying ALSA configuration..."
-cat "$ASOUND_CONF" | ssh "$SSH_TARGET" "sudo tee /etc/asound.conf > /dev/null"
+echo "4. Deploying ALSA configuration..."
+cat "$ASOUND_CONF" | ssh "$SSH_TARGET" "$SUDO_CMD tee /etc/asound.conf > /dev/null"
 echo "✓ /etc/asound.conf written"
 echo ""
 
 # Verify audio group membership
-echo "4. Verifying configuration..."
+echo "5. Verifying configuration..."
 GROUPS_OUTPUT=$(ssh "$SSH_TARGET" "groups $USERNAME")
 if echo "$GROUPS_OUTPUT" | grep -q "audio"; then
     echo "✓ User '$USERNAME' is in audio group"
@@ -80,7 +102,7 @@ fi
 echo ""
 
 # Check sound card
-echo "5. Checking sound card..."
+echo "6. Checking sound card..."
 if ssh "$SSH_TARGET" "cat /proc/asound/cards" | grep -q "PCM5102ASAI1"; then
     echo "✓ Sound card found:"
     ssh "$SSH_TARGET" "cat /proc/asound/cards" | sed 's/^/  /'

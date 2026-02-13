@@ -123,11 +123,11 @@ else
 fi
 echo ""
 
-# 5. Check TDM Values
+# 5. Check TDM Values (Device Tree uses Big Endian!)
 echo "5. TDM Configuration Values"
 echo "-------------------------------------------------------------------"
 if [ -f /sys/firmware/devicetree/base/sai@ff310000/dai-tdm-slot-num ]; then
-    tdm_slots=$(cat /sys/firmware/devicetree/base/sai@ff310000/dai-tdm-slot-num | od -An -tu4 | xargs)
+    tdm_slots=$(cat /sys/firmware/devicetree/base/sai@ff310000/dai-tdm-slot-num | od -An -tu4 --endian=big | xargs)
     if [ "$tdm_slots" = "32" ]; then
         echo -e "${GREEN}✓${NC} dai-tdm-slot-num = 32"
     else
@@ -137,7 +137,7 @@ if [ -f /sys/firmware/devicetree/base/sai@ff310000/dai-tdm-slot-num ]; then
 fi
 
 if [ -f /sys/firmware/devicetree/base/sai@ff310000/dai-tdm-slot-width ]; then
-    tdm_width=$(cat /sys/firmware/devicetree/base/sai@ff310000/dai-tdm-slot-width | od -An -tu4 | xargs)
+    tdm_width=$(cat /sys/firmware/devicetree/base/sai@ff310000/dai-tdm-slot-width | od -An -tu4 --endian=big | xargs)
     if [ "$tdm_width" = "64" ]; then
         echo -e "${GREEN}✓${NC} dai-tdm-slot-width = 64"
     else
@@ -147,7 +147,7 @@ if [ -f /sys/firmware/devicetree/base/sai@ff310000/dai-tdm-slot-width ]; then
 fi
 
 if [ -f /sys/firmware/devicetree/base/sai@ff310000/assigned-clock-rates ]; then
-    mclk_rate=$(cat /sys/firmware/devicetree/base/sai@ff310000/assigned-clock-rates | od -An -tu4 | xargs)
+    mclk_rate=$(cat /sys/firmware/devicetree/base/sai@ff310000/assigned-clock-rates | od -An -tu4 --endian=big | xargs)
     if [ "$mclk_rate" = "12288000" ]; then
         echo -e "${GREEN}✓${NC} assigned-clock-rates = 12288000 (12.288 MHz)"
     else
@@ -184,8 +184,50 @@ else
 fi
 echo ""
 
-# 8. Test Audio Device Access
-echo "8. Audio Device Access Test"
+# 8. Runtime PM Status (CRITICAL!)
+echo "8. Runtime PM Status"
+echo "-------------------------------------------------------------------"
+if [ -f /sys/devices/platform/ff310000.sai/power/runtime_status ]; then
+    pm_status=$(cat /sys/devices/platform/ff310000.sai/power/runtime_status)
+    pm_control=$(cat /sys/devices/platform/ff310000.sai/power/control)
+    
+    if [ "$pm_status" = "active" ]; then
+        echo -e "${GREEN}✓${NC} Runtime PM status: $pm_status"
+    else
+        echo -e "${RED}✗${NC} Runtime PM status: $pm_status (should be 'active')"
+        echo "   This is likely why audio doesn't work!"
+        ((errors++))
+    fi
+    
+    echo "   Power control: $pm_control"
+    
+    if [ "$pm_control" = "on" ]; then
+        echo -e "${GREEN}✓${NC} Power control set to 'on' (forced active)"
+    else
+        echo -e "${YELLOW}⚠${NC} Power control is 'auto' - device may suspend"
+        echo "   To fix: echo on | sudo tee /sys/devices/platform/ff310000.sai/power/control"
+        echo "   Or run: ./fix-runtime-pm.sh"
+    fi
+    
+    # Check clock enable status
+    if [ -f /sys/kernel/debug/clk/mclk_sai1/clk_enable_count ]; then
+        clk_enabled=$(cat /sys/kernel/debug/clk/mclk_sai1/clk_enable_count)
+        if [ "$clk_enabled" -gt 0 ]; then
+            echo -e "${GREEN}✓${NC} MCLK clock is enabled (count: $clk_enabled)"
+        else
+            echo -e "${RED}✗${NC} MCLK clock is NOT enabled (count: 0)"
+            echo "   Clock is configured but not running!"
+            echo "   This means Runtime PM has suspended the device."
+            ((errors++))
+        fi
+    fi
+else
+    echo -e "${YELLOW}⚠${NC} Cannot check Runtime PM status (file not found)"
+fi
+echo ""
+
+# 9. Test Audio Device Access
+echo "9. Audio Device Access Test"
 echo "-------------------------------------------------------------------"
 echo "Testing if audio device can be opened (2 second timeout)..."
 if timeout 2 aplay -D hw:0,0 --dump-hw-params < /dev/null 2>/dev/null; then
@@ -206,11 +248,11 @@ else
 fi
 echo ""
 
-# 9. Quick Speaker Test
-echo "9. Quick Audio Playback Test (3 seconds)"
+# 10. Quick Speaker Test
+echo "10. Quick Audio Playback Test (6 seconds)"
 echo "-------------------------------------------------------------------"
-echo "Running speaker-test with 3 second timeout..."
-if timeout 3 speaker-test -D hw:0,0 -t sine -f 1000 -c 2 -l 1 >/dev/null 2>&1; then
+echo "Running speaker-test with 6 second timeout..."
+if timeout 6 speaker-test -D hw:0,0 -t sine -f 1000 -c 2 -l 1 >/dev/null 2>&1; then
     echo -e "${GREEN}✓${NC} speaker-test completed successfully!"
     echo "   If hardware is connected, you should have heard a tone."
     echo ""
@@ -220,8 +262,9 @@ else
     exit_code=$?
     if [ $exit_code -eq 124 ]; then
         echo -e "${RED}✗${NC} speaker-test HUNG - hardware initialization failed"
-        echo "   Device tree is incorrectly configured!"
-        echo "   Check DIAGNOSIS.md for details."
+        echo "   Check Runtime PM status (Section 8 above)"
+        echo "   Run: ./fix-runtime-pm.sh"
+        echo "   See RUNTIME-PM-FIX.md for details."
         ((errors++))
     else
         echo -e "${YELLOW}⚠${NC} speaker-test failed with exit code: $exit_code"
