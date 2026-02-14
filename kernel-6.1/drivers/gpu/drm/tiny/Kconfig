@@ -199,3 +199,15 @@ config TINYDRM_ST7735R
 	  * Okaya RH128128T 1.44" 128x128 TFT
 
 	  If M is selected the module will be called st7735r.
+
+config TINYDRM_ST7305
+        tristate "DRM Driver for Sitronix ST7305 Displays"
+        default m
+        depends on DRM
+        select DRM_KMS_HELPER
+        select DRM_GEM_SHMEM_HELPER
+        help
+          This is a DRM driver for Sitronix ST7305 display controller.
+          Wooden Chair <hua.zheng@embeddedboys.com>
+
+          If M is selected the module will be called st7305_tinydrm.
