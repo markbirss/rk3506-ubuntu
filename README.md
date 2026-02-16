@@ -383,6 +383,7 @@ https://github.com/markbirss/rkdeveloptool
 ```
 
 # IMPORTANT NOTE
+
 This SDK is provided for non commercial use only
 
 UBUNTU require official autorization for commerical use
@@ -449,3 +450,19 @@ If kernel build fails, probably a new user need to be added to the docker contai
 adduser user
 usermod -aG sudo user
 ```
+
+Flash image with into SD card as described in [TF Card Image Flashing](https://wiki.luckfox.com/Luckfox-Lyra/Image-flashing#5-tf-card-image-flashing).
+
+After that, you sould have sound with the following wiring:
+
+SHIM Pin | Lyra Zero W | GPIO     |
+-------- | ----------- | -------- |
+VCC      | 3.3V        | -        |
+GND      | GND         | -        |
+SCK      | GND         | -        |
+BCK      | rm_io14     | GPIO0_B6 |
+DIN      | rm_io18     | GPIO0_C2 |
+LRCK     | rm_io16     | GPIO0_C0 |
+XSMT     | rm_io11     | GPIO0_B3 |
+
+See the audio-config folder for details
