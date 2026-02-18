@@ -10,6 +10,11 @@ adb shell reboot
 
 <img width="1014" height="732" alt="image" src="https://github.com/user-attachments/assets/2813c5c0-5395-42e9-b252-179bc68a3b8d" />
 
+# ST7305 DRM Display Driver developed by
+
+hua.zheng@embeddedboys.com
+https://github.com/IotaHydrae/st7305-kernel-drivers
+
 SDK Usage
 
 ```
