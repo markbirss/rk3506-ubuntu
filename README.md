@@ -2,6 +2,8 @@
 
 # Ubuntu 24.04.4 with 4.2 inch 300x400 ST7305 RLCD Display
 
+<img width="1121" height="793" alt="image" src="https://github.com/user-attachments/assets/ee3260f4-e215-40d6-ada3-9e21fabba77a" />
+
 Enable Console Display Rotation (Does not affect Framebuffer)
 ```
 adb shell "systemctl enable display.service"
