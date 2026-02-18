@@ -4,13 +4,19 @@
 
 <img width="1121" height="793" alt="image" src="https://github.com/user-attachments/assets/ee3260f4-e215-40d6-ada3-9e21fabba77a" />
 
-Enable Console Display Rotation (Does not affect Framebuffer)
+Enable Console Display Rotation (Does not affect Framebuffer Display Rotation)
 ```
 adb shell "systemctl enable display.service"
 adb shell reboot
 ```
 
 <img width="1014" height="732" alt="image" src="https://github.com/user-attachments/assets/2813c5c0-5395-42e9-b252-179bc68a3b8d" />
+
+# ToDo
+```
+Modify board device tree for your specific display model before compile
+
+```
 
 # ST7305 DRM Display Driver developed by
 
