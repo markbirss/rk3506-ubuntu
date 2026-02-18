@@ -13,6 +13,7 @@ adb shell reboot
 # ST7305 DRM Display Driver developed by
 
 hua.zheng@embeddedboys.com
+
 https://github.com/IotaHydrae/st7305-kernel-drivers
 
 SDK Usage
