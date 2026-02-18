@@ -1,6 +1,6 @@
 # rk3506-ubuntu 
 
-# Ubuntu 24.04.4 with 4.2 inch ST7305 RLCD Display
+# Ubuntu 24.04.4 with 4.2 inch 300x400 ST7305 RLCD Display
 
 Enable Console Display Rotation (Does not affect Framebuffer)
 ```
