@@ -2,7 +2,7 @@
 
 # Ubuntu 24.04.4 with 4.2 inch ST7305 RLCD Display
 
-Rotate the Console Display Rotation (Does not affect Framebuffer)
+Enable Console Display Rotation (Does not affect Framebuffer)
 ```
 adb shell "systemctl enable display.service"
 adb shell reboot
