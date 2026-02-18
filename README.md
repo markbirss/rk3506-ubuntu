@@ -1,8 +1,10 @@
-# rk3506-ubuntu
-<img width="1024" height="576" alt="image" src="https://github.com/user-attachments/assets/6295b83a-7a8e-4d2b-b0ba-6c5242364663" />
+# rk3506-ubuntu Ubuntu 24.04.4 with 4.2 inch ST7305 RLCD Display
 
+```
+adb shell "systemctl enable display.service"
+adb shell reboot
 
-Ubuntu 24.04.3 OS image builder for various RK3506 SBC
+```
 
 (based off the Luckfox Lyra SDK when it could still build Ubuntu 22.04 OS Images but further modified to include updated Ubuntu 24.04.3 OS and support for the later Luckfox Lyra SBC boards with ability to run luckfox-config) 
 
