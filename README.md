@@ -306,21 +306,20 @@ ln -s .chips/rk3506 ../../rk3506
 ln -s .chips/rk3506 ../../.chip
 cd ../../../../
 
-#sha256sum
-#d6f58545b0b9c679665a8ff58dd2a7a75aa2b2648871e4be5a2c2288b4261545  ubuntu_24.04.3.tar.gz
+# sha256sum
+# 231554183fc807b066c33633b1b6066b800d830c6435e533597f659300c24a25  ubuntu_24.04.4.tar.gz
 
-git clone https://github.com/markbirss/ubuntu_24.04.3.git
-cd ubuntu_24.04.3
+git clone https://github.com/markbirss/ubuntu_24.04.4.git
+cd ubuntu_24.04.4
 rm -fr .git
-7z x ubuntu_24.04.3.7z.001
-sha256sum ubuntu_24.04.3.tar.gz
+7z x ubuntu_24.04.4.7z.001
 
-rm -f ubuntu_24.04.3.7z.*
+rm -f ubuntu_24.04.4.7z.*
 
-mv ubuntu_24.04.3.tar.gz ../
+mv ubuntu_24.04.4.tar.gz ../
 cd ../
 mkdir ubuntu
-mv ubuntu_24.04.3.tar.gz ubuntu
+mv ubuntu_24.04.4.tar.gz ubuntu/ubuntu_24.04.3.tar.gz
 
 #./build.sh lunch
 # sudo ./build.sh
