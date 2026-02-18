@@ -14,8 +14,46 @@ adb shell reboot
 
 # ToDo
 ```
-Modify board device tree for your specific display model before compile
+Modify board device tree for your specific display model and the pins used for connection before compile
 
+
+example
+&pinctrl {
+	tft {
+		tft_pins: tft-pins {
+			rockchip,pins = <0 RK_PA2 RK_FUNC_GPIO &pcfg_pull_none>, // reset
+					<0 RK_PA3 RK_FUNC_GPIO &pcfg_pull_none>; // dc
+		};
+	};
+};
+
+&spi0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&rm_io29_spi0_clk &rm_io28_spi0_mosi &rm_io4_spi0_csn0>;
+
+	status = "okay";
+
+	tft: st7305@0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&tft_pins>;
+
+		// compatible = "osptek,ydp154h008-v3";
+		// compatible = "osptek,ydp213h001-v3";
+		// compatible = "osptek,ydp290h001-v3";
+		// compatible = "osptek,ydp420h001-v3";
+		compatible = "swi,lhf420tb-f07";
+
+		spi-max-frequency = <50000000>;
+		reg = <0>;
+
+		reset-gpios = <&gpio0 RK_PA2 GPIO_ACTIVE_HIGH>;
+		dc-gpios = <&gpio0 RK_PA3 GPIO_ACTIVE_HIGH>;
+		status = "okay";
+	};
+};
 ```
 
 # ST7305 DRM Display Driver developed by
