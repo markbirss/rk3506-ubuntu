@@ -8,6 +8,8 @@ adb shell "systemctl enable display.service"
 adb shell reboot
 ```
 
+<img width="1014" height="732" alt="image" src="https://github.com/user-attachments/assets/2813c5c0-5395-42e9-b252-179bc68a3b8d" />
+
 SDK Usage
 
 ```
