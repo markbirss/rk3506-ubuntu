@@ -25,6 +25,69 @@ luckfox_lyra_ubuntu_sdmmc_defconfig				./kernel-6.1/arch/arm/boot/dts/rk3506g-lu
 luckfox_lyra_zero-w_ubuntu_sdmmc_defconfig		./kernel-6.1/arch/arm/boot/dts/rk3506b-luckfox-lyra-zero-w-sd
 
 example - https://github.com/markbirss/st7305-kernel-drivers/blob/luckfox-lyra/rk3506g-luckfox-lyra-sd.dts
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright (c) 2024 Rockchip Electronics Co., Ltd.
+ */
+
+/dts-v1/;
+
+#include "rk3506-luckfox-lyra.dtsi"
+
+/ {
+	model = "Luckfox Lyra";
+	compatible = "rockchip,rk3506g-demo-display-control", "rockchip,rk3506";
+
+	chosen {
+		bootargs = "earlycon=uart8250,mmio32,0xff0a0000 console=tty1 console=ttyFIQ0 storagemedia=sd root=/dev/mmcblk0p3 rootfstype=ext4 rootwait snd_aloop.index=7 snd_aloop.use_raw_jiffies=1";
+	};
+};
+
+/**********display**********/
+&cma {
+	size = <0x2000000>;
+};
+
+&dsi {
+	status = "disabled";
+};
+
+&dsi_dphy {
+	status = "disabled";
+};
+
+&dsi_in_vop {
+	status = "disabled";
+};
+
+&route_dsi {
+	status = "disabled";
+};
+
+&dsi_panel {
+	status = "disabled";
+};
+
+/**********ethernet**********/
+&gmac1 {
+	status = "disabled";
+};
+
+&mdio1 {
+	status = "disabled";
+};
+
+/**********usb**********/
+&usb20_otg0 {
+	dr_mode = "peripheral";
+	status = "okay";
+};
+
+&usb20_otg1 {
+	dr_mode = "host";
+	status = "okay";
+};
+
 &pinctrl {
 	tft {
 		tft_pins: tft-pins {
@@ -58,6 +121,7 @@ example - https://github.com/markbirss/st7305-kernel-drivers/blob/luckfox-lyra/r
 
 		reset-gpios = <&gpio0 RK_PA2 GPIO_ACTIVE_HIGH>;
 		dc-gpios = <&gpio0 RK_PA3 GPIO_ACTIVE_HIGH>;
+
 		status = "okay";
 	};
 };
