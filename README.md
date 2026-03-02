@@ -17,7 +17,14 @@ adb shell reboot
 Modify board device tree for your specific display model and the pins used for connection before compile
 
 
-example
+luckfox_lyra_pi-w_ubuntu_emmc_defconfig			./kernel-6.1/arch/arm/boot/dts/rk3506b-luckfox-lyra-pi-w
+luckfox_lyra_plus_ubuntu_sdmmc_defconfig  		./kernel-6.1/arch/arm/boot/dts/rk3506g-luckfox-lyra-plus-sd
+luckfox_lyra_ultra-w_ubuntu_emmc_defconfig		./kernel-6.1/arch/arm/boot/dts/rk3506b-luckfox-lyra-ultra-w
+luckfox_lyra_pi-w_ubuntu_sdmmc_defconfig  		./kernel-6.1/arch/arm/boot/dts/rk3506b-luckfox-lyra-pi-w-sd
+luckfox_lyra_ubuntu_sdmmc_defconfig				./kernel-6.1/arch/arm/boot/dts/rk3506g-luckfox-lyra-sd       
+luckfox_lyra_zero-w_ubuntu_sdmmc_defconfig		./kernel-6.1/arch/arm/boot/dts/rk3506b-luckfox-lyra-zero-w-sd
+
+example - https://github.com/markbirss/st7305-kernel-drivers/blob/luckfox-lyra/rk3506g-luckfox-lyra-sd.dts
 &pinctrl {
 	tft {
 		tft_pins: tft-pins {
