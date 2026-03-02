@@ -19,15 +19,17 @@ Modify board device tree for your specific display model and the pins used for c
 
 BOARD | file |
 |:--|:--|
+| Luckfox Lyra Ultra W emmc | ./kernel-6.1/arch/arm/boot/dts/rk3506b-luckfox-lyra-ultra-w.dts | 
 | Luckfox Lyra Pi W emmc | ./kernel-6.1/arch/arm/boot/dts/rk3506b-luckfox-lyra-pi-w.dts |
 | Luckfox Lyra Pi W sdmmc | ./kernel-6.1/arch/arm/boot/dts/rk3506b-luckfox-lyra-pi-w-sd.dts |
-| Luckfox Lyra Ultra W emmc | ./kernel-6.1/arch/arm/boot/dts/rk3506b-luckfox-lyra-ultra-w.dts | 
 | Luckfox Lyra sdmmc | ./kernel-6.1/arch/arm/boot/dts/rk3506g-luckfox-lyra-sd.dts        |
 | Luckfox Lyra Plus sdmmc | ./kernel-6.1/arch/arm/boot/dts/rk3506g-luckfox-lyra-plus-sd.dts |
 | Luckfox Lyra Zero W sdmmc | ./kernel-6.1/arch/arm/boot/dts/rk3506b-luckfox-lyra-zero-w-sd.dts |
 
 ```
-example - https://github.com/markbirss/st7305-kernel-drivers/blob/luckfox-lyra/rk3506g-luckfox-lyra-sd.dts
+Luckfox Lyra example
+https://github.com/markbirss/st7305-kernel-drivers/blob/luckfox-lyra/rk3506g-luckfox-lyra-sd.dts
+
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
  * Copyright (c) 2024 Rockchip Electronics Co., Ltd.
