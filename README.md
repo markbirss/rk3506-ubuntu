@@ -145,6 +145,24 @@ https://github.com/markbirss/st7305-kernel-drivers/blob/luckfox-lyra/rk3506g-luc
 };
 ```
 
+```
+Cahnge dither
+enum {
+	DITHER_TYPE_NONE,
+	DITHER_TYPE_BAYER_4X4,
+	DITHER_TYPE_BAYER_16X16,
+	DITHER_TYPE_MAX,
+};
+File
+/sys/devices/platform/ff120000.spi/spi_master/spi0/spi0.0/config/dither_type
+
+None
+echo 0 > /sys/devices/platform/ff120000.spi/spi_master/spi0/spi0.0/config/dither_type
+
+16x16
+echo 2 > /sys/devices/platform/ff120000.spi/spi_master/spi0/spi0.0/config/dither_type
+```
+
 # ST7305 DRM Display Driver developed by
 
 hua.zheng@embeddedboys.com
