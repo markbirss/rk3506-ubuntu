@@ -146,7 +146,8 @@ https://github.com/markbirss/st7305-kernel-drivers/blob/luckfox-lyra/rk3506g-luc
 ```
 
 ```
-Cahnge dither
+Change display dither method
+
 enum {
 	DITHER_TYPE_NONE,
 	DITHER_TYPE_BAYER_4X4,
