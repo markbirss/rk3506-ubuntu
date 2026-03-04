@@ -19,6 +19,8 @@ adb shell reboot
 
 # The FPC Flex cable is very fragile take care !!!!
 
+<img width="1847" height="2586" alt="image" src="https://github.com/user-attachments/assets/7b8c178a-d9ce-43f7-92fc-6e371d2304c0" />
+
 <img width="1848" height="2667" alt="image" src="https://github.com/user-attachments/assets/bd0ebf37-c624-4e29-96ef-8c3b8496b034" />
 
 <img width="1848" height="2586" alt="image" src="https://github.com/user-attachments/assets/1ed75b48-060e-4d8a-90b5-e15dc7064bdb" />
