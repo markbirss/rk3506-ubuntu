@@ -160,6 +160,9 @@ File
 None
 echo 0 > /sys/devices/platform/ff120000.spi/spi_master/spi0/spi0.0/config/dither_type
 
+4x4
+echo 1 > /sys/devices/platform/ff120000.spi/spi_master/spi0/spi0.0/config/dither_type
+
 16x16
 echo 2 > /sys/devices/platform/ff120000.spi/spi_master/spi0/spi0.0/config/dither_type
 ```
