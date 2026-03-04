@@ -4,13 +4,18 @@
 
 <img width="1121" height="793" alt="image" src="https://github.com/user-attachments/assets/ee3260f4-e215-40d6-ada3-9e21fabba77a" />
 
+
+<img width="1014" height="732" alt="image" src="https://github.com/user-attachments/assets/2813c5c0-5395-42e9-b252-179bc68a3b8d" />
+
 Enable Console Display Rotation (Does not affect Framebuffer Display Rotation)
 ```
 adb shell "systemctl enable display.service"
 adb shell reboot
 ```
 
-<img width="1014" height="732" alt="image" src="https://github.com/user-attachments/assets/2813c5c0-5395-42e9-b252-179bc68a3b8d" />
+<img width="1168" height="1866" alt="image" src="https://github.com/user-attachments/assets/17a31d34-b958-4719-9ed5-9efc46df19c4" />
+
+<img width="1598" height="2444" alt="image" src="https://github.com/user-attachments/assets/81583579-d62e-4e32-9148-6f658c093045" />
 
 # ToDo
 ```
