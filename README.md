@@ -25,6 +25,11 @@ adb shell reboot
 
 <img width="1848" height="2586" alt="image" src="https://github.com/user-attachments/assets/1ed75b48-060e-4d8a-90b5-e15dc7064bdb" />
 
+```
+PCB Adapters link
+https://oshwhub.com/embeddedboys/shi-yong-yu-st7305-fan-she-shi-tft-de-zhuan-jie-ban
+```
+
 # ToDo
 ```
 Modify board device tree for your specific display model and the pins used for connection before compile
