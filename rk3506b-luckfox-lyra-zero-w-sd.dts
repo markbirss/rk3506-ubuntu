@@ -1,0 +1,183 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright (c) 2024 Rockchip Electronics Co., Ltd.
+ */
+
+/dts-v1/;
+
+#include "rk3506-luckfox-lyra-ultra.dtsi"
+
+/ {
+	model = "Luckfox Lyra Zero W";
+	compatible = "rockchip,rk3506g-demo-display-control", "rockchip,rk3506";
+
+	chosen {
+		bootargs = "earlycon=uart8250,mmio32,0xff0a0000 console=tty1 console=ttyFIQ0 root=/dev/mmcblk0p3 rootfstype=ext4 rootwait snd_aloop.index=7 snd_aloop.use_raw_jiffies=1";
+	};
+
+	wireless_bluetooth: wireless-bluetooth {
+		compatible = "bluetooth-platdata";
+		BT,power_gpio = <&gpio1 RK_PC5 GPIO_ACTIVE_HIGH>;
+		status = "okay";
+	};
+
+        gpio_keys: gpio-keys {
+                compatible = "gpio-keys";
+                pinctrl-names = "default";
+                pinctrl-0 = <&usr_button_pins>;
+
+                button-select {
+                        label = "SELECT";
+                        linux,code = <KEY_SELECT>;
+                        gpios = <&gpio1 RK_PC3 GPIO_ACTIVE_LOW>;
+                };
+
+                button-up {
+                        label = "UP";
+                        linux,code = <KEY_UP>;
+                        gpios = <&gpio1 RK_PB1 GPIO_ACTIVE_HIGH>;
+                };
+
+                button-down {
+                        label = "DOWN";
+                        linux,code = <KEY_DOWN>;
+                        gpios = <&gpio1 RK_PB2 GPIO_ACTIVE_HIGH>;
+                };
+
+                button-left {
+                        label = "LEFT";
+                        linux,code = <KEY_LEFT>;
+                        gpios = <&gpio1 RK_PB3 GPIO_ACTIVE_LOW>;
+                };
+
+                button-right {
+                        label = "RIGHT";
+                        linux,code = <KEY_RIGHT>;
+                        gpios = <&gpio0 RK_PC0 GPIO_ACTIVE_LOW>;
+                };
+        };
+};
+
+/**********media**********/
+&mmc {
+	/* For SDMMC */
+	max-frequency = <52000000>;
+	bus-width = <4>;
+	no-sdio;
+	no-mmc;
+	cap-mmc-highspeed;
+	cap-sd-highspeed;
+	cd-gpios = <&gpio1 RK_PB6 GPIO_ACTIVE_LOW>; //det
+	disable-wp;
+	//sd-uhs-sdr104;
+	pinctrl-names = "default";
+	pinctrl-0 = <&sdmmc_clk_pins &sdmmc_cmd_pins &sdmmc_bus4_pins &sdmmc_det &sdmmc_pwren>;
+	vqmmc-supply = <&vcc_3v3>;
+	vmmc-supply = <&vcc_3v3>;
+	status = "okay";
+};
+
+&fspi {
+	status = "okay";
+
+	flash@0 {
+		compatible = "spi-nand";
+		reg = <0>;
+		spi-max-frequency = <80000000>;
+		spi-rx-bus-width = <4>;
+		spi-tx-bus-width = <1>;
+	};
+};
+
+/**********display**********/
+&cma {
+	size = <0x1000000>;
+};
+
+&dsi {
+	status = "disabled";
+};
+
+&dsi_dphy {
+	status = "disabled";
+};
+
+&dsi_in_vop {
+	status = "disabled";
+};
+
+&route_dsi {
+	status = "disabled";
+};
+
+&dsi_panel {
+	status = "disabled";
+};
+
+/**********ethernet**********/
+&gmac1 {
+	status = "disabled";
+};
+
+&mdio1 {
+	status = "disabled";
+};
+
+/**********usb**********/
+&usb20_otg0 {
+	dr_mode = "peripheral";
+	status = "okay";
+};
+
+&usb20_otg1 {
+	dr_mode = "host";
+	status = "okay";
+};
+
+&pinctrl {
+	tft {
+		tft_pins: tft-pins {
+			rockchip,pins = <0 RK_PA2 RK_FUNC_GPIO &pcfg_pull_none>, // reset
+					<0 RK_PA3 RK_FUNC_GPIO &pcfg_pull_none>; // dc
+		};
+	};
+
+	joystick {
+		  usr_button_pins: usr-button-pins {
+			rockchip,pins = <1 RK_PC3 RK_FUNC_GPIO &pcfg_pull_none>, // SELECT
+					<1 RK_PB1 RK_FUNC_GPIO &pcfg_pull_none>, // UP
+					<1 RK_PB2 RK_FUNC_GPIO &pcfg_pull_none>, // DOWN
+					<1 RK_PB3 RK_FUNC_GPIO &pcfg_pull_none>, // LEFT
+					<0 RK_PC0 RK_FUNC_GPIO &pcfg_pull_none>; // RIGHT
+		};
+        };
+};
+
+&spi0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&rm_io29_spi0_clk &rm_io30_spi0_mosi &rm_io31_spi0_csn0>;
+
+	status = "okay";
+
+	tft: st7305@0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&tft_pins>;
+
+		// compatible = "osptek,ydp154h008-v3";
+		// compatible = "osptek,ydp213h001-v3";
+		// compatible = "osptek,ydp290h001-v3";
+		// compatible = "osptek,ydp420h001-v3";
+		compatible = "swi,lhf420tb-f07";
+
+		spi-max-frequency = <50000000>;
+		reg = <0>;
+
+		reset-gpios = <&gpio0 RK_PC2 GPIO_ACTIVE_HIGH>;
+		dc-gpios = <&gpio0 RK_PC1 GPIO_ACTIVE_HIGH>;
+
+		status = "okay";
+	};
+};
