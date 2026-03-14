@@ -68,7 +68,7 @@ https://github.com/markbirss/st7305-kernel-drivers/blob/luckfox-lyra/rk3506g-luc
 
 /**********display**********/
 &cma {
-	size = <0x2000000>;
+	size = <0x1000000>;
 };
 
 &dsi {
