@@ -1,0 +1,124 @@
+[2026-03-14]
+
+@21H33
+
+	ST7305									ST7305
+		Joystick						Joystick
+			LoRa					LoRa
+	Red			3V3			VSYS
+			    SDA	RMIO0	0_A0		VSYS
+			    SCL	RMIO1	0_A1		GND
+			BUSY	RMIO2	0_A2	0_C6	RMIO22	UART_TX
+	Black			GND		0_C7	RMIO23	UART_RX
+			RXEN	RMIO3	0_A3	0_B6	RMIO14	RESET
+			      x	RMIO4	0_A4		GND
+			IRQ	RMIO5	0_A5	0_B5	RMIO13 x
+	Red	COM		3V3		0_B4	RMIO12 x
+			MOSI	RMIO6	0_A6		GND
+			MISO	RMIO7	0_A7	0_B3	RMIO11 x		
+			SCK	RMIO8	0_B0	0_B2	RMIO10	NSS
+				GND		0_B1	RMIO9  x		NSS-2	
+		Gray-UP		RMIO24	1_B1	1_D3	RMIO31			CS
+		Blue-DWN	RMIO25	1_B2		GND
+		Orange-LFT	RMIO26	1_B3	1_D2	RMIO30			SDA
+			      x	RMIO27	1_C2		GND
+		Yellow-RHT	RMIO16	0_C0	1_D1	RMIO29			SCL	
+		Green-SEL	RMIO28	1_C3	0_C1	RMIO17			DC
+				GND		0_C2	RMIO18			RES
+				
+
+https://github.com/beagleboard/linux/blob/v6.12.57-ti-arm64-r59/arch/arm64/boot/dts/ti/k3-am62l3-badge.dts
+COM	Black	3V3
+UP	Gray	RMIO24	UP
+DWN	Blue	RMIO25	DOWN
+LFT	Orange	RMIO26	LEFT
+RHT	Yellow	RMIO16	RIGHT
+MID	Green	RMIO28	SELECT
+SET
+RST
+
+        gpio_keys: gpio-keys {
+                compatible = "gpio-keys";
+                pinctrl-names = "default";
+                pinctrl-0 = <&usr_button_pins>;
+
+                button-select {
+                        label = "SELECT";
+                        linux,code = <KEY_SELECT>;
+                        gpios = <&gpio1 RK_PC3 GPIO_ACTIVE_LOW>;
+                };
+
+                button-up {
+                        label = "UP";
+                        linux,code = <KEY_UP>;
+                        gpios = <&gpio1 RK_PB1 GPIO_ACTIVE_HIGH>;
+                };
+
+                button-down {
+                        label = "DOWN";
+                        linux,code = <KEY_DOWN>;
+                        gpios = <&gpio1 RK_PB2 GPIO_ACTIVE_HIGH>;
+                };
+
+                button-left {
+                        label = "LEFT";
+                        linux,code = <KEY_LEFT>;
+                        gpios = <&gpio1 RK_PB3 GPIO_ACTIVE_LOW>;
+                };
+
+                button-right {
+                        label = "RIGHT";
+                        linux,code = <KEY_RIGHT>;
+                        gpios = <&gpio0 RK_PC0 GPIO_ACTIVE_LOW>;
+                };
+        };
+};
+
+&pinctrl {
+	tft {
+		tft_pins: tft-pins {
+			rockchip,pins = <0 RK_PC2 RK_FUNC_GPIO &pcfg_pull_none>, // reset
+					<0 RK_PC1 RK_FUNC_GPIO &pcfg_pull_none>; // dc
+		};
+	};
+
+        joystick {
+                  usr_button_pins: usr-button-pins {
+                        rockchip,pins = <1 RK_PC3 RK_FUNC_GPIO &pcfg_pull_none>, // SELECT
+                                        <1 RK_PB1 RK_FUNC_GPIO &pcfg_pull_none>, // UP
+                                        <1 RK_PB2 RK_FUNC_GPIO &pcfg_pull_none>, // DOWN
+                                        <1 RK_PB3 RK_FUNC_GPIO &pcfg_pull_none>, // LEFT
+                                        <0 RK_PC0 RK_FUNC_GPIO &pcfg_pull_none>; // RIGHT
+                };
+        };
+};
+
+
+&spi0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&rm_io29_spi0_clk &rm_io30_spi0_mosi &rm_io31_spi0_csn0>;
+
+	status = "okay";
+
+	tft: st7305@0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&tft_pins>;
+
+		// compatible = "osptek,ydp154h008-v3";
+		// compatible = "osptek,ydp213h001-v3";
+		// compatible = "osptek,ydp290h001-v3";
+		// compatible = "osptek,ydp420h001-v3";
+		compatible = "swi,lhf420tb-f07";
+
+		spi-max-frequency = <50000000>;
+		reg = <0>;
+
+		reset-gpios = <&gpio0 RK_PC2 GPIO_ACTIVE_HIGH>;
+		dc-gpios = <&gpio0 RK_PC1 GPIO_ACTIVE_HIGH>;
+
+		status = "okay";
+	};
+};				
