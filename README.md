@@ -15,6 +15,36 @@ in order to boot directly from SDCard not SPI nand set 3V3 jumper J28 (close by 
 
 <img width="1449" height="1269" alt="Boot_with_sdcard_instead_of_spi_nand_move_jumper_to_3v3" src="https://github.com/user-attachments/assets/e9a89622-3c97-4542-b90b-0af648462dd2" />
 
+
+```
+git clone -b qiyang https://github.com/markbirss/rk3506-ubuntu.git
+cd rk3506-ubuntu/device/rockchip/.chips/rk3506
+ln -s .chips/rk3506 ../../rk3506
+ln -s .chips/rk3506 ../../.chip
+cd ../../../../
+
+#sha256sum
+#d6f58545b0b9c679665a8ff58dd2a7a75aa2b2648871e4be5a2c2288b4261545  ubuntu_24.04.3.tar.gz
+
+git clone https://github.com/markbirss/ubuntu_24.04.3.git
+cd ubuntu_24.04.3
+rm -fr .git
+7z x ubuntu_24.04.3.7z.001
+sha256sum ubuntu_24.04.3.tar.gz
+
+rm -f ubuntu_24.04.3.7z.*
+
+mv ubuntu_24.04.3.tar.gz ../
+cd ../
+mkdir ubuntu
+mv ubuntu_24.04.3.tar.gz ubuntu
+
+#./build.sh lunch
+# sudo ./build.sh
+# sudo ./rkflash.sh update
+
+```
+
 #IMPORTANT NOTE
 This SDK is provided for non commercial use only
 
