@@ -1,11 +1,13 @@
 # rk3506-ubuntu
 <img width="1024" height="576" alt="image" src="https://github.com/user-attachments/assets/6295b83a-7a8e-4d2b-b0ba-6c5242364663" />
 
-
 <img width="750" height="805" alt="image" src="https://github.com/user-attachments/assets/c7277eb4-2fff-4f3f-acee-21915a6b2c33" />
 
 <img width="750" height="1040" alt="image" src="https://github.com/user-attachments/assets/11ac862c-de62-415a-a380-de043a691bb2" />
 
+<img width="750" height="796" alt="image" src="https://github.com/user-attachments/assets/3417e9d1-f991-426f-bb6f-f2afe243ef82" />
+
+<img width="760" height="695" alt="image" src="https://github.com/user-attachments/assets/2a4baff5-b6d1-4fc5-a5bb-7b703dc43c21" />
 
 RK3506(256MB+256MB) WiP
 
