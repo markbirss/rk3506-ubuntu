@@ -733,7 +733,7 @@ static int spi_nor_wait_till_ready_with_timeout_and_msleep(struct spi_nor *nor,
  *
  * Return: 0 on success, -errno otherwise.
  */
-int spi_nor_wait_till_ready_with_msleep(struct spi_nor *nor)
+static int spi_nor_wait_till_ready_with_msleep(struct spi_nor *nor)
 {
 	return spi_nor_wait_till_ready_with_timeout_and_msleep(nor,
 							       DEFAULT_READY_WAIT_JIFFIES);

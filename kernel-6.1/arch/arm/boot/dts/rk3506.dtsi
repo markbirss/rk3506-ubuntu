@@ -4,13 +4,14 @@
  */
 
 #include "rk3502.dtsi"
-
+#include <dt-bindings/phy/jlsemi-dt-phy.h>
 / {
 	compatible = "rockchip,rk3506";
 
 	aliases {
 		ethernet0 = &gmac0;
 		ethernet1 = &gmac1;
+		phy0 = &jl1xxxphy;
 	};
 
 	display_subsystem: display-subsystem {
@@ -79,6 +80,9 @@
 		resets = <&cru SRST_A_MAC0>;
 		reset-names = "stmmaceth";
 
+		assigned-clocks = <&cru CLK_MAC0_PTP>;
+		assigned-clock-rates = <62500000>;
+
 		snps,mixed-burst;
 		snps,tso;
 
@@ -116,6 +120,24 @@
 		};
 	};
 
+	jl1xxxphy: jl1xxx-phy@0 {
+		compatible = "ethernet-phy-id937c.4020";
+		jl1xxx,led-enable = <JL1XXX_LED_CTRL_EN>;
+		jl1xxx,led-mode = <JL1XXX_CFG_LED_MODE>;
+		jl1xxx,led-period = <JL1XXX_GLOBAL_PERIOD_MS>;
+		jl1xxx,led-on = <JL1XXX_GLOBAL_ON_MS>;
+		//jl1xxx,led-gpio = <JL1XXXX_CFG_GPIO>;
+		jl1xxx,wol-enable = <JL1XXX_WOL_CTRL_EN>;
+		jl1xxx,interrupt-enable = <JL1XXX_INTR_CTRL_EN>;
+		jl1xxx,mdi-enable = <JL1XXX_MDI_CTRL_EN>;
+		jl1xxx,mdi-rate = <JL1XXX_MDI_RATE>;
+		jl1xxx,mdi-amplitude = <JL1XXX_MDI_AMPLITUDE>;
+		jl1xxx,rmii-enable = <JL1XXX_RMII_CTRL_EN>;
+		jl1xxx,rmii-rx_timing = <JL1XXX_RMII_RX_TIMING>;
+		jl1xxx,rmii-tx_timing = <JL1XXX_RMII_TX_TIMING>;
+		status = "okay";
+	};
+
 	gmac1: ethernet@ff4d0000 {
 		compatible = "rockchip,rk3506-gmac", "snps,dwmac-4.20a";
 		reg = <0xff4d0000 0x2000>;
@@ -129,6 +151,9 @@
 			      "pclk_mac", "aclk_mac";
 		resets = <&cru SRST_A_MAC1>;
 		reset-names = "stmmaceth";
+
+		assigned-clocks = <&cru CLK_MAC1_PTP>;
+		assigned-clock-rates = <62500000>;
 
 		snps,mixed-burst;
 		snps,tso;
@@ -280,7 +305,7 @@
 	//	dmas = <&dmac0 8  0xff288078 0x80008000 0xff2880ac 0x00030000>,
 	//	       <&dmac0 10 0xff288078 0x40004000 0xff2880ac 0x00300000>;
 		dma-names = "req0", "req1";
-		pinctrl-names = "default", "active" ,"lb-slave";
+		pinctrl-names = "default", "active", "lb-slave";
 		pinctrl-0 = <&dsmc_csn_pull_pins
 			     &dsmc_bus16_pins
 			     &dsmc_clk_pins>;

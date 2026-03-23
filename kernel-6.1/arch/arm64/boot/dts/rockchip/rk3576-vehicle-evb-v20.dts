@@ -11,11 +11,16 @@
 #include "rk3576-vehicle-evb-v20-nca9539-io-expander.dtsi"
 #include "rk3576-vehicle-evb-v20-serdes-mfd-display-maxim.dtsi"
 #include "rk3576-vehicle-evb-v20-maxim-max96712-dphy0-isx021.dtsi"
+#include "rk3576-vehicle-evb-v20-maxim-max96712-dphy3-sc233at.dtsi"
 #include "rk3576-android.dtsi"
 
 / {
 	model = "Rockchip RK3576 VEHICLE EVB V20 Board";
 	compatible = "rockchip,rk3576-vehicle-evb-v20", "rockchip,rk3576";
+
+	chosen: chosen {
+		bootargs = "earlycon=uart8250,mmio32,0x2ad40000 console=ttyFIQ0 rcupdate.rcu_expedited=1 rcu_nocbs=all spidev.bufsiz=131072";
+	};
 
 	vehicle_dummy: vehicle-dummy {
 		status = "okay";

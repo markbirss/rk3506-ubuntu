@@ -3313,33 +3313,7 @@ err:
 	return ret;
 }
 
-/* sensor mclk set */
-static void rkcif_s_mclk(struct vehicle_cif *cif, int on, int clk_rate)
-{
-	int err = 0;
-	struct device *dev = cif->dev;
-	struct rk_cif_clk *clk = &cif->clk;
-
-	//return ;
-	if (on && !clk->on) {
-		if (!IS_ERR(clk->xvclk)) {
-			err = clk_set_rate(clk->xvclk, clk_rate);
-			if (err < 0)
-				dev_err(dev, "Failed to set xvclk rate (24MHz)\n");
-		}
-		if (!IS_ERR(clk->xvclk)) {
-			err = clk_prepare_enable(clk->xvclk);
-			if (err < 0)
-				dev_err(dev, "Failed to enable xvclk\n");
-		}
-	} else {
-		if (!IS_ERR(clk->xvclk))
-			clk_disable_unprepare(clk->xvclk);
-	}
-	usleep_range(2000, 5000);
-}
-
-static int rk_cif_mclk_ctrl(struct vehicle_cif *cif, int on, int clk_rate)
+static int rk_cif_mclk_ctrl(struct vehicle_cif *cif, int on)
 {
 	int err = 0;
 
@@ -5130,36 +5104,14 @@ int vehicle_cif_reverse_close(void)
 	return 0;
 }
 
-static void vehicle_cif_dphy_get_node(struct vehicle_cif *cif)
-{
-	struct device_node *node = NULL;
-	struct device_node *cp = NULL;
-	struct device *dev = cif->dev;
-	const char *status = NULL;
-
-	node = of_parse_phandle(dev->of_node, "rockchip,cif-phy", 0);
-	if (!node) {
-		VEHICLE_DGERR("get cif-phy dts failed\n");
-		return;
-	}
-
-	for_each_child_of_node(node, cp) {
-		of_property_read_string(cp, "status", &status);
-		if (status && !strcmp(status, "disabled"))
-			continue;
-		else
-			cif->phy_node = cp;
-		VEHICLE_INFO("status: %s %s\n", cp->name, status);
-	}
-}
-
 static int cif_parse_dt(struct vehicle_cif *cif)
 {
 	struct device *dev = cif->dev;
 	struct device_node *node;
-	struct device_node *phy_node = cif->phy_node;
+	struct device_node *phy_node;
 	struct device_node *cif_node;
 	struct device_node *cis2_node;
+	const char *status = NULL;
 
 	if (of_property_read_u32(dev->of_node, "cif,drop-frames",
 				 &cif->drop_frames)) {
@@ -5178,127 +5130,112 @@ static int cif_parse_dt(struct vehicle_cif *cif)
 
 	node = of_parse_phandle(dev->of_node, "rockchip,cru", 0);
 	cif->cru_base = of_iomap(node, 0);
+	of_node_put(node);
 
 	node = of_parse_phandle(dev->of_node, "rockchip,grf", 0);
 	cif->grf_base = of_iomap(node, 0);
+	of_node_put(node);
 
 	cif->regmap_grf = syscon_regmap_lookup_by_phandle(dev->of_node, "rockchip,grf");
 	if (IS_ERR(cif->regmap_grf))
 		VEHICLE_DGERR("unable to get rockchip,grf\n");
 
 	cif->irq = irq_of_parse_and_map(cif_node, 0);
+	of_node_put(cif_node);
 	if (cif->irq < 0) {
 		VEHICLE_DGERR("%s: request cif irq failed\n", __func__);
-		iounmap(cif->base);
-		iounmap(cif->cru_base);
-		iounmap(cif->grf_base);
-		return -ENODEV;
+		goto unmap_cif;
 	}
 
-	if (of_property_read_u32(phy_node, "csihost-idx", &cif->csi_host_idx)) {
+	node = of_parse_phandle(dev->of_node, "rockchip,cif-phy", 0);
+	if (!node) {
+		VEHICLE_DGERR("get cif-phy dts failed\n");
+		goto unmap_cif;
+	}
+
+	for_each_child_of_node(node, phy_node) {
+		of_property_read_string(phy_node, "status", &status);
+		if (status && !strcmp(status, "disabled"))
+			continue;
+		else
+			cif->phy_node = phy_node;
+		VEHICLE_INFO("status: %s %s\n", cif->phy_node->name, status);
+	}
+	of_node_put(node);
+	if (of_property_read_u32(cif->phy_node, "csihost-idx", &cif->csi_host_idx)) {
 		VEHICLE_INFO("Get %s csihost-idx failed! sensor link to dvp!!\n",
-				phy_node->name);
+				cif->phy_node->name);
 		cif->inf_id = RKCIF_DVP;
 	} else {
 		cif->inf_id = RKCIF_MIPI_LVDS;
-		VEHICLE_INFO("sensor link to %s!!\n", phy_node->name);
+		VEHICLE_INFO("sensor link to %s!!\n", cif->phy_node->name);
 	}
 
 	if (cif->inf_id == RKCIF_MIPI_LVDS) {
 		if (cif->chip_id == CHIP_RK3588_VEHICLE_CIF &&
 		    !(cif->csi_host_idx == RKCIF_MIPI0_CSI2 ||
 		      cif->csi_host_idx == RKCIF_MIPI1_CSI2)) {
-			node = of_parse_phandle(phy_node, "rockchip,csi2-dphy", 0);
+			node = of_parse_phandle(cif->phy_node, "rockchip,csi2-dphy", 0);
 			cif->csi2_dphy_base = of_iomap(node, 0);
+			of_node_put(node);
 
 			cif->regmap_dphy_grf =
-				syscon_regmap_lookup_by_phandle(phy_node, "rockchip,dphy-grf");
+				syscon_regmap_lookup_by_phandle(cif->phy_node, "rockchip,dphy-grf");
 			if (IS_ERR(cif->regmap_dphy_grf))
 				VEHICLE_INFO("unable to get rockchip,dphy-grf\n");
 		} else if (cif->chip_id == CHIP_RK3576_VEHICLE_CIF &&
 			cif->csi_host_idx != RKCIF_MIPI0_CSI2) {
-			node = of_parse_phandle(phy_node, "rockchip,csi2-dphy", 0);
+			node = of_parse_phandle(cif->phy_node, "rockchip,csi2-dphy", 0);
 			cif->csi2_dphy_base = of_iomap(node, 0);
+			of_node_put(node);
 
 			cif->regmap_dphy_grf =
-				syscon_regmap_lookup_by_phandle(phy_node, "rockchip,dphy-grf");
+				syscon_regmap_lookup_by_phandle(cif->phy_node, "rockchip,dphy-grf");
 			if (IS_ERR(cif->regmap_dphy_grf))
 				VEHICLE_INFO("unable to get rockchip,dphy-grf\n");
 
 			cif->dphy_sys_grf =
-				syscon_regmap_lookup_by_phandle(phy_node, "rockchip,sys-grf");
+				syscon_regmap_lookup_by_phandle(cif->phy_node, "rockchip,sys-grf");
 			if (IS_ERR(cif->dphy_sys_grf))
 				VEHICLE_INFO("unable to get rockchip,sys-grf\n");
 		} else if (cif->chip_id != CHIP_RK3588_VEHICLE_CIF &&
 				cif->chip_id != CHIP_RK3576_VEHICLE_CIF) {
-			node = of_parse_phandle(phy_node, "rockchip,csi2-dphy", 0);
+			node = of_parse_phandle(cif->phy_node, "rockchip,csi2-dphy", 0);
 			cif->csi2_dphy_base = of_iomap(node, 0);
+			of_node_put(node);
 		}
 
-		cis2_node = of_parse_phandle(phy_node, "rockchip,csi2", 0);
+		cis2_node = of_parse_phandle(cif->phy_node, "rockchip,csi2", 0);
 		cif->csi2_base = of_iomap(cis2_node, 0);
 
 		cif->csi2_irq1 = irq_of_parse_and_map(cis2_node, 0);
 		if (cif->csi2_irq1 < 0) {
 			VEHICLE_DGERR("%s: request csi-intr1 failed\n", __func__);
-			iounmap(cif->base);
-			iounmap(cif->cru_base);
-			iounmap(cif->grf_base);
-			iounmap(cif->csi2_dphy_base);
-			iounmap(cif->csi2_base);
-			return -ENODEV;
+			of_node_put(cis2_node);
+			goto unmap_csi;
 		}
 
 		cif->csi2_irq2 = irq_of_parse_and_map(cis2_node, 1);
+		of_node_put(cis2_node);
 		if (cif->csi2_irq2 < 0) {
 			VEHICLE_DGERR("%s: request csi-intr2 failed\n", __func__);
-			iounmap(cif->base);
-			iounmap(cif->cru_base);
-			iounmap(cif->grf_base);
-			iounmap(cif->csi2_dphy_base);
-			iounmap(cif->csi2_base);
-			return -ENODEV;
+			goto unmap_csi;
 		}
 	}
 
 	VEHICLE_DG("%s, drop_frames = %d\n", __func__, cif->drop_frames);
 
 	return 0;
-}
 
-int vehicle_cif_init_mclk(struct vehicle_cif *cif)
-{
-	struct device *dev = cif->dev;
-	struct rk_cif_clk *clk = &cif->clk;
+unmap_csi:
+	iounmap(cif->csi2_dphy_base);
+	iounmap(cif->csi2_base);
+unmap_cif:
+	iounmap(cif->base);
+	iounmap(cif->cru_base);
+	iounmap(cif->grf_base);
 
-	/* sensor MCLK:
-	 * current use CLK_CIF_OUT
-	 */
-	vehicle_cif_dphy_get_node(cif);
-	clk->xvclk = of_clk_get_by_name(cif->phy_node, "xvclk");
-	if (IS_ERR(clk->xvclk)) {
-		dev_err(dev, "Failed to get sensor xvclk\n");
-		return -EINVAL;
-	}
-
-	rkcif_s_mclk(cif, 1, 24000000);
-	VEHICLE_INFO("%s(%d): set sensor MCLK rate 24MHZ OK!\n", __func__, __LINE__);
-
-	return 0;
-}
-
-static int vehicle_cif_deinit_mclk(struct vehicle_cif *cif)
-{
-	struct rk_cif_clk *clk = &cif->clk;
-
-	/* release sensor MCLK:
-	 * current use CLK_CIF_OUT
-	 */
-	if (!IS_ERR(clk->xvclk))
-		clk_disable_unprepare(clk->xvclk);
-	clk_put(clk->xvclk);
-
-	return 0;
+	return -ENODEV;
 }
 
 int vehicle_cif_init(struct vehicle_cif *cif)
@@ -5553,7 +5490,7 @@ int vehicle_cif_init(struct vehicle_cif *cif)
 	}
 
 	/*  2. set cif clk & sensor mclk */
-	rk_cif_mclk_ctrl(cif, 1, 24000000);
+	rk_cif_mclk_ctrl(cif, 1);
 	INIT_DELAYED_WORK(&cif->work, vehicle_cif_reset_work_func);
 
 	if (inf_id == RKCIF_MIPI_LVDS)
@@ -5665,14 +5602,11 @@ int vehicle_cif_deinit(struct vehicle_cif *cif)
 	// vehicle_cif_s_stream(cif, 0);
 	// vehicle_cif_do_stop_stream(cif);
 
-	/* set csi2-dphy csi cif clk & sensor mclk */
-	rk_cif_mclk_ctrl(cif, 0, 0);
+	/* set csi2-dphy csi cif clk */
+	rk_cif_mclk_ctrl(cif, 0);
 	if (inf_id == RKCIF_MIPI_LVDS)
 		if (cif->dphy_hw->on)
 			vehicle_csi2_clk_ctrl(cif, 0);
-
-	/* release sensor MCLK */
-	vehicle_cif_deinit_mclk(cif);
 
 	/* vicap rsts release */
 	for (i = 0; i < clk->rsts_num; i++)

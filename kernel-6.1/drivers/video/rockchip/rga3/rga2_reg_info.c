@@ -101,17 +101,68 @@ unsigned int rga2_rop_code[256] = {
 	0x00000051, 0x008004d4, 0x00800451, 0x00800007,//f
 };
 
+static void rga2_scale_down_bilinear_protect(u32 *param_fix, u32 *src_fix,
+					     u32 param, u32 offset, u32 src, u32 dst)
+{
+	int final_coor, final_diff, final_steps;
+
+	while (1) {
+		final_coor = offset + param * (dst - 1);
+		final_diff = (src - 1) * (1 << RGA2_BILINEAR_PREC) - final_coor;
+
+		/*
+		 *   The hardware requires that the last point of the dst map on
+		 * src must not exceed the range of src.
+		 */
+		if (final_diff <= 0)
+			param = param - 1;
+		else
+			break;
+	}
+
+	/*
+	 *   The hardware requires that the last point of dst mapping on
+	 * src be between the last two points of each row/column, so
+	 * actual width/height needs to be modified.
+	 */
+	final_steps = (final_coor & ((1 << RGA2_BILINEAR_PREC) - 1)) ?
+		((final_coor >> RGA2_BILINEAR_PREC) + 1) :
+		(final_coor >> RGA2_BILINEAR_PREC);
+
+	*param_fix = param;
+	*src_fix = final_steps + 1;
+}
+
+static void rag2_scale_down_average_protect(u32 *param_fix, u32 param,
+					    u32 src, u32 dst)
+{
+	/* division Loss */
+	param = param + 1;
+
+	/*
+	 *   Ensure that the (src - 1) drop point is to the left of the last
+	 * point of the dst.
+	 */
+	while ((param * (src - 1)) > (dst << 16))
+		param--;
+
+	*param_fix = param;
+}
+
 static void RGA2_reg_get_param(unsigned char *base, struct rga2_req *msg)
 {
 	u32 *bRGA_SRC_X_FACTOR;
 	u32 *bRGA_SRC_Y_FACTOR;
+	u32 *bRGA_SRC_ACT_INFO;
 	u32 sw, sh;
 	u32 dw, dh;
 	u32 param_x, param_y;
 	u32 scale_x_offset, scale_y_offset;
+	u32 src_fix, param_fix;
 
 	bRGA_SRC_X_FACTOR = (u32 *) (base + RGA2_SRC_X_FACTOR_OFFSET);
 	bRGA_SRC_Y_FACTOR = (u32 *) (base + RGA2_SRC_Y_FACTOR_OFFSET);
+	bRGA_SRC_ACT_INFO = (u32 *) (base + RGA2_SRC_ACT_INFO_OFFSET);
 
 	if (((msg->rotate_mode & 0x3) == 1) ||
 		((msg->rotate_mode & 0x3) == 3)) {
@@ -128,12 +179,27 @@ static void RGA2_reg_get_param(unsigned char *base, struct rga2_req *msg)
 	if (sw > dw) {
 		if (msg->interp.horiz == RGA_INTERP_LINEAR) {
 			/* default to half_pixel mode. */
-			param_x = (sw << 12) / dw;
-			scale_x_offset = 0x1ff;
+			param_x = (sw << RGA2_BILINEAR_PREC) / dw;
+			scale_x_offset = (1 << RGA2_BILINEAR_PREC) >> 1;
 
-			*bRGA_SRC_X_FACTOR = ((param_x & 0xffff) | ((scale_x_offset) << 16));
+			rga2_scale_down_bilinear_protect(&param_fix, &src_fix,
+							 param_x, scale_x_offset, sw, dw);
+			if (DEBUGGER_EN(MSG)) {
+				if (param_x != param_fix)
+					rga_log("scale: Bi-linear horiz factor %#x fix to %#x\n",
+						param_x, param_fix);
+				if (sw != src_fix)
+					rga_log("scale: Bi-linear src_width %d -> %d\n",
+						sw, src_fix);
+			}
+
+			*bRGA_SRC_X_FACTOR = ((param_fix & 0xffff) | ((scale_x_offset) << 16));
+			*bRGA_SRC_ACT_INFO =
+				((*bRGA_SRC_ACT_INFO & (~m_RGA2_SRC_ACT_INFO_SW_SRC_ACT_WIDTH)) |
+				s_RGA2_SRC_ACT_INFO_SW_SRC_ACT_WIDTH((src_fix - 1)));
 		} else {
-			param_x = ((dw << 16) + (sw / 2)) / sw;
+			param_x = (dw << 16) / sw;
+			rag2_scale_down_average_protect(&param_x, param_x, sw, dw);
 
 			*bRGA_SRC_X_FACTOR |= ((param_x & 0xffff) << 0);
 		}
@@ -151,12 +217,27 @@ static void RGA2_reg_get_param(unsigned char *base, struct rga2_req *msg)
 	if (sh > dh) {
 		if (msg->interp.verti == RGA_INTERP_LINEAR) {
 			/* default to half_pixel mode. */
-			param_y = (sh << 12) / dh;
-			scale_y_offset = 0x1ff;
+			param_y = (sh << RGA2_BILINEAR_PREC) / dh;
+			scale_y_offset = (1 << RGA2_BILINEAR_PREC) >> 1;
 
-			*bRGA_SRC_Y_FACTOR = ((param_y & 0xffff) | ((scale_y_offset) << 16));
+			rga2_scale_down_bilinear_protect(&param_fix, &src_fix,
+							 param_y, scale_y_offset, sh, dh);
+			if (DEBUGGER_EN(MSG)) {
+				if (param_y != param_fix)
+					rga_log("scale: Bi-linear verti factor %#x fix to %#x\n",
+						param_y, param_fix);
+				if (sh != src_fix)
+					rga_log("scale: Bi-linear src_height %d fix to %d\n",
+						sh, src_fix);
+			}
+
+			*bRGA_SRC_Y_FACTOR = ((param_fix & 0xffff) | ((scale_y_offset) << 16));
+			*bRGA_SRC_ACT_INFO =
+				((*bRGA_SRC_ACT_INFO & (~m_RGA2_SRC_ACT_INFO_SW_SRC_ACT_HEIGHT)) |
+				s_RGA2_SRC_ACT_INFO_SW_SRC_ACT_HEIGHT((src_fix - 1)));
 		} else {
-			param_y = ((dh << 16) + (sh / 2)) / sh;
+			param_y = (dh << 16) / sh;
+			rag2_scale_down_average_protect(&param_y, param_y, sh, dh);
 
 			*bRGA_SRC_Y_FACTOR |= ((param_y & 0xffff) << 0);
 		}
@@ -363,10 +444,6 @@ static void RGA2_set_reg_src_info(u8 *base, struct rga2_req *msg)
 			vsd_scale_mode = 0;
 			break;
 		case RGA_INTERP_LINEAR:
-			if (sh > 4096)
-				/* force select average */
-				vsd_scale_mode = 0;
-			else
 				vsd_scale_mode = 1;
 
 			break;
@@ -2680,24 +2757,20 @@ static int rga2_check_param(struct rga_job *job,
 static int rga2_align_check(struct rga_job *job, struct rga2_req *req)
 {
 	if (rga_is_yuv10bit_format(req->src.format))
-		if ((req->src.vir_w % 16) || (req->src.x_offset % 2) ||
-			(req->src.act_w % 2) || (req->src.y_offset % 2) ||
-			(req->src.act_h % 2) || (req->src.vir_h % 2))
+		if ((req->src.x_offset % 2) || (req->src.y_offset % 2) ||
+		    (req->src.act_w % 2) || (req->src.act_w % 2))
 			rga_job_log(job, "err src wstride, 10bit yuv\n");
 	if (rga_is_yuv10bit_format(req->dst.format))
-		if ((req->dst.vir_w % 16) || (req->dst.x_offset % 2) ||
-			(req->dst.act_w % 2) || (req->dst.y_offset % 2) ||
-			(req->dst.act_h % 2) || (req->dst.vir_h % 2))
+		if ((req->dst.x_offset % 2) || (req->dst.y_offset % 2) ||
+		    (req->dst.act_w % 2) || (req->dst.act_w % 2))
 			rga_job_log(job, "err dst wstride, 10bit yuv\n");
 	if (rga_is_yuv8bit_format(req->src.format))
-		if ((req->src.vir_w % 4) || (req->src.x_offset % 2) ||
-			(req->src.act_w % 2) || (req->src.y_offset % 2) ||
-			(req->src.act_h % 2) || (req->src.vir_h % 2))
+		if ((req->src.x_offset % 2) || (req->src.y_offset % 2) ||
+		    (req->src.act_w % 2) || (req->src.act_w % 2))
 			rga_job_log(job, "err src wstride, 8bit yuv\n");
 	if (rga_is_yuv8bit_format(req->dst.format))
-		if ((req->dst.vir_w % 4) || (req->dst.x_offset % 2) ||
-			(req->dst.act_w % 2) || (req->dst.y_offset % 2) ||
-			(req->dst.act_h % 2) || (req->dst.vir_h % 2))
+		if ((req->dst.x_offset % 2) || (req->dst.y_offset % 2) ||
+		    (req->dst.act_w % 2) || (req->dst.act_w % 2))
 			rga_job_log(job, "err dst wstride, 8bit yuv\n");
 
 	return 0;
@@ -3194,6 +3267,12 @@ static int rga2_isr_thread(struct rga_job *job, struct rga_scheduler_t *schedule
 			job->ret = -EFAULT;
 		} else if (job->intr_status & m_RGA2_INT_MMU_INT_FLAG) {
 			rga_job_err(job, "mmu failed, please check size of the buffer or whether the buffer has been freed.\n");
+			job->ret = -EACCES;
+		} else if (job->intr_status & m_RGA2_INT_SCL_ERROR_INTR) {
+			rga_job_err(job, "scale failed, check scale config or formula.\n");
+			job->ret = -EACCES;
+		} else if (job->intr_status & m_RGA2_INT_FBCIN_DEC_ERROR) {
+			rga_job_err(job, "FBC decode failed, please check if the source data is FBC data.\n");
 			job->ret = -EACCES;
 		}
 

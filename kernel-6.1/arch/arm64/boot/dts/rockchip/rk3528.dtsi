@@ -405,6 +405,14 @@
 			29  254  4
 		>;
 
+		opp-324000000 {
+			opp-hz = /bits/ 64 <324000000>;
+			opp-microvolt = <850000 850000 1000000>;
+		};
+		opp-666000000 {
+			opp-hz = /bits/ 64 <666000000>;
+			opp-microvolt = <850000 850000 1000000>;
+		};
 		opp-920000000 {
 			opp-hz = /bits/ 64 <920000000>;
 			opp-microvolt = <850000 850000 1000000>;
@@ -452,6 +460,8 @@
 		compatible = "rockchip,mpp-service";
 		rockchip,taskqueue-count = <5>;
 		rockchip,resetgroup-count = <5>;
+		/* avsd:0x2, vdpu:0x8, iep:0x200, vdpp:0x4000 */
+		rockchip,iommu-shared-mask = <0x420a>;
 		status = "disabled";
 	};
 
@@ -1536,6 +1546,7 @@
 		ddc-i2c-scl-low-time-ns = <10000>;
 		reg-io-width = <4>;
 		rockchip,grf = <&grf>;
+		rockchip,cts-manual;
 		pinctrl-names = "default";
 		pinctrl-0 = <&hdmi_pins>;
 		phys = <&hdmiphy>;
@@ -1952,10 +1963,13 @@
 		interrupts = <GIC_SPI 128 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&cru MCLK_SAI_I2S3>, <&cru HCLK_SAI_I2S3>;
 		clock-names = "mclk", "hclk";
+		assigned-clocks = <&cru MCLK_SAI_I2S3>;
+		assigned-clock-rates = <6144000>;
 		dmas = <&dmac 5>;
 		dma-names = "tx";
 		resets = <&cru SRST_MRESETN_SAI_I2S3>, <&cru SRST_HRESETN_SAI_I2S3>;
 		reset-names = "m", "h";
+		rockchip,always-on;
 		#sound-dai-cells = <0>;
 		status = "disabled";
 	};

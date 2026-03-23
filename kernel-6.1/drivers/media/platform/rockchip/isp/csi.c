@@ -545,7 +545,7 @@ int rkisp_csi_config_patch(struct rkisp_device *dev, bool is_pre_cfg)
 			u32 op_mode;
 
 			memset(&mode, 0, sizeof(mode));
-			mode.name = dev->name;
+			strscpy(mode.name, dev->name, sizeof(mode.name));
 
 			rkisp_get_remote_mipi_sensor(dev, &mipi_sensor, MEDIA_ENT_F_PROC_VIDEO_COMPOSER);
 			if (!mipi_sensor)
@@ -680,8 +680,10 @@ int rkisp_csi_config_patch(struct rkisp_device *dev, bool is_pre_cfg)
 	if (val)
 		rkisp_unite_set_bits(dev, CTRL_SWS_CFG, 0, val, false);
 	/* line counter from isp out, default from mp out */
-	if (dev->isp_ver == ISP_V32_L || dev->isp_ver == ISP_V39)
-		rkisp_unite_set_bits(dev, CTRL_SWS_CFG, 0, ISP32L_ISP2ENC_CNT_MUX, true);
+	if (dev->isp_ver == ISP_V32_L || dev->isp_ver == ISP_V39) {
+		val |= ISP32L_ISP2ENC_CNT_MUX;
+		rkisp_unite_set_bits(dev, CTRL_SWS_CFG, 0, val, true);
+	}
 	dev->rdbk_cnt = -1;
 	dev->rdbk_cnt_x1 = -1;
 	dev->rdbk_cnt_x2 = -1;
@@ -715,7 +717,7 @@ void rkisp_csi_sof(struct rkisp_device *dev, u8 id)
 		return;
 	}
 
-	rkisp_isp_queue_event_sof(&dev->isp_sdev);
+	rkisp_isp_queue_event_sof(dev);
 }
 
 int rkisp_register_csi_subdev(struct rkisp_device *dev,

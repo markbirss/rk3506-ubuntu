@@ -14,6 +14,7 @@
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
+#include <linux/property.h>
 #include <linux/regmap.h>
 #include <linux/mfd/syscon.h>
 #include <media/media-entity.h>
@@ -1171,7 +1172,6 @@ static int rockchip_csi2_dphy_get_hw(struct csi2_dphy *dphy)
 static int rockchip_csi2_dphy_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	const struct of_device_id *of_id;
 	struct csi2_dphy *csi2dphy;
 	struct v4l2_subdev *sd;
 	const struct dphy_drv_data *drv_data;
@@ -1182,10 +1182,9 @@ static int rockchip_csi2_dphy_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	csi2dphy->dev = dev;
 
-	of_id = of_match_device(rockchip_csi2_dphy_match_id, dev);
-	if (!of_id)
+	drv_data = device_get_match_data(dev);
+	if (!drv_data)
 		return -EINVAL;
-	drv_data = of_id->data;
 	csi2dphy->drv_data = drv_data;
 
 	csi2dphy->phy_index = of_alias_get_id(dev->of_node, drv_data->dev_name);

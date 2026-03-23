@@ -10,3 +10,11 @@ config VIDEO_ROCKCHIP_VPSS
 	default n
 	help
 	  Support for VPSS on the rockchip SoC.
+
+config VIDEO_ROCKCHIP_VPSS_V10
+	bool "vpss1 for rk3576"
+	depends on CPU_RK3576
+	depends on VIDEO_ROCKCHIP_VPSS
+	default y
+	help
+	 Support for rk3576

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (C) Fuzhou Rockchip Electronics Co.Ltd
+ * Copyright (C) Rockchip Electronics Co., Ltd.
  * Author:Mark Yao <mark.yao@rock-chips.com>
  */
 
@@ -1902,17 +1902,8 @@ static int vop_plane_atomic_check(struct drm_plane *plane,
 		return 0;
 	}
 
-	//if (drm_rect_width(src) >> 16 > vop_data->max_input.width ||
-	//    drm_rect_height(src) >> 16 > vop_data->max_input.height) {
-	//	DRM_ERROR("Invalid source: %dx%d. max input: %dx%d\n",
-	//		  drm_rect_width(src) >> 16,
-	//		  drm_rect_height(src) >> 16,
-	//		  vop_data->max_input.width,
-	//		  vop_data->max_input.height);
-	//	return -EINVAL;
-	//}
-
-	if (drm_rect_width(src) >> 16 > vop_data->max_input.width) {
+	if (drm_rect_width(src) >> 16 > vop_data->max_input.width ||
+	    drm_rect_height(src) >> 16 > vop_data->max_input.height) {
 		DRM_ERROR("Invalid source: %dx%d. max input: %dx%d\n",
 			  drm_rect_width(src) >> 16,
 			  drm_rect_height(src) >> 16,
@@ -3358,7 +3349,7 @@ static bool vop_crtc_mode_fixup(struct drm_crtc *crtc,
 	     s->output_if & VOP_OUTPUT_IF_BT656))
 		adj_mode->crtc_clock *= 2;
 
-	if (vop->mcu_timing.mcu_pix_total)
+	if (s->output_if & VOP_OUTPUT_IF_RGB)
 		adj_mode->crtc_clock *= rockchip_drm_get_cycles_per_pixel(s->bus_format) *
 					(vop->mcu_timing.mcu_pix_total + 1);
 
@@ -4423,8 +4414,8 @@ static void vop_crtc_atomic_flush(struct drm_crtc *crtc,
 }
 
 static const struct drm_crtc_helper_funcs vop_crtc_helper_funcs = {
-	.mode_fixup = vop_crtc_mode_fixup,
 	.mode_valid = vop_crtc_mode_valid,
+	.mode_fixup = vop_crtc_mode_fixup,
 	.atomic_check = vop_crtc_atomic_check,
 	.atomic_flush = vop_crtc_atomic_flush,
 	.atomic_enable = vop_crtc_atomic_enable,
@@ -4975,15 +4966,15 @@ static int vop_crtc_create_feature_property(struct vop *vop, struct drm_crtc *cr
 	static const struct drm_prop_enum_list props[] = {
 		{ ROCKCHIP_DRM_CRTC_FEATURE_ALPHA_SCALE, "ALPHA_SCALE" },
 		{ ROCKCHIP_DRM_CRTC_FEATURE_HDR10, "HDR10" },
-		{ ROCKCHIP_DRM_CRTC_FEATURE_NEXT_HDR, "NEXT_HDR" },
+		{ ROCKCHIP_DRM_CRTC_FEATURE_DOVI, "DOVI" },
 	};
 
 	if (vop_data->feature & VOP_FEATURE_ALPHA_SCALE)
 		feature |= BIT(ROCKCHIP_DRM_CRTC_FEATURE_ALPHA_SCALE);
 	if (vop_data->feature & VOP_FEATURE_HDR10)
 		feature |= BIT(ROCKCHIP_DRM_CRTC_FEATURE_HDR10);
-	if (vop_data->feature & VOP_FEATURE_NEXT_HDR)
-		feature |= BIT(ROCKCHIP_DRM_CRTC_FEATURE_NEXT_HDR);
+	if (vop_data->feature & VOP_FEATURE_DOVI)
+		feature |= BIT(ROCKCHIP_DRM_CRTC_FEATURE_DOVI);
 
 	prop = drm_property_create_bitmask(vop->drm_dev,
 					   DRM_MODE_PROP_IMMUTABLE, "FEATURE",
@@ -5408,10 +5399,6 @@ static int vop_bind(struct device *dev, struct device *master, void *data)
 	spin_lock_init(&vop->irq_lock);
 	mutex_init(&vop->vop_lock);
 
-	ret = devm_request_irq(dev, vop->irq, vop_isr,
-			       IRQF_SHARED, dev_name(dev), vop);
-	if (ret)
-		return ret;
 	ret = vop_create_crtc(vop);
 	if (ret)
 		return ret;
@@ -5475,7 +5462,21 @@ static int vop_bind(struct device *dev, struct device *master, void *data)
 
 	rockchip_drm_dma_init_device(drm_dev, dev);
 
+	ret = devm_request_irq(dev, vop->irq, vop_isr,
+			       IRQF_SHARED, dev_name(dev), vop);
+	if (ret)
+		goto err_pm_detach;
+
 	return 0;
+
+err_pm_detach:
+	if (vop->genpd_dev1)
+		dev_pm_domain_detach(vop->genpd_dev1, true);
+	if (vop->genpd_dev0)
+		dev_pm_domain_detach(vop->genpd_dev0, true);
+	pm_runtime_disable(dev);
+	vop_destroy_crtc(vop);
+	return ret;
 }
 
 static void vop_unbind(struct device *dev, struct device *master, void *data)

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) Rockchip Electronics Co.Ltd
+ * Copyright (C) Rockchip Electronics Co., Ltd.
  * Author: Felix Zeng <felix.zeng@rock-chips.com>
  */
 
@@ -16,6 +16,59 @@
 #include "rknpu_mem.h"
 
 #ifdef CONFIG_ROCKCHIP_RKNPU_DMA_HEAP
+
+#if KERNEL_VERSION(6, 1, 115) < LINUX_VERSION_CODE
+#ifdef CONFIG_ARM64
+/*
+ * Check whether a kernel address is valid (derived from arch/x86/).
+ */
+static int kern_addr_valid(unsigned long addr)
+{
+	pgd_t *pgdp;
+	p4d_t *p4dp;
+	pud_t *pudp, pud;
+	pmd_t *pmdp, pmd;
+	pte_t *ptep, pte;
+
+	addr = arch_kasan_reset_tag(addr);
+	if ((((long)addr) >> VA_BITS) != -1UL)
+		return 0;
+
+	pgdp = pgd_offset_k(addr);
+	if (pgd_none(READ_ONCE(*pgdp)))
+		return 0;
+
+	p4dp = p4d_offset(pgdp, addr);
+	if (p4d_none(READ_ONCE(*p4dp)))
+		return 0;
+
+	pudp = pud_offset(p4dp, addr);
+	pud = READ_ONCE(*pudp);
+	if (pud_none(pud))
+		return 0;
+
+	if (pud_sect(pud))
+		return pfn_valid(pud_pfn(pud));
+
+	pmdp = pmd_offset(pudp, addr);
+	pmd = READ_ONCE(*pmdp);
+	if (pmd_none(pmd))
+		return 0;
+
+	if (pmd_sect(pmd))
+		return pfn_valid(pmd_pfn(pmd));
+
+	ptep = pte_offset_kernel(pmdp, addr);
+	pte = READ_ONCE(*ptep);
+	if (pte_none(pte))
+		return 0;
+
+	return pfn_valid(pte_pfn(pte));
+}
+#else
+#define kern_addr_valid(addr)	(1)
+#endif
+#endif
 
 int rknpu_mem_create_ioctl(struct rknpu_device *rknpu_dev, struct file *file,
 			   unsigned int cmd, unsigned long data)

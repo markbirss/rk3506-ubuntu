@@ -200,7 +200,7 @@ static const struct rockchip_p3phy_ops rk3588_ops = {
 	.phy_calibrate = rockchip_p3phy_rk3588_calibrate,
 };
 
-static int rochchip_p3phy_init(struct phy *phy)
+static int rockchip_p3phy_init(struct phy *phy)
 {
 	struct rockchip_p3phy_priv *priv = phy_get_drvdata(phy);
 	int ret;
@@ -223,7 +223,7 @@ static int rochchip_p3phy_init(struct phy *phy)
 	return ret;
 }
 
-static int rochchip_p3phy_exit(struct phy *phy)
+static int rockchip_p3phy_exit(struct phy *phy)
 {
 	struct rockchip_p3phy_priv *priv = phy_get_drvdata(phy);
 
@@ -232,9 +232,9 @@ static int rochchip_p3phy_exit(struct phy *phy)
 	return 0;
 }
 
-static const struct phy_ops rochchip_p3phy_ops = {
-	.init = rochchip_p3phy_init,
-	.exit = rochchip_p3phy_exit,
+static const struct phy_ops rockchip_p3phy_ops = {
+	.init = rockchip_p3phy_init,
+	.exit = rockchip_p3phy_exit,
 	.set_mode = rockchip_p3phy_set_mode,
 	.owner = THIS_MODULE,
 };
@@ -276,17 +276,15 @@ static int rockchip_p3phy_probe(struct platform_device *pdev)
 		dev_info(dev, "failed to find rockchip,pipe_grf regmap\n");
 
 	ret = device_property_read_u32(dev, "rockchip,pcie30-phymode", &val);
-	if (!ret)
+	if (!ret) {
 		priv->pcie30_phymode = val;
-	else
+		if (priv->pcie30_phymode > 4)
+			priv->pcie30_phymode = PHY_MODE_PCIE_AGGREGATION;
+		regmap_write(priv->phy_grf, RK3588_PCIE3PHY_GRF_CMN_CON0,
+			     (0x7<<16) | priv->pcie30_phymode);
+	} else {
 		priv->pcie30_phymode = PHY_MODE_PCIE_AGGREGATION;
-
-	/* Select correct pcie30_phymode */
-	if (priv->pcie30_phymode > 4)
-		priv->pcie30_phymode = PHY_MODE_PCIE_AGGREGATION;
-
-	regmap_write(priv->phy_grf, RK3588_PCIE3PHY_GRF_CMN_CON0,
-		     (0x7<<16) | priv->pcie30_phymode);
+	}
 
 	/* Set pcie1ln_sel in PHP_GRF_PCIESEL_CON */
 	if (!IS_ERR(priv->pipe_grf)) {
@@ -296,7 +294,7 @@ static int rockchip_p3phy_probe(struct platform_device *pdev)
 				     (reg << 16) | reg);
 	};
 
-	priv->phy = devm_phy_create(dev, NULL, &rochchip_p3phy_ops);
+	priv->phy = devm_phy_create(dev, NULL, &rockchip_p3phy_ops);
 	if (IS_ERR(priv->phy)) {
 		dev_err(dev, "failed to create combphy\n");
 		return PTR_ERR(priv->phy);

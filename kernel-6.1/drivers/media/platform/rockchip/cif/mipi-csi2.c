@@ -1101,42 +1101,60 @@ static const struct csi2_match_data rv1103b_csi2_match_data = {
 };
 
 static const struct of_device_id csi2_dt_ids[] = {
+#ifdef CONFIG_CPU_RK1808
 	{
 		.compatible = "rockchip,rk1808-mipi-csi2",
 		.data = &rk1808_csi2_match_data,
 	},
+#endif
+#ifdef CONFIG_CPU_RK3288
 	{
 		.compatible = "rockchip,rk3288-mipi-csi2",
 		.data = &rk3288_csi2_match_data,
 	},
+#endif
+#ifdef CONFIG_CPU_RK3568
 	{
 		.compatible = "rockchip,rk3568-mipi-csi2",
 		.data = &rk3568_csi2_match_data,
 	},
+#endif
+#ifdef CONFIG_CPU_RV1126
 	{
 		.compatible = "rockchip,rv1126-mipi-csi2",
 		.data = &rv1126_csi2_match_data,
 	},
+#endif
+#ifdef CONFIG_CPU_RK3588
 	{
 		.compatible = "rockchip,rk3588-mipi-csi2",
 		.data = &rk3588_csi2_match_data,
 	},
+#endif
+#ifdef CONFIG_CPU_RV1106
 	{
 		.compatible = "rockchip,rv1106-mipi-csi2",
 		.data = &rv1106_csi2_match_data,
 	},
+#endif
+#ifdef CONFIG_CPU_RK3562
 	{
 		.compatible = "rockchip,rk3562-mipi-csi2",
 		.data = &rk3562_csi2_match_data,
 	},
+#endif
+#ifdef CONFIG_CPU_RK3576
 	{
 		.compatible = "rockchip,rk3576-mipi-csi2",
 		.data = &rk3576_csi2_match_data,
 	},
+#endif
+#ifdef CONFIG_CPU_RV1103B
 	{
 		.compatible = "rockchip,rv1103b-mipi-csi2",
 		.data = &rv1103b_csi2_match_data,
 	},
+#endif
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, csi2_dt_ids);
@@ -1299,42 +1317,60 @@ static const struct csi2_hw_match_data rv1103b_csi2_hw_match_data = {
 };
 
 static const struct of_device_id csi2_hw_ids[] = {
+#ifdef CONFIG_CPU_RK1808
 	{
 		.compatible = "rockchip,rk1808-mipi-csi2-hw",
 		.data = &rk1808_csi2_hw_match_data,
 	},
+#endif
+#ifdef CONFIG_CPU_RK3288
 	{
 		.compatible = "rockchip,rk3288-mipi-csi2-hw",
 		.data = &rk3288_csi2_hw_match_data,
 	},
+#endif
+#ifdef CONFIG_CPU_RK3568
 	{
 		.compatible = "rockchip,rk3568-mipi-csi2-hw",
 		.data = &rk3568_csi2_hw_match_data,
 	},
+#endif
+#ifdef CONFIG_CPU_RV1126
 	{
 		.compatible = "rockchip,rv1126-mipi-csi2-hw",
 		.data = &rv1126_csi2_hw_match_data,
 	},
+#endif
+#ifdef CONFIG_CPU_RK3588
 	{
 		.compatible = "rockchip,rk3588-mipi-csi2-hw",
 		.data = &rk3588_csi2_hw_match_data,
 	},
+#endif
+#ifdef CONFIG_CPU_RV1106
 	{
 		.compatible = "rockchip,rv1106-mipi-csi2-hw",
 		.data = &rv1106_csi2_hw_match_data,
 	},
+#endif
+#ifdef CONFIG_CPU_RK3562
 	{
 		.compatible = "rockchip,rk3562-mipi-csi2-hw",
 		.data = &rk3562_csi2_hw_match_data,
 	},
+#endif
+#ifdef CONFIG_CPU_RK3576
 	{
 		.compatible = "rockchip,rk3576-mipi-csi2-hw",
 		.data = &rk3576_csi2_hw_match_data,
 	},
+#endif
+#ifdef CONFIG_CPU_RV1103B
 	{
 		.compatible = "rockchip,rv1103b-mipi-csi2-hw",
 		.data = &rv1103b_csi2_hw_match_data,
 	},
+#endif
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, csi2_hw_ids);

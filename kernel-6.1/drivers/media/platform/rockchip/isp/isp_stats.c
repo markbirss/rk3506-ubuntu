@@ -61,8 +61,8 @@ static int rkisp_stats_querycap(struct file *file,
 	snprintf(cap->driver, sizeof(cap->driver),
 		 "%s_v%d", DRIVER_NAME,
 		 stats_vdev->dev->isp_ver >> 4);
-	strlcpy(cap->card, vdev->name, sizeof(cap->card));
-	strlcpy(cap->bus_info, "platform: " DRIVER_NAME, sizeof(cap->bus_info));
+	strscpy(cap->card, vdev->name, sizeof(cap->card));
+	strscpy(cap->bus_info, "platform: " DRIVER_NAME, sizeof(cap->bus_info));
 	cap->version = RKISP_DRIVER_VERSION;
 	return 0;
 }
@@ -152,7 +152,7 @@ static void rkisp_stats_vb2_buf_queue(struct vb2_buffer *vb)
 	struct rkisp_isp_stats_vdev *stats_dev = vq->drv_priv;
 	struct rkisp_device *dev = stats_dev->dev;
 	u32 size = stats_dev->vdev_fmt.fmt.meta.buffersize;
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	stats_buf->vaddr[0] = vb2_plane_vaddr(vb, 0);
 	if (dev->isp_ver == ISP_V32 || dev->isp_ver == ISP_V39 || dev->isp_ver == ISP_V33) {
@@ -208,8 +208,8 @@ static void rkisp_stats_vb2_stop_streaming(struct vb2_queue *vq)
 	struct rkisp_isp_stats_vdev *stats_vdev = vq->drv_priv;
 	struct rkisp_device *dev = stats_vdev->dev;
 	struct rkisp_buffer *buf;
-	unsigned long flags;
-	int i;
+	unsigned long flags = 0;
+	LIST_HEAD(local_list);
 
 	v4l2_dbg(1, rkisp_debug, &dev->v4l2_dev,
 		 "%s state:0x%x\n", __func__, dev->isp_state);
@@ -221,25 +221,25 @@ static void rkisp_stats_vb2_stop_streaming(struct vb2_queue *vq)
 	tasklet_disable(&stats_vdev->rd_tasklet);
 
 	spin_lock_irqsave(&stats_vdev->rd_lock, flags);
-	for (i = 0; i < RKISP_ISP_STATS_REQ_BUFS_MAX; i++) {
-		if (list_empty(&stats_vdev->stat))
-			break;
-		buf = list_first_entry(&stats_vdev->stat,
-				       struct rkisp_buffer, queue);
-		list_del(&buf->queue);
-		vb2_buffer_done(&buf->vb.vb2_buf, VB2_BUF_STATE_ERROR);
-	}
 	if (stats_vdev->cur_buf) {
-		vb2_buffer_done(&stats_vdev->cur_buf->vb.vb2_buf, VB2_BUF_STATE_ERROR);
+		buf = stats_vdev->cur_buf;
+		list_add_tail(&buf->queue, &stats_vdev->stat);
 		if (stats_vdev->cur_buf == stats_vdev->nxt_buf)
 			stats_vdev->nxt_buf = NULL;
 		stats_vdev->cur_buf = NULL;
 	}
 	if (stats_vdev->nxt_buf) {
-		vb2_buffer_done(&stats_vdev->nxt_buf->vb.vb2_buf, VB2_BUF_STATE_ERROR);
+		buf = stats_vdev->nxt_buf;
+		list_add_tail(&buf->queue, &stats_vdev->stat);
 		stats_vdev->nxt_buf = NULL;
 	}
+	list_replace_init(&stats_vdev->stat, &local_list);
 	spin_unlock_irqrestore(&stats_vdev->rd_lock, flags);
+	while (!list_empty(&local_list)) {
+		buf = list_first_entry(&local_list, struct rkisp_buffer, queue);
+		list_del(&buf->queue);
+		vb2_buffer_done(&buf->vb.vb2_buf, VB2_BUF_STATE_ERROR);
+	}
 
 	stats_vdev->ae_meas_done_next = false;
 	stats_vdev->af_meas_done_next = false;
@@ -410,7 +410,7 @@ int rkisp_register_stats_vdev(struct rkisp_isp_stats_vdev *stats_vdev,
 	spin_lock_init(&stats_vdev->irq_lock);
 	spin_lock_init(&stats_vdev->rd_lock);
 
-	strlcpy(vdev->name, STATS_NAME, sizeof(vdev->name));
+	strscpy(vdev->name, STATS_NAME, sizeof(vdev->name));
 
 	vdev->ioctl_ops = &rkisp_stats_ioctl;
 	vdev->fops = &rkisp_stats_fops;

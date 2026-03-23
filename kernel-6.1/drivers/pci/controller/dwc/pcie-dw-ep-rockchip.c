@@ -700,6 +700,45 @@ static int rockchip_pcie_deinit_host(struct rockchip_pcie *rockchip)
 	return 0;
 }
 
+/*
+ * ATS does not work on platform like rk3588 when running in EP mode.
+ * After a host has enabled ATS on the EP side, it will send an IOTLB
+ * invalidation request to the EP side. The rk3588 will never send a completion
+ * back and eventually the host will print an IOTLB_INV_TIMEOUT error, and the
+ * EP will not be operational. If we hide the ATS cap, things work as expected.
+ */
+static void rockchip_pcie_hide_broken_ats_cap(struct dw_pcie *pci)
+{
+	struct device *dev = pci->dev;
+	unsigned int spcie_cap_offset, next_cap_offset;
+	u32 spcie_cap_header, next_cap_header;
+
+	/* only hide the ATS cap for rk3588 running in EP mode */
+	if (!of_device_is_compatible(dev->of_node, "rockchip,rk3588-pcie-std-ep"))
+		return;
+
+	spcie_cap_offset = dw_pcie_find_ext_capability(pci, PCI_EXT_CAP_ID_SECPCI);
+	if (!spcie_cap_offset)
+		return;
+
+	spcie_cap_header = dw_pcie_readl_dbi(pci, spcie_cap_offset);
+	next_cap_offset = PCI_EXT_CAP_NEXT(spcie_cap_header);
+
+	next_cap_header = dw_pcie_readl_dbi(pci, next_cap_offset);
+	if (PCI_EXT_CAP_ID(next_cap_header) != PCI_EXT_CAP_ID_ATS)
+		return;
+
+	/* clear next ptr */
+	spcie_cap_header &= ~GENMASK(31, 20);
+
+	/* set next ptr to next ptr of ATS_CAP */
+	spcie_cap_header |= next_cap_header & GENMASK(31, 20);
+
+	dw_pcie_dbi_ro_wr_en(pci);
+	dw_pcie_writel_dbi(pci, spcie_cap_offset, spcie_cap_header);
+	dw_pcie_dbi_ro_wr_dis(pci);
+}
+
 static int rockchip_pcie_config_host(struct rockchip_pcie *rockchip)
 {
 	struct device *dev = rockchip->pci.dev;
@@ -716,6 +755,8 @@ static int rockchip_pcie_config_host(struct rockchip_pcie *rockchip)
 		dev_info(dev, "Configure complete registers\n");
 
 	dw_pcie_setup(&rockchip->pci);
+
+	rockchip_pcie_hide_broken_ats_cap(pci);
 
 	dw_pcie_dbi_ro_wr_en(&rockchip->pci);
 	/* Enable bus master and memory space */

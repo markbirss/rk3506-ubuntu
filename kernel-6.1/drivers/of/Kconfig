@@ -108,14 +108,6 @@ config OF_OVERLAY
 	  While this option is selected automatically when needed, you can
 	  enable it manually to improve device tree unit test coverage.
 
-config OF_DTBO
-	bool "Device Tree DTBO"
-	select OF_DYNAMIC
-	select OF_FLATTREE
-	select OF_RESOLVE
-	help
-	  Device Tree DTBO
-
 config OF_NUMA
 	bool
 

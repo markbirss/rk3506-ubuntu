@@ -367,6 +367,13 @@ static int rockchip_combphy_parse_dt(struct device *dev,
 		return PTR_ERR(priv->phy_grf);
 	}
 
+	/* Configuring grf with cru enabled. */
+	ret = clk_bulk_prepare_enable(priv->num_clks, priv->clks);
+	if (ret) {
+		dev_err(priv->dev, "failed to enable clocks\n");
+		return ret;
+	}
+
 	if (device_property_present(dev, "rockchip,dis-u3otg0-port")) {
 		rockchip_combphy_param_write(priv->pipe_grf,
 					     &cfg->u3otg0_port_en, false);
@@ -387,6 +394,8 @@ static int rockchip_combphy_parse_dt(struct device *dev,
 					    vals, ARRAY_SIZE(vals)))
 		regmap_write(priv->pipe_grf, vals[0],
 			     (GENMASK(vals[2], vals[1]) << 16) | (vals[3] << vals[1]));
+
+	clk_bulk_disable_unprepare(priv->num_clks, priv->clks);
 
 	priv->apb_rst = devm_reset_control_get_optional(dev, "combphy-apb");
 	if (IS_ERR(priv->apb_rst)) {

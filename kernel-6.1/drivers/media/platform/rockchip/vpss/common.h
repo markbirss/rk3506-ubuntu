@@ -12,6 +12,9 @@
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
 #include <media/videobuf2-v4l2.h>
+#include <linux/delay.h>
+#include <linux/of_platform.h>
+#include <linux/slab.h>
 
 #include "../isp/isp_vpss.h"
 #include <linux/rk-camera-module.h>
@@ -86,6 +89,14 @@ static inline struct vb2_queue *to_vb2_queue(struct file *file)
 	struct rkvpss_vdev_node *vnode = video_drvdata(file);
 
 	return &vnode->buf_queue;
+}
+
+static inline int vpss_outchn_max(int version)
+{
+	if (version == VPSS_V10)
+		return 4;
+
+	return 0;
 }
 
 extern int rkvpss_debug;

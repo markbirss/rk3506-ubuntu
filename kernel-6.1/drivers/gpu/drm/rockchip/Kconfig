@@ -171,8 +171,8 @@ config ROCKCHIP_VCONN
 	  This selects support virtual HDMI/DP/DSI drived by
 	  rockchip vop, This is used for some test.
 
-config DRM_ROCKCHIP_VVOP
-	bool "Rockchip virtual VOP drm driver"
+config DRM_ROCKCHIP_VKMS
+	bool "Rockchip virtual Kernel Mode-Setting driver"
 	help
 	  Say y here if you want use some module of rockchip drm, but
 	  don't need a real vop driver(et: you just want rockchip drm

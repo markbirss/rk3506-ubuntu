@@ -423,7 +423,7 @@ int rkispp_register_fec(struct rkispp_hw_dev *hw)
 	fec->hw = hw;
 	hw->is_fec_ext = true;
 	v4l2_dev = &fec->v4l2_dev;
-	strlcpy(v4l2_dev->name, fec_videodev.name, sizeof(v4l2_dev->name));
+	strscpy(v4l2_dev->name, fec_videodev.name, sizeof(v4l2_dev->name));
 	ret = v4l2_device_register(hw->dev, v4l2_dev);
 	if (ret)
 		return ret;

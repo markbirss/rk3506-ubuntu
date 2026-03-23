@@ -2,7 +2,7 @@
 //
 // es8323.c -- es8323 ALSA SoC audio driver
 //
-// Copyright (c) 2016 Rockchip Electronics Co. Ltd.
+// Copyright (c) 2016 Rockchip Electronics Co., Ltd.
 //
 // Author: Mark Brown <will@everset-semi.com>
 // Author: Jianqun Xu <jay.xu@rock-chips.com>
@@ -755,6 +755,9 @@ static int es8323_resume(struct snd_soc_component *component)
 	snd_soc_component_write(component, 0x31, es8323_DEF_VOL);
 	snd_soc_component_write(component, 0x30, es8323_DEF_VOL);
 	snd_soc_component_write(component, 0x19, 0x02);
+
+	es8323_set_bias_level(component, SND_SOC_BIAS_OFF);
+
 	return 0;
 }
 
@@ -791,7 +794,7 @@ static int es8323_probe(struct snd_soc_component *component)
 	snd_soc_component_write(component, 0x19, 0x02);
 	snd_soc_component_write(component, 0x09, 0x00);
 	snd_soc_component_write(component, 0x0A, 0xf8);
-	snd_soc_component_write(component, 0x0B, 0x82);
+	snd_soc_component_write(component, 0x0B, 0x02);         //设置录音的通道为LIN1和RIN1
 	snd_soc_component_write(component, 0x0C, 0x0C);
 	snd_soc_component_write(component, 0x0D, 0x02);
 	snd_soc_component_write(component, 0x10, 0x00);
@@ -818,7 +821,7 @@ static int es8323_probe(struct snd_soc_component *component)
 	usleep_range(18000, 20000);
 	snd_soc_component_write(component, 0x04, 0x3C);
 
-	es8323_set_bias_level(component, SND_SOC_BIAS_STANDBY);
+	es8323_set_bias_level(component, SND_SOC_BIAS_OFF);
 	return 0;
 }
 

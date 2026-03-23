@@ -2,7 +2,7 @@
 /*
  * Rockchip Audio Delta-sigma Digital Converter Interface
  *
- * Copyright (C) 2023 Rockchip Electronics Co.,Ltd
+ * Copyright (C) 2023 Rockchip Electronics Co., Ltd.
  *
  */
 
@@ -14,6 +14,7 @@
 #include <linux/of_platform.h>
 #include <linux/clk.h>
 #include <linux/mfd/syscon.h>
+#include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/regmap.h>

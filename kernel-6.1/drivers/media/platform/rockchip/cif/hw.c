@@ -1797,11 +1797,31 @@ static int __maybe_unused rkcif_runtime_resume(struct device *dev)
 static int __maybe_unused rkcif_sleep_suspend(struct device *dev)
 {
 	struct rkcif_hw *cif_hw = dev_get_drvdata(dev);
+	struct rkcif_multi_sync_config *sync_config;
+	int i = 0;
+	int j = 0;
 
 	if (atomic_read(&cif_hw->power_cnt) == 0)
 		return 0;
 
 	rkcif_disable_sys_clk(cif_hw);
+	for (i = 0; i < RKCIF_MAX_GROUP; i++) {
+		sync_config = &cif_hw->sync_config[i];
+		if (sync_config->mode != RKCIF_NOSYNC_MODE) {
+			sync_config->streaming_cnt = 0;
+			sync_config->sync_code = 0;
+			sync_config->update_code = 0;
+			sync_config->update_cache = 0;
+			for (j = 0; j < sync_config->slave.count; j++)
+				sync_config->slave.is_streaming[j] = false;
+			for (j = 0; j < sync_config->ext_master.count; j++)
+				sync_config->ext_master.is_streaming[j] = false;
+			for (j = 0; j < sync_config->int_master.count; j++)
+				sync_config->int_master.is_streaming[j] = false;
+			for (j = 0; j < sync_config->soft_sync.count; j++)
+				sync_config->soft_sync.is_streaming[j] = false;
+		}
+	}
 
 	return pinctrl_pm_select_sleep_state(dev);
 }

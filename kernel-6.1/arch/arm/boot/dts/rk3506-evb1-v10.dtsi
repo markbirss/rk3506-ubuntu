@@ -16,9 +16,24 @@
 		bootargs = "earlycon=uart8250,mmio32,0xff0a0000 console=ttyFIQ0 ubi.mtd=5 ubi.block=0,rootfs root=/dev/ubiblock0_0 rootfstype=squashfs rootwait snd_aloop.index=7 snd_aloop.use_raw_jiffies=1 storagemedia=mtd androidboot.storagemedia=mtd androidboot.mode=normal";
 	};
 
+	aliases {
+        watchdog2 = &qywatchdog;
+    };
+
+    qywatchdog: qywatchdog {
+        compatible = "linux,wdt-gpio";
+        pinctrl-names = "default";
+        pinctrl-0 = <&gpio_dog_pin>;
+        gpios = <&gpio1 RK_PB4 GPIO_ACTIVE_LOW>;
+        hw_algo = "toggle";
+        always-running;
+        hw_margin_ms = <1200>;
+        status = "okay";
+    };
+
 	backlight: backlight {
 		compatible = "pwm-backlight";
-		pwms = <&pwm0_4ch_2 0 25000 0>;
+		pwms = <&pwm0_4ch_2 0 25000 1>;
 		brightness-levels = <
 			  0  20  20  21  21  22  22  23
 			 23  24  24  25  25  26  26  27
@@ -79,11 +94,13 @@
 		compatible = "simple-panel-dsi";
 		reg = <0>;
 		backlight = <&backlight>;
-		prepare-delay-ms = <5>;
-		reset-delay-ms = <1>;
-		init-delay-ms = <80>;
-		disable-delay-ms = <10>;
-		unprepare-delay-ms = <5>;
+		enable-gpios = <&gpio1 RK_PB0 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio1 RK_PA5 GPIO_ACTIVE_LOW>;
+		prepare-delay-ms = <120>;
+		reset-delay-ms = <50>;
+		init-delay-ms = <20>;
+		disable-delay-ms = <60>;
+		unprepare-delay-ms = <60>;
 
 		width-mm = <68>;
 		height-mm = <121>;
@@ -93,220 +110,225 @@
 		dsi,format = <MIPI_DSI_FMT_RGB888>;
 		dsi,lanes  = <2>;
 		panel-init-sequence = [
-			39 00 04 ff 98 81 03
+			39 00 04 FF 98 81 03
 			15 00 02 01 00
-			15 00 02 02 00
-			15 00 02 03 53
-			15 00 02 04 53
-			15 00 02 05 13
-			15 00 02 06 04
-			15 00 02 07 02
-			15 00 02 08 02
-			15 00 02 09 00
-			15 00 02 0a 00
-			15 00 02 0b 00
-			15 00 02 0c 00
-			15 00 02 0d 00
-			15 00 02 0e 00
-			15 00 02 0f 00
-			15 00 02 10 00
-			15 00 02 11 00
-			15 00 02 12 00
-			15 00 02 13 00
-			15 00 02 14 00
-			15 00 02 15 08
-			15 00 02 16 10
-			15 00 02 17 00
-			15 00 02 18 08
-			15 00 02 19 00
-			15 00 02 1a 00
-			15 00 02 1b 00
-			15 00 02 1c 00
-			15 00 02 1d 00
-			15 00 02 1e c0
-			15 00 02 1f 80
-			15 00 02 20 02
-			15 00 02 21 09
-			15 00 02 22 00
-			15 00 02 23 00
-			15 00 02 24 00
-			15 00 02 25 00
-			15 00 02 26 00
-			15 00 02 27 00
-			15 00 02 28 55
-			15 00 02 29 03
-			15 00 02 2a 00
-			15 00 02 2b 00
-			15 00 02 2c 00
-			15 00 02 2d 00
-			15 00 02 2e 00
-			15 00 02 2f 00
-			15 00 02 30 00
-			15 00 02 31 00
-			15 00 02 32 00
-			15 00 02 33 00
-			15 00 02 34 04
-			15 00 02 35 05
-			15 00 02 36 05
-			15 00 02 37 00
-			15 00 02 38 3c
-			15 00 02 39 35
-			15 00 02 3a 00
-			15 00 02 3b 40
-			15 00 02 3c 00
-			15 00 02 3d 00
-			15 00 02 3e 00
-			15 00 02 3f 00
-			15 00 02 40 00
-			15 00 02 41 88
-			15 00 02 42 00
-			15 00 02 43 00
-			15 00 02 44 1f
-			15 00 02 50 01
-			15 00 02 51 23
-			15 00 02 52 45
-			15 00 02 53 67
-			15 00 02 54 89
-			15 00 02 55 ab
-			15 00 02 56 01
-			15 00 02 57 23
-			15 00 02 58 45
-			15 00 02 59 67
-			15 00 02 5a 89
-			15 00 02 5b ab
-			15 00 02 5c cd
-			15 00 02 5d ef
-			15 00 02 5e 03
-			15 00 02 5f 14
-			15 00 02 60 15
-			15 00 02 61 0c
-			15 00 02 62 0d
-			15 00 02 63 0e
-			15 00 02 64 0f
-			15 00 02 65 10
-			15 00 02 66 11
-			15 00 02 67 08
-			15 00 02 68 02
-			15 00 02 69 0a
-			15 00 02 6a 02
-			15 00 02 6b 02
-			15 00 02 6c 02
-			15 00 02 6d 02
-			15 00 02 6e 02
-			15 00 02 6f 02
-			15 00 02 70 02
-			15 00 02 71 02
-			15 00 02 72 06
-			15 00 02 73 02
-			15 00 02 74 02
-			15 00 02 75 14
-			15 00 02 76 15
-			15 00 02 77 0f
-			15 00 02 78 0e
-			15 00 02 79 0d
-			15 00 02 7a 0c
-			15 00 02 7b 11
-			15 00 02 7c 10
-			15 00 02 7d 06
-			15 00 02 7e 02
-			15 00 02 7f 0a
-			15 00 02 80 02
-			15 00 02 81 02
-			15 00 02 82 02
-			15 00 02 83 02
-			15 00 02 84 02
-			15 00 02 85 02
-			15 00 02 86 02
-			15 00 02 87 02
-			15 00 02 88 08
-			15 00 02 89 02
-			15 00 02 8a 02
-			39 00 04 ff 98 81 04
-			15 00 02 00 80
-			15 00 02 70 00
-			15 00 02 71 00
-			15 00 02 66 fe
-			15 00 02 82 15
-			15 00 02 84 15
-			15 00 02 85 15
-			15 00 02 3a 24
-			15 00 02 32 ac
-			15 00 02 8c 80
-			15 00 02 3c f5
-			15 00 02 88 33
-			39 00 04 ff 98 81 01
-			15 00 02 22 0a
-			15 00 02 31 00
-			15 00 02 53 78
-			15 00 02 55 7b
-			15 00 02 60 20
-			15 00 02 61 00
-			15 00 02 62 0d
-			15 00 02 63 00
-			15 00 02 a0 00
-			15 00 02 a1 10
-			15 00 02 a2 1c
-			15 00 02 a3 13
-			15 00 02 a4 15
-			15 00 02 a5 26
-			15 00 02 a6 1a
-			15 00 02 a7 1d
-			15 00 02 a8 67
-			15 00 02 a9 1c
-			15 00 02 aa 29
-			15 00 02 ab 5b
-			15 00 02 ac 26
-			15 00 02 ad 28
-			15 00 02 ae 5c
-			15 00 02 af 30
-			15 00 02 b0 31
-			15 00 02 b1 32
-			15 00 02 b2 00
-			15 00 02 b1 2e
-			15 00 02 b2 32
-			15 00 02 b3 00
-			15 00 02 b6 02
+            15 00 02 02 00
+            15 00 02 03 53
+            15 00 02 04 D3
+            15 00 02 05 00
+            15 00 02 06 0D
+            15 00 02 07 08
+            15 00 02 08 00
+            15 00 02 09 00
+            15 00 02 0a 00
+            15 00 02 0b 00
+            15 00 02 0c 00
+            15 00 02 0d 00
+            15 00 02 0e 00
+            15 00 02 0f 28
+            15 00 02 10 28
+            15 00 02 11 00
+            15 00 02 12 00
+            15 00 02 13 00
+            15 00 02 14 00
+            15 00 02 15 00
+            15 00 02 16 00
+            15 00 02 17 00
+            15 00 02 18 00
+            15 00 02 19 00
+            15 00 02 1a 00
+            15 00 02 1b 00
+            15 00 02 1c 00
+            15 00 02 1d 00
+            15 00 02 1e 40
+            15 00 02 1f 80
+            15 00 02 20 06
+            15 00 02 21 01
+            15 00 02 22 00
+            15 00 02 23 00
+            15 00 02 24 00
+            15 00 02 25 00
+            15 00 02 26 00
+            15 00 02 27 00
+            15 00 02 28 33
+            15 00 02 29 33
+            15 00 02 2a 00
+            15 00 02 2b 00
+            15 00 02 2c 00
+            15 00 02 2d 00
+            15 00 02 2e 00
+            15 00 02 2f 00
+            15 00 02 30 00
+            15 00 02 31 00
+            15 00 02 32 00
+            15 00 02 33 00
+            15 00 02 34 03
+            15 00 02 35 00
+            15 00 02 36 00
+            15 00 02 37 00
+            15 00 02 38 96
+            15 00 02 39 00
+            15 00 02 3A 00
+            15 00 02 3B 00
+            15 00 02 3C 00
+            15 00 02 3D 00
+            15 00 02 3E 00
+            15 00 02 3F 00
+            15 00 02 40 00
+            15 00 02 41 00
+            15 00 02 42 00
+            15 00 02 43 00
+            15 00 02 44 00
+            15 00 02 50 00
+            15 00 02 51 23
+            15 00 02 52 45
+            15 00 02 53 67
+            15 00 02 54 89
+            15 00 02 55 AB
+            15 00 02 56 01
+            15 00 02 57 23
+            15 00 02 58 45
+            15 00 02 59 67
+            15 00 02 5A 89
+            15 00 02 5B AB
+            15 00 02 5C CD
+            15 00 02 5D EF
+            15 00 02 5E 00
+            15 00 02 5F 08
+            15 00 02 60 08
+            15 00 02 61 06
+            15 00 02 62 06
+            15 00 02 63 01
+            15 00 02 64 01
+            15 00 02 65 00
+            15 00 02 66 00
+            15 00 02 67 02
+            15 00 02 68 15
+            15 00 02 69 15
+            15 00 02 6A 14
+            15 00 02 6B 14
+            15 00 02 6C 0D
+            15 00 02 6D 0D
+            15 00 02 6E 0C
+            15 00 02 6F 0C
+            15 00 02 70 0F
+            15 00 02 71 0F
+            15 00 02 72 0E
+            15 00 02 73 0E
+            15 00 02 74 02
+            15 00 02 75 08
+            15 00 02 76 08
+            15 00 02 77 06
+            15 00 02 78 06
+            15 00 02 79 01
+            15 00 02 7A 01
+            15 00 02 7B 00
+            15 00 02 7C 00
+            15 00 02 7D 02
+            15 00 02 7E 15
+            15 00 02 7F 15
+            15 00 02 80 14
+            15 00 02 81 14
+            15 00 02 82 0D
+            15 00 02 83 0D
+            15 00 02 84 0C
+            15 00 02 85 0C
+            15 00 02 86 0F
+            15 00 02 87 0F
+            15 00 02 88 0E
+            15 00 02 89 0E
+            15 00 02 8A 02
+            39 00 04 FF 98 81 04
+            15 00 02 6E 2B
+            15 00 02 6F 37
+            15 00 02 3A 24
+            15 00 02 8D 1A
+            15 00 02 87 BA
+            15 00 02 B2 D1
+            15 00 02 88 0B
+            15 00 02 38 01
+            15 00 02 39 00
+            15 00 02 B5 02
+            15 00 02 31 25
+            15 00 02 3B 98
+            39 00 04 FF 98 81 01
+            15 00 02 22 0A
+            15 00 02 31 00
+            15 00 02 53 5A
+            15 00 02 55 3D
+            15 00 02 50 85
+            15 00 02 51 80
+            15 00 02 60 06
+            15 00 02 62 20
+            15 00 02 a0 00
+            15 00 02 a1 14
+            15 00 02 a2 21
+            15 00 02 a3 13
+            15 00 02 a4 17
+            15 00 02 a5 29
+            15 00 02 a6 1D
+            15 00 02 a7 1f
+            15 00 02 a8 8B
+            15 00 02 a9 1e
+            15 00 02 aa 28
+            15 00 02 ab 7A
+            15 00 02 ac 1C
+            15 00 02 ad 1B
+            15 00 02 ae 50
+            15 00 02 af 26
+            15 00 02 b0 2B
+            15 00 02 b1 52
+            15 00 02 b2 5E
+            15 00 02 b3 23
 			15 00 02 b7 03
-			15 00 02 c0 00
-			15 00 02 c1 10
-			15 00 02 c2 1c
-			15 00 02 c3 13
-			15 00 02 c4 15
-			15 00 02 c5 26
-			15 00 02 c6 1a
-			15 00 02 c7 1d
-			15 00 02 c8 67
-			15 00 02 c9 1c
-			15 00 02 ca 29
-			15 00 02 cb 5b
-			15 00 02 cc 26
-			15 00 02 cd 28
-			15 00 02 ce 5c
-			15 00 02 cf 30
-			15 00 02 d0 31
-			15 00 02 d1 2e
-			15 00 02 d2 32
-			15 00 02 d3 00
-			39 00 04 ff 98 81 00
-			05 96 01 11
-			05 14 01 29
+            15 00 02 c0 00
+            15 00 02 c1 13
+            15 00 02 c2 23
+            15 00 02 c3 14
+            15 00 02 c4 17
+            15 00 02 c5 2B
+            15 00 02 c6 1F
+            15 00 02 c7 20
+            15 00 02 c8 8D
+            15 00 02 c9 1E
+            15 00 02 ca 28
+            15 00 02 cb 7B
+            15 00 02 CC 1B
+            15 00 02 cd 1A
+            15 00 02 ce 51
+            15 00 02 cf 25
+            15 00 02 d0 2A
+            15 00 02 d1 52
+            15 00 02 d2 5E
+            15 00 02 d3 23
+            39 00 04 FF 98 81 00
+            15 00 02 35 00
+            15 78 02 11 00
+            15 14 02 29 00
+            05 78 01 11
+            05 0A 01 29
+		];
+
+		panel-exit-sequence = [
+			05 00 01 28
+			05 00 01 10
 		];
 
 		disp_timings0: display-timings {
 			native-mode = <&dsi_timing0>;
 			dsi_timing0: timing0 {
-				clock-frequency = <65000000>;
-				hactive = <720>;
+				clock-frequency = <68695200>;
+				hactive = <800>;
 				vactive = <1280>;
-				hfront-porch = <48>;
-				hsync-len = <8>;
-				hback-porch = <52>;
-				vfront-porch = <16>;
-				vsync-len = <6>;
-				vback-porch = <15>;
+				hfront-porch = <30>;
+				hsync-len = <20>;
+				hback-porch = <20>;
+				vfront-porch = <15>;
+				vsync-len = <4>;
+				vback-porch = <12>;
 				hsync-active = <0>;
 				vsync-active = <0>;
-				de-active = <0>;
+				de-active = <1>;
 				pixelclk-active = <0>;
 			};
 		};
@@ -344,9 +366,9 @@
 
 &gmac0 {
 	phy-mode = "rmii";
-	clock_in_out = "output";
+	clock_in_out = "input";
 
-	snps,reset-gpio = <&gpio0 RK_PC2 GPIO_ACTIVE_LOW>;
+	snps,reset-gpio = <&gpio0 RK_PA1 GPIO_ACTIVE_LOW>;
 	snps,reset-active-low;
 	snps,reset-delays-us = <0 20000 100000>;
 
@@ -354,7 +376,8 @@
 	pinctrl-0 = <&eth_rmii0_miim_pins
 		     &eth_rmii0_tx_bus2_pins
 		     &eth_rmii0_rx_bus2_pins
-		     &eth_rmii0_clk_pins>;
+		     &eth_rmii0_clk_pins
+			 &eth_clk1_25m_out_pins>;
 
 	phy-handle = <&rmii_phy0>;
 	status = "okay";
@@ -363,26 +386,86 @@
 &i2c2 {
 	clock-frequency = <400000>;
 	pinctrl-names = "default";
-	pinctrl-0 = <&rm_io4_i2c2_scl &rm_io5_i2c2_sda>;
+	pinctrl-0 = <&rm_io16_i2c2_sda &rm_io17_i2c2_scl>;
 	status = "okay";
 
-	gt1x: gt1x@14 {
-		compatible = "goodix,gt1x";
-		reg = <0x14>;
-		gtp_ics_slot_report;
-		goodix,rst-gpio = <&gpio0 RK_PA7 GPIO_ACTIVE_HIGH>;
-		goodix,irq-gpio = <&gpio0 RK_PA6 GPIO_ACTIVE_LOW>;
+	es8388: es8388@11 {
 		status = "disabled";
+		#sound-dai-cells = <0>;
+		compatible = "everest,es8388", "everest,es8323";
+		reg = <0x11>;
+		clocks = <&mclkout_sai2>;
+		clock-names = "mclk";
+		assigned-clocks = <&mclkout_sai2>;
+		assigned-clock-rates = <12288000>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&sai2m1_mclk_pins>;
+	};
+
+	gt9x: gt9x@14 {
+		compatible = "goodix,gt9xx";
+        pinctrl-names = "default";
+        pinctrl-0 = <&touch_gpio>;
+		reg = <0x14>;
+		reset-gpio = <&gpio1 RK_PA6 GPIO_ACTIVE_HIGH>;
+		touch-gpio = <&gpio1 RK_PA7 GPIO_ACTIVE_LOW>;
+        max-x = <800>;
+        max-y = <1280>;
+        tp-size= <911>;
+		status = "okay";
 	};
 };
 
 &mdio0 {
-	rmii_phy0: phy@1 {
+	rmii_phy0: phy@0 {
 		compatible = "ethernet-phy-ieee802.3-c22";
-		reg = <0x1>;
+		reg = <0x0>;
+		clocks = <&cru CLK_MAC_OUT>;
+	};
+};
+
+&gmac1 {
+	phy-mode = "rmii";
+	clock_in_out = "input";
+
+	snps,reset-gpio = <&gpio4 RK_PB2 GPIO_ACTIVE_LOW>;
+	snps,reset-active-low;
+	snps,reset-delays-us = <0 20000 1000000>;
+
+	pinctrl-names = "default";
+	pinctrl-0 = <&eth_rmii1_miim_pins
+		     &eth_rmii1_tx_bus2_pins
+		     &eth_rmii1_rx_bus2_pins
+		     &eth_rmii1_clk_pins
+			 &eth_clk0_25m_out_pins>;
+
+	phy-handle = <&rmii_phy1>;
+	status = "okay";
+};
+
+&mdio1 {
+	rmii_phy1: phy@3 {
+		compatible = "ethernet-phy-ieee802.3-c22";
+		reg = <0x3>;
+		clocks = <&cru CLK_MAC_OUT>;
 	};
 };
 
 &vop {
 	status = "okay";
+};
+
+&pinctrl {
+    touch {
+        touch_gpio: touch-gpio {
+            rockchip,pins = <1 RK_PA6 RK_FUNC_GPIO &pcfg_pull_none>,
+                            <1 RK_PA7 RK_FUNC_GPIO &pcfg_pull_none>;
+        };
+    };
+
+	watchdog{
+        gpio_dog_pin: gpio_dog_pin{
+            rockchip,pins = <1 RK_PB4 RK_FUNC_GPIO &pcfg_pull_none>;
+               };
+    };
 };

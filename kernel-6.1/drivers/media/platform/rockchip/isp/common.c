@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright (C) 2019 Rockchip Electronics Co., Ltd */
+/* Copyright (C) 2019 Rockchip Electronics Co., Ltd. */
 
 #include <media/videobuf2-dma-contig.h>
 #include <media/videobuf2-dma-sg.h>
@@ -338,6 +338,7 @@ void rkisp_free_buffer(struct rkisp_device *dev,
 			dma_buf_put(buf->dbuf);
 		g_ops->put(buf->mem_priv);
 		buf->size = 0;
+		buf->index = -1;
 		buf->dbuf = NULL;
 		buf->vaddr = NULL;
 		buf->mem_priv = NULL;

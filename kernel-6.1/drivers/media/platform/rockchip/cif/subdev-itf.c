@@ -98,6 +98,8 @@ static void sditf_buffree_work(struct work_struct *work)
 		if (rx_buf) {
 			list_del(&rx_buf->list_free);
 			rkcif_free_reserved_mem_buf(priv->cif_dev, rx_buf);
+			memset(rx_buf, 0, sizeof(*rx_buf));
+			rx_buf->dummy.is_free = true;
 		}
 	}
 	spin_unlock_irqrestore(&priv->cif_dev->buffree_lock, flags);
@@ -476,6 +478,15 @@ static long sditf_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 		if (mode->rdbk_mode == RKISP_VICAP_ONLINE_UNITE &&
 		    priv->cif_dev->chip_id < CHIP_RV1103B_CIF)
 			return -EINVAL;
+
+		ret = v4l2_subdev_call(cif_dev->terminal_sensor.sd,
+				       core, ioctl,
+				       RKMODULE_GET_SYNC_MODE,
+				       &sync_type);
+		if (ret || sync_type == NO_SYNC_MODE)
+			mode->input.multi_sync = 0;
+		else
+			mode->input.multi_sync = 1;
 		memcpy(&priv->mode_src, mode, sizeof(*mode));
 		if (cif_dev->is_thunderboot &&
 		    cif_dev->is_thunderboot_start) {
@@ -494,15 +505,6 @@ static long sditf_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 		else
 			mode->input.merge_num = 1;
 		mode->input.index = priv->combine_index;
-
-		ret = v4l2_subdev_call(cif_dev->terminal_sensor.sd,
-				       core, ioctl,
-				       RKMODULE_GET_SYNC_MODE,
-				       &sync_type);
-		if (ret || sync_type == NO_SYNC_MODE)
-			mode->input.multi_sync = 0;
-		else
-			mode->input.multi_sync = 1;
 #ifdef CONFIG_VIDEO_ROCKCHIP_THUNDER_BOOT_SETUP
 		if (cif_dev->is_thunderboot)
 			sditf_select_sensor_setting_for_thunderboot(priv);
@@ -604,6 +606,12 @@ static long sditf_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 			if (priv->mode.rdbk_mode != RKISP_VICAP_ONLINE_MULTI)
 				sditf_disable_immediately(priv);
 		}
+		return 0;
+	case RKISP_VICAP_CMD_MULTI_ONLINE:
+		if (*(int *)arg)
+			priv->is_multi_online = true;
+		else
+			priv->is_multi_online = false;
 		return 0;
 	default:
 		break;
@@ -843,8 +851,6 @@ static int sditf_channel_enable_rv1103b(struct sditf_priv *priv, int user)
 				width | (height << 16));
 		}
 	}
-	if (priv->mode.rdbk_mode == RKISP_VICAP_ONLINE_MULTI)
-		rkcif_write_register_or(cif_dev, CIF_REG_MIPI_LVDS_CTRL, CSI_ENABLE_CAPTURE);
 	read_ctrl_ch0 = rkcif_read_register(cif_dev, CIF_REG_TOISP0_CTRL);
 	v4l2_dbg(3, rkcif_debug, &cif_dev->v4l2_dev,  "isp%d, toisp ch0 %d, width %d, height %d, reg w:0x%x r:0x%x\n",
 		 user, ch0, width, height, ctrl_ch0, read_ctrl_ch0);
@@ -1010,9 +1016,6 @@ static void sditf_channel_disable_rv1103b(struct sditf_priv *priv, int user)
 	struct rkcif_device *cif_dev = priv->cif_dev;
 	u32 ctrl_val = 0x1;
 	u32 read_ctrl_ch0 = 0;
-
-	if (priv->mode.rdbk_mode == RKISP_VICAP_ONLINE_MULTI)
-		rkcif_write_register_and(cif_dev, CIF_REG_MIPI_LVDS_CTRL, ~CSI_ENABLE_CAPTURE);
 
 	rkcif_write_register_and(cif_dev, CIF_REG_TOISP0_CTRL, ~ctrl_val);
 	read_ctrl_ch0 = rkcif_read_register(cif_dev, CIF_REG_TOISP0_CTRL);
@@ -1301,8 +1304,8 @@ static int sditf_s_rx_buffer(struct v4l2_subdev *sd,
 	}
 
 	rx_buf = to_cif_rx_buf(dbufs);
-	v4l2_dbg(3, rkcif_debug, &cif_dev->v4l2_dev, "buf back to vicap 0x%x\n",
-		 (u32)rx_buf->dummy.dma_addr);
+	v4l2_dbg(3, rkcif_debug, &cif_dev->v4l2_dev, "type %d buf back to vicap 0x%x, is_switch %d\n",
+		 dbufs->type, (u32)rx_buf->dummy.dma_addr, dbufs->is_switch);
 	spin_lock_irqsave(&stream->vbq_lock, flags);
 	stream->last_rx_buf_idx = dbufs->sequence + 1;
 	atomic_inc(&stream->buf_cnt);
@@ -1320,7 +1323,7 @@ static int sditf_s_rx_buffer(struct v4l2_subdev *sd,
 		is_free = true;
 	}
 
-	if (!is_free && (!dbufs->is_switch)) {
+	if (!is_free && (!dbufs->is_switch) && stream->state == RKCIF_STATE_STREAMING) {
 		list_add_tail(&rx_buf->list, &stream->rx_buf_head);
 		rkcif_assign_check_buffer_update_toisp(stream);
 		if (cif_dev->resume_mode != RKISP_RTT_MODE_ONE_FRAME) {
@@ -1743,6 +1746,7 @@ static int rkcif_subdev_media_init(struct sditf_priv *priv)
 	mutex_init(&priv->mutex);
 	priv->hdr_wrap_line = 0;
 	priv->is_buf_init = false;
+	priv->is_multi_online = false;
 	return 0;
 }
 

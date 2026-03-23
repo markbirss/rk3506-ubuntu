@@ -1130,18 +1130,18 @@ rkisp_stats_send_meas_v2x(struct rkisp_isp_stats_vdev *stats_vdev,
 	unsigned int cur_frame_id = -1;
 	struct rkisp_isp2x_stat_buffer *cur_stat_buf = NULL;
 	struct rkisp_buffer *cur_buf = NULL;
-	struct rkisp_stats_v2x_ops *ops =
-		(struct rkisp_stats_v2x_ops *)stats_vdev->priv_ops;
+	struct rkisp_stats_v2x_ops *ops = stats_vdev->priv_ops;
+	unsigned long flags = 0;
 
 	cur_frame_id = meas_work->frame_id;
-	spin_lock(&stats_vdev->rd_lock);
+	spin_lock_irqsave(&stats_vdev->rd_lock, flags);
 	/* get one empty buffer */
 	if (!list_empty(&stats_vdev->stat)) {
 		cur_buf = list_first_entry(&stats_vdev->stat,
 					   struct rkisp_buffer, queue);
 		list_del(&cur_buf->queue);
 	}
-	spin_unlock(&stats_vdev->rd_lock);
+	spin_unlock_irqrestore(&stats_vdev->rd_lock, flags);
 
 	if (cur_buf) {
 		cur_stat_buf =
@@ -1340,6 +1340,7 @@ rkisp_stats_isr_v2x(struct rkisp_isp_stats_vdev *stats_vdev,
 	u32 hdl_ris, hdl_3aris, unhdl_ris, unhdl_3aris;
 	u32 wr_buf_idx;
 	u32 temp_isp_ris, temp_isp3a_ris;
+	unsigned long flags = 0;
 
 	rkisp_dmarx_get_frame(stats_vdev->dev, &cur_frame_id, NULL, NULL, true);
 #ifdef LOG_ISR_EXE_TIME
@@ -1347,7 +1348,7 @@ rkisp_stats_isr_v2x(struct rkisp_isp_stats_vdev *stats_vdev,
 #endif
 	if (IS_HDR_RDBK(dev->hdr.op_mode))
 		iq_3a_mask = ISP2X_3A_RAWAE_BIG;
-	spin_lock(&stats_vdev->irq_lock);
+	spin_lock_irqsave(&stats_vdev->irq_lock, flags);
 
 	temp_isp_ris = rkisp_read(stats_vdev->dev, ISP_ISP_RIS, true);
 	temp_isp3a_ris = rkisp_read(stats_vdev->dev, ISP_ISP3A_RIS, true);
@@ -1444,7 +1445,7 @@ rkisp_stats_isr_v2x(struct rkisp_isp_stats_vdev *stats_vdev,
 #endif
 
 unlock:
-	spin_unlock(&stats_vdev->irq_lock);
+	spin_unlock_irqrestore(&stats_vdev->irq_lock, flags);
 }
 
 static void

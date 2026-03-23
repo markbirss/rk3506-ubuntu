@@ -72,7 +72,7 @@
 
 enum rkisp_isp_state {
 	ISP_FRAME_END = BIT(0),
-	ISP_FRAME_IN = BIT(1),
+	ISP_FRAME_BNR = BIT(1),
 	ISP_FRAME_VS = BIT(2),
 	ISP_FRAME_MP = BIT(3),
 	ISP_FRAME_SP = BIT(4),
@@ -266,6 +266,8 @@ struct rkisp_device {
 	unsigned int skip_frame;
 	unsigned int irq_ends;
 	unsigned int irq_ends_mask;
+	unsigned int irq_f_ends;
+	unsigned int irq_f_ends_mask;
 	bool send_fbcgain;
 	struct rkisp_ispp_buf *cur_fbcgain;
 	struct rkisp_buffer *cur_spbuf;
@@ -274,6 +276,7 @@ struct rkisp_device {
 
 	struct work_struct rdbk_work;
 	struct kfifo rdbk_kfifo;
+	struct kfifo rdbk_be_kfifo;
 	spinlock_t rdbk_lock;
 	int rdbk_cnt;
 	int rdbk_cnt_x1;
@@ -306,11 +309,13 @@ struct rkisp_device {
 	bool is_suspend_one_frame;
 	bool is_aiisp_en;
 	bool is_aiisp_upd;
+	bool is_aiisp_sync;
 	bool is_frm_rd;
 	bool is_multi_one_sync;
 	bool is_wait_aiq;
 
 	struct rkisp_vicap_input vicap_in;
+	struct rkisp_vicap_sof vicap_sof;
 	u32 hdr_wrap_line;
 
 	u8 multi_mode;

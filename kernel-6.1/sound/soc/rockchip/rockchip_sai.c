@@ -2,7 +2,7 @@
 /*
  * ALSA SoC Audio Layer - Rockchip SAI Controller driver
  *
- * Copyright (c) 2022 Rockchip Electronics Co. Ltd.
+ * Copyright (c) 2022 Rockchip Electronics Co., Ltd.
  */
 
 #include <linux/module.h>
@@ -75,6 +75,7 @@ struct rk_sai_dev {
 	bool is_clk_auto;
 	bool is_mclk_calibrate;
 	bool is_tx_auto_gate; /* auto gate clk when TX FIFO empty */
+	bool no_set_mclk;
 };
 
 static const struct sai_of_quirks {
@@ -630,7 +631,7 @@ static int rockchip_sai_hw_params(struct snd_pcm_substream *substream,
 
 	if (sai->is_master_mode) {
 		bclk_rate = sai->fw_ratio * slot_width * ch_per_lane * params_rate(params);
-		if (sai->is_clk_auto)
+		if (sai->is_clk_auto && !sai->no_set_mclk)
 			clk_set_rate(sai->mclk, bclk_rate);
 
 		mclk_rate = clk_get_rate(sai->mclk);
@@ -921,9 +922,11 @@ static int rockchip_sai_set_sysclk(struct snd_soc_dai *dai, int clk_id,
 		return ret;
 	}
 
-	ret = clk_set_rate(sai->mclk, freq);
-	if (ret)
-		dev_err(sai->dev, "Failed to set mclk %d\n", ret);
+	if (!sai->no_set_mclk) {
+		ret = clk_set_rate(sai->mclk, freq);
+		if (ret)
+			dev_err(sai->dev, "Failed to set mclk %d\n", ret);
+	}
 
 	return ret;
 }
@@ -1226,7 +1229,7 @@ static int rockchip_sai_init_dai(struct rk_sai_dev *sai, struct resource *res,
 		dai->playback.stream_name = "Playback";
 		dai->playback.channels_min = 1;
 		dai->playback.channels_max = 512;
-		dai->playback.rates = SNDRV_PCM_RATE_8000_384000;
+		dai->playback.rates = SNDRV_PCM_RATE_CONTINUOUS;
 		dai->playback.formats = SNDRV_PCM_FMTBIT_S8 |
 					SNDRV_PCM_FMTBIT_S16_LE |
 					SNDRV_PCM_FMTBIT_S24_LE |
@@ -1242,7 +1245,7 @@ static int rockchip_sai_init_dai(struct rk_sai_dev *sai, struct resource *res,
 		dai->capture.stream_name = "Capture";
 		dai->capture.channels_min = 1;
 		dai->capture.channels_max = 512;
-		dai->capture.rates = SNDRV_PCM_RATE_8000_384000;
+		dai->capture.rates = SNDRV_PCM_RATE_CONTINUOUS;
 		dai->capture.formats = SNDRV_PCM_FMTBIT_S8 |
 				       SNDRV_PCM_FMTBIT_S16_LE |
 				       SNDRV_PCM_FMTBIT_S24_LE |
@@ -1973,6 +1976,9 @@ static int rockchip_sai_probe(struct platform_device *pdev)
 
 		dev_info(&pdev->dev, "Have mclk compensation feature\n");
 	}
+
+	sai->no_set_mclk =
+		device_property_read_bool(&pdev->dev, "rockchip,mclk-no-set");
 
 	sai->mclk = devm_clk_get(&pdev->dev, "mclk");
 	if (IS_ERR(sai->mclk)) {

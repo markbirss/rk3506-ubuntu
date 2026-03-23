@@ -37,7 +37,6 @@ struct vehicle_rkcif_dummy_buffer {
 struct rk_cif_clk {
 	/************clk************/
 	struct clk	*clks[RKCIF_MAX_BUS_CLK];
-	struct clk	*xvclk;
 	int		clks_num;
 	/************reset************/
 	struct reset_control	*cif_rst[RKCIF_MAX_RESET];

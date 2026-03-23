@@ -2,7 +2,7 @@
 /*
  * ALSA SoC Audio Layer - Rockchip Multi-DAIS  driver
  *
- * Copyright (c) 2018 Rockchip Electronics Co. Ltd.
+ * Copyright (c) 2018 Rockchip Electronics Co., Ltd.
  * Author: Sugar Zhang <sugar.zhang@rock-chips.com>
  *
  */
@@ -10,6 +10,7 @@
 #include <linux/module.h>
 #include <linux/mfd/syscon.h>
 #include <linux/of_device.h>
+#include <linux/of_platform.h>
 #include <linux/pm_runtime.h>
 #include <sound/pcm_params.h>
 #include <sound/soc.h>

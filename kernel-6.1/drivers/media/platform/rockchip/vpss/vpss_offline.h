@@ -7,7 +7,7 @@
 #define UNITE_ENLARGE 16
 #define UNITE_LEFT_ENLARGE 16
 
-#include "hw.h"
+extern char rkvpss_regfile[RKVPSS_REGFILE_LEN];
 
 struct rkvpss_ofl_incfginfo {
 	int width;
@@ -82,5 +82,6 @@ struct rkvpss_offline_dev {
 int rkvpss_register_offline(struct rkvpss_hw_dev *hw);
 void rkvpss_unregister_offline(struct rkvpss_hw_dev *hw);
 void rkvpss_offline_irq(struct rkvpss_hw_dev *hw, u32 irq);
+void rkvpss_dump_reg(struct rkvpss_offline_dev *ofl, int sequence, int size);
 
 #endif

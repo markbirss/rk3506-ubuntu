@@ -633,17 +633,17 @@ static ssize_t pwm_rockchip_test_write(struct file *file, const char __user *buf
 		duty_table.offset = (channel_id % 3) * PWM_TABLE_MAX;
 		duty_table.len = PWM_TABLE_MAX;
 
-		wave_config.rpt = PWM_WAVE_RPT;
-
-		/* select the 400k clk src */
-		wave_config.clk_rate = 400000;
 		wave_config.duty_table = &duty_table;
 		wave_config.period_table = NULL;
+		wave_config.clk_src = PWM_SELECT_CLK_PWM;
+		wave_config.mem_clk_src = PWM_SELECT_CLK_PWM_OSC;
+		wave_config.width_mode = PWM_WIDTH_MODE;
+		wave_config.update_mode = PWM_WAVE_INCREASING_THEN_DECREASING;
 		wave_config.enable = enable;
 		wave_config.duty_en = true;
 		wave_config.period_en = false;
-		wave_config.width_mode = PWM_WIDTH_MODE;
-		wave_config.update_mode = PWM_WAVE_INCREASING_THEN_DECREASING;
+		wave_config.clk_rate = 400000;
+		wave_config.rpt = PWM_WAVE_RPT;
 		wave_config.duty_max = (channel_id % 3 + 1) * PWM_TABLE_MAX - 1;
 		wave_config.duty_min = (channel_id % 3) * PWM_TABLE_MAX;
 		wave_config.period_max = 0;

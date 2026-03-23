@@ -63,4 +63,5 @@
 /delete-node/ &sata1;
 /delete-node/ &usb_drd1_dwc3;
 /delete-node/ &u2phy1_otg;
+/delete-node/ &u2phy1;
 /delete-node/ &vopl;

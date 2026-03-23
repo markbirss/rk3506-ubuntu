@@ -19,6 +19,7 @@
 #include <linux/pm_opp.h>
 #include <linux/pm_qos.h>
 #include <linux/pm_runtime.h>
+#include <linux/property.h>
 #include <linux/regulator/consumer.h>
 #include <linux/regulator/coupler.h>
 #include <linux/regulator/driver.h>
@@ -830,6 +831,8 @@ static int monitor_device_parse_status_config(struct device_node *np,
 
 	ret = of_property_read_u32(np, "rockchip,early-suspend-freq",
 				   &info->early_suspend_freq);
+	ret &= of_property_read_u32(np, "rockchip,video-1080p-freq",
+				   &info->video_1080p_freq);
 	ret &= of_property_read_u32(np, "rockchip,video-4k-freq",
 				   &info->video_4k_freq);
 	ret &= of_property_read_u32(np, "rockchip,reboot-freq",
@@ -1674,9 +1677,14 @@ static void rockchip_system_status_cpu_limit_freq(struct monitor_dev_info *info,
 
 	if (info->early_suspend_freq && (status & SYS_STATUS_SUSPEND))
 		target_freq = info->early_suspend_freq;
-
-	if (info->video_4k_freq && (status & SYS_STATUS_VIDEO_4K))
-		target_freq = info->video_4k_freq;
+	if (info->video_1080p_freq && (status & SYS_STATUS_VIDEO_1080P)) {
+		if (!target_freq || target_freq > info->video_1080p_freq)
+			target_freq = info->video_1080p_freq;
+	}
+	if (info->video_4k_freq && (status & SYS_STATUS_VIDEO_4K)) {
+		if (!target_freq || target_freq > info->video_4k_freq)
+			target_freq = info->video_4k_freq;
+	}
 
 	if (target_freq == info->status_max_limit)
 		return;
@@ -1909,7 +1917,6 @@ MODULE_DEVICE_TABLE(of, rockchip_system_monitor_of_match);
 static int rockchip_system_monitor_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	const struct of_device_id *match;
 	int (*init)(struct platform_device *pdev);
 
 	system_monitor = devm_kzalloc(dev, sizeof(struct system_monitor),
@@ -1933,11 +1940,9 @@ static int rockchip_system_monitor_probe(struct platform_device *pdev)
 
 	rockchip_system_monitor_parse_dt(system_monitor);
 
-	match = of_match_device(rockchip_system_monitor_of_match, &pdev->dev);
-	if (match && match->data) {
-		init = match->data;
+	init = device_get_match_data(dev);
+	if (init)
 		init(pdev);
-	}
 
 	if (system_monitor->tz) {
 		system_monitor->last_temp = INT_MAX;

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (c) 2018 Rockchip Electronics Co. Ltd.
+ * Copyright (c) 2018 Rockchip Electronics Co., Ltd.
  *
  * Author: Wyon Bi <bivvy.bi@rock-chips.com>
  */
@@ -1151,7 +1151,7 @@ static const struct of_device_id inno_dsidphy_of_match[] = {
 		.compatible = "rockchip,rk3568-dsi-dphy",
 		.data = &rk3568_video_phy_plat_data,
 	}, {
-		.compatible = "rockchip,rv1126-mipi-dphy",
+		.compatible = "rockchip,rv1126-dsi-dphy",
 		.data = &rv1126_video_phy_plat_data,
 	},
 	{}

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (c) 2021 Rockchip Electronics Co. Ltd.
+ * Copyright (c) 2021 Rockchip Electronics Co., Ltd.
  *
  * Author: Dingxian Wen <shawn.wen@rock-chips.com>
  */
@@ -2616,12 +2616,6 @@ static long rk628_csi_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 			csi->user_color_range = COLOR_RANGE_AUTO;
 		v4l2_info(sd, "user set color range: %d\n", csi->user_color_range);
 		rk628_csi_set_color_range(sd);
-		break;
-	case RKMODULE_GET_SKIP_FRAME:
-		if (csi->plat_data->tx_mode == DSI_MODE)
-			*(int *)arg = CSI_SKIP_FRAME_NORMAL;
-		else
-			*(int *)arg = 0;
 		break;
 	case RK_HDMIRX_CMD_GET_EDID_VERSION:
 		*(int *)arg = csi->edid_version;

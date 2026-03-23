@@ -142,7 +142,6 @@ struct rkisp_isp_subdev {
 	atomic_t frm_sync_seq;
 	enum v4l2_quantization quantization;
 	enum v4l2_colorspace colorspace;
-	u64 frm_timestamp;
 	struct frame_debug_info dbg;
 };
 
@@ -184,7 +183,7 @@ int rkisp_update_sensor_info(struct rkisp_device *dev);
 
 u32 rkisp_mbus_pixelcode_to_v4l2(u32 pixelcode);
 
-void rkisp_isp_queue_event_sof(struct rkisp_isp_subdev *isp);
+void rkisp_isp_queue_event_sof(struct rkisp_device *dev);
 
 void rkisp_check_idle(struct rkisp_device *dev, u32 irq);
 

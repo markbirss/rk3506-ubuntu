@@ -2,7 +2,7 @@
 /*
  * rk730.c -- RK730 ALSA SoC Audio driver
  *
- * Copyright (C) 2022 Rockchip Electronics Co.,Ltd
+ * Copyright (C) 2022 Rockchip Electronics Co., Ltd.
  */
 
 #include <linux/module.h>
@@ -55,6 +55,7 @@ struct rk730_priv {
 	struct clk *mclk;
 	unsigned int sysclk;
 	atomic_t mix_mode;
+	bool fixed_mclk_fs;
 };
 
 /* ADC Digital Volume */
@@ -666,6 +667,16 @@ static const struct _coeff_div coeff_div[] = {
 	{8192000, 32000, 0xe, 0x3, 0x0},
 	{8192000, 64000, 0xe, 0x3, 0x0},
 	{8192000, 128000, 0xe, 0x3, 0x0},
+
+	/* uncommon sample rate groups */
+	{12288000, 11025, 0x1, 0x1, 0x0},
+	{12288000, 22050, 0x1, 0x1, 0x0},
+	{12000000, 11025, 0x4, 0x1, 0x0},
+	{12000000, 22050, 0x4, 0x1, 0x0},
+	{24000000, 11025, 0xa, 0x1, 0x0},
+	{24000000, 22050, 0xa, 0x1, 0x0},
+	{11289600, 11025, 0xd, 0x1, 0x0},
+	{11289600, 22050, 0xd, 0x1, 0x0},
 };
 
 static inline int get_coeff(int mclk, int rate)
@@ -679,16 +690,49 @@ static inline int get_coeff(int mclk, int rate)
 	return -EINVAL;
 }
 
+struct _coeff_clk {
+	int mclk;
+	int rate;
+};
+
+/* codec selects the required mclk and sets it by itself  */
+static const struct _coeff_clk coeff_clk[] = {
+	/* mclks */
+	{12288000, 48000},
+	{12288000, 96000},
+	{12288000, 192000},
+	{11289600, 44100},
+	{11289600, 88200},
+	{11289600, 176000},
+	{8192000, 8000},
+	{8192000, 16000},
+	{8192000, 32000},
+	{8192000, 64000},
+	{8192000, 128000},
+	/* uncommon sample rate groups */
+	{11289600, 11025},
+	{11289600, 22050},
+};
+
+static inline int get_coeff_clk(int rate)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(coeff_clk); i++) {
+		if (coeff_clk[i].rate == rate)
+			return coeff_clk[i].mclk;
+	}
+	return -EINVAL;
+}
+
 static unsigned int samplerate_to_bit(unsigned int samplerate)
 {
 	switch (samplerate) {
 	case 8000:
 	case 11025:
-	case 12000:
 		return 0;
 	case 16000:
 	case 22050:
-	case 24000:
 		return 1;
 	case 32000:
 	case 44100:
@@ -715,6 +759,24 @@ static int rk730_dai_hw_params(struct snd_pcm_substream *substream,
 	struct rk730_priv *rk730 = snd_soc_component_get_drvdata(component);
 	unsigned int rate;
 	int coeff;
+
+	if (!rk730->fixed_mclk_fs) {
+		rk730->sysclk = get_coeff_clk(params_rate(params));
+		if ((int)rk730->sysclk < 0) {
+			dev_err(component->dev,
+				"Unable to lookup coeff clk with sample rate %dHz\n",
+				params_rate(params));
+			return -EINVAL;
+		}
+		dev_info(component->dev, "%s: Lookup mclk:%d for rate:%d\n",
+			 __func__, rk730->sysclk, params_rate(params));
+
+		if (clk_set_rate(rk730->mclk, rk730->sysclk) < 0) {
+			dev_err(component->dev,
+				"Unable to set mclk %dHz\n", rk730->sysclk);
+			return -EINVAL;
+		}
+	}
 
 	coeff = get_coeff(rk730->sysclk, params_rate(params));
 	if (coeff < 0)
@@ -1130,6 +1192,9 @@ static int rk730_i2c_probe(struct i2c_client *i2c,
 	rk730->mclk = devm_clk_get(&i2c->dev, "mclk");
 	if (IS_ERR(rk730->mclk))
 		return PTR_ERR(rk730->mclk);
+
+	rk730->fixed_mclk_fs =
+		device_property_read_bool(&i2c->dev, "rockchip,mclk-fs-fixed");
 
 	i2c_set_clientdata(i2c, rk730);
 

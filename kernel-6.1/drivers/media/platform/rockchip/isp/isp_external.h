@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) 2021 Fuzhou Rockchip Electronics Co., Ltd. */
+/* Copyright (c) 2021 Rockchip Electronics Co., Ltd. */
 
 #ifndef _RKISP_EXTERNAL_H
 #define _RKISP_EXTERNAL_H
@@ -26,6 +26,12 @@
 
 #define RKISP_VICAP_CMD_HW_LINK \
 	_IOW('V', BASE_VIDIOC_PRIVATE + 6, int)
+
+#define RKISP_VICAP_CMD_SOF \
+	_IOW('V', BASE_VIDIOC_PRIVATE + 7, struct rkisp_vicap_sof)
+
+#define RKISP_VICAP_CMD_MULTI_ONLINE \
+	_IOW('V', BASE_VIDIOC_PRIVATE + 8, int)
 
 #define RKISP_VICAP_BUF_CNT 3
 #define RKISP_VICAP_BUF_CNT_MAX 8
@@ -54,7 +60,8 @@ enum rkisp_vicap_link {
 };
 
 struct rkisp_vicap_mode {
-	char *name;
+	/* copy rkisp_device name */
+	char name[128];
 	enum rkisp_vicap_link rdbk_mode;
 
 	struct rkisp_vicap_input input;
@@ -88,6 +95,21 @@ struct rkisp_rx_buf {
 	bool is_switch;
 
 	bool is_uncompact;
+};
+
+struct rkisp_vicap_sof {
+	u64 timestamp;
+	u32 sequence;
+	u32 exp[3];
+	u32 gain[3];
+	u32 hts;
+	u32 vts;
+	u32 pclk;
+	__u32 dcg_used;
+	__u32 dcg_val[3];
+	struct rkmodule_dcg_ratio dcg_ratio;
+	struct rkmodule_gain_mode gain_mode;
+	bool is_exp_active;
 };
 
 #endif

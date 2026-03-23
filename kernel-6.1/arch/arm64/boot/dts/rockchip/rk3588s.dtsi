@@ -3364,6 +3364,8 @@
 				clocks = <&cru PCLK_PHP_ROOT>,
 					 <&cru ACLK_PCIE_ROOT>,
 					 <&cru ACLK_PHP_ROOT>;
+				pm_qos = <&qos_gic600_m0>,
+					 <&qos_gic600_m1>;
 			};
 			power-domain@RK3588_PD_SDIO {
 				reg = <RK3588_PD_SDIO>;
@@ -4630,7 +4632,10 @@
 			 <&cru PCLK_VOP_ROOT>,
 			 <&cru DCLK_VOP0_SRC>,
 			 <&cru DCLK_VOP1_SRC>,
-			 <&cru DCLK_VOP2_SRC>;
+			 <&cru DCLK_VOP2_SRC>,
+			 <&cru ACLK_VOP_DOBY>,
+			 <&cru ACLK_VOP_DIV2_SRC>,
+			 <&cru ACLK_VOP_ROOT>;
 		clock-names = "aclk_vop",
 			      "hclk_vop",
 			      "dclk_vp0",
@@ -4640,7 +4645,10 @@
 			      "pclk_vop",
 			      "dclk_src_vp0",
 			      "dclk_src_vp1",
-			      "dclk_src_vp2";
+			      "dclk_src_vp2",
+			      "aclk_dovi",
+			      "aclk_vop_div2_src",
+			      "aclk_vop_root";
 		assigned-clocks = <&cru ACLK_VOP>;
 		assigned-clock-rates = <750000000>;
 		resets = <&cru SRST_A_VOP>,
@@ -5243,6 +5251,16 @@
 	qos_sdio: qos@fdf39000 {
 		compatible = "syscon";
 		reg = <0x0 0xfdf39000 0x0 0x20>;
+	};
+
+	qos_gic600_m0: qos@fdf3a000 {
+		compatible = "syscon";
+		reg = <0x0 0xfdf3a000 0x0 0x20>;
+	};
+
+	qos_gic600_m1: qos@fdf3a200 {
+		compatible = "syscon";
+		reg = <0x0 0xfdf3a200 0x0 0x20>;
 	};
 
 	qos_sdmmc: qos@fdf3d800 {

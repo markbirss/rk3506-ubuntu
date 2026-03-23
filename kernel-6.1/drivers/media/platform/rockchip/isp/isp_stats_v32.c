@@ -427,7 +427,7 @@ rkisp_stats_update_buf(struct rkisp_isp_stats_vdev *stats_vdev)
 {
 	struct rkisp_device *dev = stats_vdev->dev;
 	struct rkisp_buffer *buf;
-	unsigned long flags;
+	unsigned long flags = 0;
 	u32 size = stats_vdev->vdev_fmt.fmt.meta.buffersize;
 	u32 val = 0;
 	int i;
@@ -556,7 +556,7 @@ rkisp_stats_send_meas(struct rkisp_isp_stats_vdev *stats_vdev,
 	u32 size = stats_vdev->vdev_fmt.fmt.meta.buffersize;
 	u32 cur_frame_id = meas_work->frame_id;
 	bool is_dummy = false;
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	if (!stats_vdev->rdbk_drop) {
 		if (!cur_buf && stats_vdev->stats_buf[0].mem_priv) {
@@ -924,15 +924,16 @@ rkisp_stats_send_meas_lite(struct rkisp_isp_stats_vdev *stats_vdev,
 	struct rkisp_buffer *cur_buf = stats_vdev->cur_buf;
 	struct rkisp32_lite_stat_buffer *cur_stat_buf = NULL;
 	u32 size = stats_vdev->vdev_fmt.fmt.meta.buffersize;
+	unsigned long flags = 0;
 
 	if (hw->unite != ISP_UNITE_ONE || dev->unite_index == ISP_UNITE_LEFT) {
-		spin_lock(&stats_vdev->rd_lock);
+		spin_lock_irqsave(&stats_vdev->rd_lock, flags);
 		if (!list_empty(&stats_vdev->stat)) {
 			cur_buf = list_first_entry(&stats_vdev->stat, struct rkisp_buffer, queue);
 			list_del(&cur_buf->queue);
 			stats_vdev->cur_buf = cur_buf;
 		}
-		spin_unlock(&stats_vdev->rd_lock);
+		spin_unlock_irqrestore(&stats_vdev->rd_lock, flags);
 	}
 
 	if (cur_buf) {
@@ -1019,10 +1020,11 @@ rkisp_stats_isr_v32(struct rkisp_isp_stats_vdev *stats_vdev,
 		ISP3X_EXP_END | ISP3X_SIHST_RDY | ISP3X_AFM_SUM_OF | ISP3X_AFM_LUM_OF;
 	u32 cur_frame_id, isp_mis_tmp = 0;
 	u32 temp_isp_ris, temp_isp3a_ris;
+	unsigned long flags = 0;
 
 	rkisp_dmarx_get_frame(stats_vdev->dev, &cur_frame_id, NULL, NULL, true);
 
-	spin_lock(&stats_vdev->irq_lock);
+	spin_lock_irqsave(&stats_vdev->irq_lock, flags);
 
 	temp_isp_ris = isp3_stats_read(stats_vdev, ISP3X_ISP_RIS);
 	temp_isp3a_ris = isp3_stats_read(stats_vdev, ISP3X_ISP_3A_RIS);
@@ -1058,7 +1060,7 @@ rkisp_stats_isr_v32(struct rkisp_isp_stats_vdev *stats_vdev,
 		rkisp_stats_send_meas_v32(stats_vdev, &work);
 	}
 
-	spin_unlock(&stats_vdev->irq_lock);
+	spin_unlock_irqrestore(&stats_vdev->irq_lock, flags);
 }
 
 static void

@@ -132,6 +132,14 @@
 #define m_RGA2_STATUS1_SW_RGA_STA			(0x1 << 0)
 
 /*RGA_INT*/
+#define m_RGA2_INT_FBCIN_DEC_ERROR_CLEAR		(1 << 24)
+#define m_RGA2_INT_FBCIN_DEC_ERROR_EN			(1 << 23)
+#define m_RGA2_INT_FBCIN_DEC_ERROR			(1 << 22)
+#define m_RGA2_INT_PREFETCH_TH_INTR			(1 << 21)
+#define m_RGA2_INT_PRE_TH_CLEAR				(1 << 20)
+#define m_RGA2_INT_SCL_ERROR_CLEAR			(1 << 19)
+#define m_RGA2_INT_SCL_ERROR_EN				(1 << 18)
+#define m_RGA2_INT_SCL_ERROR_INTR			(1 << 17)
 #define m_RGA2_INT_LINE_WR_CLEAR			(1 << 16)
 #define m_RGA2_INT_LINE_RD_CLEAR			(1 << 15)
 #define m_RGA2_INT_LINE_WR_EN				(1 << 14)
@@ -153,17 +161,23 @@
 #define m_RGA2_INT_ERROR_FLAG_MASK \
 	( \
 		m_RGA2_INT_MMU_INT_FLAG | \
-		m_RGA2_INT_ERROR_INT_FLAG \
+		m_RGA2_INT_ERROR_INT_FLAG | \
+		m_RGA2_INT_SCL_ERROR_INTR | \
+		m_RGA2_INT_FBCIN_DEC_ERROR \
 	)
 #define m_RGA2_INT_ERROR_CLEAR_MASK \
 	( \
-	m_RGA2_INT_MMU_INT_CLEAR | \
-	m_RGA2_INT_ERROR_INT_CLEAR \
+		m_RGA2_INT_MMU_INT_CLEAR | \
+		m_RGA2_INT_ERROR_INT_CLEAR | \
+		m_RGA2_INT_SCL_ERROR_CLEAR | \
+		m_RGA2_INT_FBCIN_DEC_ERROR_CLEAR \
 )
 #define m_RGA2_INT_ERROR_ENABLE_MASK \
 	( \
 		m_RGA2_INT_MMU_INT_EN | \
-		m_RGA2_INT_ERROR_INT_EN \
+		m_RGA2_INT_ERROR_INT_EN | \
+		m_RGA2_INT_SCL_ERROR_EN | \
+		m_RGA2_INT_FBCIN_DEC_ERROR_EN \
 	)
 
 #define s_RGA2_INT_LINE_WR_CLEAR(x)			((x & 0x1) << 16)
@@ -292,11 +306,15 @@
 
 
 /* RGA_SRC_ACT_INFO */
-#define m_RGA2_SRC_ACT_INFO_SW_SRC_ACT_WIDTH		(0x1fff << 0)
-#define m_RGA2_SRC_ACT_INFO_SW_SRC_ACT_HEIGHT		(0x1fff << 16)
+#define m_RGA2_SRC_ACT_INFO_SW_TILE4X4_IN_YOFF		(0x3 << 30)
+#define m_RGA2_SRC_ACT_INFO_SW_SRC_ACT_HEIGHT		(0x7ff << 16)
+#define m_RGA2_SRC_ACT_INFO_SW_TILE4X4_IN_XOFF		(0x3 << 14)
+#define m_RGA2_SRC_ACT_INFO_SW_SRC_ACT_WIDTH		(0x7ff << 0)
 
-#define s_RGA2_SRC_ACT_INFO_SW_SRC_ACT_WIDTH(x)		((x & 0x1fff) << 0)
-#define s_RGA2_SRC_ACT_INFO_SW_SRC_ACT_HEIGHT(x)	((x & 0x1fff) << 16)
+#define s_RGA2_SRC_ACT_INFO_SW_TILE4X4_IN_YOFF(x)	((x & 0x3) << 30)
+#define s_RGA2_SRC_ACT_INFO_SW_SRC_ACT_HEIGHT(x)	((x & 0x7ff) << 16)
+#define s_RGA2_SRC_ACT_INFO_SW_TILE4X4_IN_XOFF(x)	((x & 0x3) << 14)
+#define s_RGA2_SRC_ACT_INFO_SW_SRC_ACT_WIDTH(x)		((x & 0x7ff) << 0)
 
 /* RGA2_OSD_CTRL0 */
 #define m_RGA2_OSD_CTRL0_SW_OSD_MODE			(0x3 << 0)
@@ -480,6 +498,7 @@
 #define s_RGA2_MMU_CTRL1_SW_ELS_MMU_FLUSH(x)		((x & 0x1) << 13)
 
 #define RGA2_VSP_BICUBIC_LIMIT				1996
+#define RGA2_BILINEAR_PREC				12
 
 union rga2_color_ctrl {
 	uint32_t value;

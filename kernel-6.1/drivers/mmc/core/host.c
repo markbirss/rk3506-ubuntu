@@ -263,6 +263,8 @@ mmc_of_parse_clk_phase(struct mmc_host *host, struct mmc_clk_phase_map *map)
 }
 EXPORT_SYMBOL(mmc_of_parse_clk_phase);
 
+extern int wifi_tf_swich;   //定义在drivers/misc/qiyang_reset.c中
+
 /**
  * mmc_of_parse() - parse host's device properties
  * @host: host whose properties should be parsed.
@@ -323,22 +325,29 @@ int mmc_of_parse(struct mmc_host *host)
 	if (device_property_read_bool(dev, "non-removable")) {
 		host->caps |= MMC_CAP_NONREMOVABLE;
 	} else {
-		if (device_property_read_bool(dev, "cd-inverted"))
-			host->caps2 |= MMC_CAP2_CD_ACTIVE_HIGH;
+		 //一个镜像同时支持wifi或者tf卡时，如果注册cd脚导致wifi无法启动
+		if(wifi_tf_swich==0)   //切换为TF卡
+		{
+			if (device_property_read_bool(dev, "cd-inverted"))
+				host->caps2 |= MMC_CAP2_CD_ACTIVE_HIGH;
 
-		if (device_property_read_u32(dev, "cd-debounce-delay-ms",
-					     &cd_debounce_delay_ms))
-			cd_debounce_delay_ms = 200;
+			if (device_property_read_u32(dev, "cd-debounce-delay-ms",
+							&cd_debounce_delay_ms))
+				cd_debounce_delay_ms = 200;
 
-		if (device_property_read_bool(dev, "broken-cd"))
-			host->caps |= MMC_CAP_NEEDS_POLL;
+			if (device_property_read_bool(dev, "broken-cd"))
+				host->caps |= MMC_CAP_NEEDS_POLL;
 
-		ret = mmc_gpiod_request_cd(host, "cd", 0, false,
-					   cd_debounce_delay_ms * 1000);
-		if (!ret)
-			dev_info(host->parent, "Got CD GPIO\n");
-		else if (ret != -ENOENT && ret != -ENOSYS)
-			return ret;
+			ret = mmc_gpiod_request_cd(host, "cd", 0, false,
+						cd_debounce_delay_ms * 1000);
+			if (!ret)
+				dev_info(host->parent, "Got CD GPIO\n");
+			else if (ret != -ENOENT && ret != -ENOSYS)
+				return ret;
+        }else if(wifi_tf_swich==1)	//切换为wifi
+		{
+			host->caps |= MMC_CAP_NONREMOVABLE;
+		}
 	}
 
 	/* Parse Write Protection */

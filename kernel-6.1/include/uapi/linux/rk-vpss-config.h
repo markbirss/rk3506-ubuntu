@@ -27,6 +27,8 @@
  * ioctl RKVPSS_CMD_MODULE_SEL to select function using
  */
 
+#define RKVPSS_OUT_V10_MAX 4
+
 /******vpss(online mode) v4l2 ioctl***************************/
 /* set before VIDIOC_S_FMT if dynamically changing output resolution */
 #define RKVPSS_CMD_SET_STREAM_MAX_SIZE \
@@ -68,6 +70,8 @@
 #define RKVPSS_CMD_CHECKPARAMS \
 	_IOW('V', BASE_VIDIOC_PRIVATE + 55, struct rkvpss_frame_cfg)
 
+#define RKVPSS_CMD_STREAM_ATTACH_INFO \
+	_IOW('V', BASE_VIDIOC_PRIVATE + 56, int)
 /********************************************************************/
 
 /* struct rkvpss_mirror_flip
@@ -280,6 +284,29 @@ struct rkvpss_buf_info {
 	int buf_cnt;
 	int buf_size[RKVPSS_BUF_MAX];
 	int buf_fd[RKVPSS_BUF_MAX];
+} __attribute__ ((packed));
+
+struct rkvpss_frame_info {
+	__u64 timestamp;
+	__u32 seq;
+	__u32 hdr;
+	__u32 rolling_shutter_skew;
+	/* linear or hdr short frame */
+	__u32 sensor_exposure_time;
+	__u32 sensor_analog_gain;
+	__u32 sensor_digital_gain;
+	__u32 isp_digital_gain;
+	/* hdr mid-frame */
+	__u32 sensor_exposure_time_m;
+	__u32 sensor_analog_gain_m;
+	__u32 sensor_digital_gain_m;
+	__u32 isp_digital_gain_m;
+	/* hdr long frame */
+	__u32 sensor_exposure_time_l;
+	__u32 sensor_analog_gain_l;
+	__u32 sensor_digital_gain_l;
+	__u32 isp_digital_gain_l;
+	__u32 isp_reg[6144];
 } __attribute__ ((packed));
 
 #endif

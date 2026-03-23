@@ -1,10 +1,34 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Copyright (c) 2023 Fuzhou Rockchip Electronics Co., Ltd. */
+/* Copyright (c) 2023 Rockchip Electronics Co., Ltd. */
 
 #ifndef _RKVPSS_VPSS_H
 #define _RKVPSS_VPSS_H
 
-#include "common.h"
+#include <linux/delay.h>
+#include <linux/interrupt.h>
+#include <linux/iommu.h>
+#include <linux/pm_runtime.h>
+#include <linux/videodev2.h>
+#include <media/media-entity.h>
+#include <media/v4l2-event.h>
+#include <linux/version.h>
+
+#include <linux/clk.h>
+#include <linux/delay.h>
+#include <linux/pm_runtime.h>
+#include <linux/slab.h>
+#include <media/v4l2-common.h>
+#include <media/v4l2-event.h>
+#include <media/v4l2-fh.h>
+#include <media/v4l2-ioctl.h>
+#include <media/v4l2-mc.h>
+#include <media/v4l2-subdev.h>
+#include <media/videobuf2-dma-contig.h>
+#include <media/videobuf2-dma-sg.h>
+#include <uapi/linux/rk-video-format.h>
+
+#include <linux/rk-vpss-config.h>
+
 
 #define GRP_ID_VPSS		BIT(0)
 

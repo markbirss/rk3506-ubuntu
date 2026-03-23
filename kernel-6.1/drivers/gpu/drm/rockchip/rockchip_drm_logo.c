@@ -266,7 +266,7 @@ static int init_loader_memory(struct drm_device *drm_dev)
 	if (!size)
 		return -ENOMEM;
 	if (!IS_ALIGNED(res.start, PAGE_SIZE) || !IS_ALIGNED(size, PAGE_SIZE))
-		DRM_ERROR("Reserved logo memory should be aligned as:0x%lx, cureent is:start[%pad] size[%pad]\n",
+		DRM_ERROR("Reserved logo memory should be aligned as:0x%lx, current is:start[%pad] size[%pad]\n",
 			  PAGE_SIZE, &res.start, &size);
 	if (pg_size != PAGE_SIZE)
 		DRM_WARN("iommu page size[0x%x] isn't equal to OS page size[0x%lx]\n", pg_size, PAGE_SIZE);
@@ -311,7 +311,7 @@ static int init_loader_memory(struct drm_device *drm_dev)
 	if (!size)
 		return 0;
 	if (!IS_ALIGNED(res.start, PAGE_SIZE) || !IS_ALIGNED(size, PAGE_SIZE))
-		DRM_ERROR("Reserved drm cubic memory should be aligned as:0x%lx, cureent is:start[%pad] size[%pad]\n",
+		DRM_ERROR("Reserved drm cubic memory should be aligned as:0x%lx, current is:start[%pad] size[%pad]\n",
 			  PAGE_SIZE, &res.start, &size);
 
 	private->cubic_lut_kvaddr = phys_to_virt(start);
@@ -730,11 +730,34 @@ static void rockchip_drm_mode_fixup(struct drm_crtc_state *crtc_state,
 	const struct drm_crtc_helper_funcs *crtc_funcs;
 	struct drm_encoder *encoder = conn_state->best_encoder;
 	struct drm_crtc *crtc = crtc_state->crtc;
+	struct drm_bridge *bridge;
+	struct drm_bridge_state *bridge_state;
 	int ret;
 
 	ret = drm_atomic_set_mode_for_crtc(crtc_state, adj_mode);
 	if (ret)
 		return;
+
+	bridge = drm_bridge_chain_get_first_bridge(encoder);
+	/*
+	 * Check whether the bridge supports atomic mode or not.
+	 * According to the include/drm/drm_bridge.h, the following functions
+	 * are mandatory in atomic mode:
+	 * &drm_bridge_funcs.atomic_reset()
+	 * &drm_bridge_funcs.atomic_duplicate_state()
+	 * &drm_bridge_funcs.atomic_destroy_state()
+	 *
+	 * For some bridge drivers that have not supported atomic mode yet:
+	 * drivers/gpu/drm/bridge/sii902x.c
+	 * drivers/gpu/drm/bridge/rk630-tve.c
+	 */
+	if (bridge && bridge->funcs->atomic_duplicate_state) {
+		bridge_state = drm_atomic_get_bridge_state(crtc_state->state, bridge);
+		if (IS_ERR(bridge_state))
+			return;
+
+		drm_atomic_bridge_chain_check(bridge, crtc_state, conn_state);
+	}
 
 	encoder_funcs = encoder->helper_private;
 	if (encoder_funcs && encoder_funcs->atomic_check)

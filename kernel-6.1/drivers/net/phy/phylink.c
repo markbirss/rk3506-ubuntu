@@ -115,9 +115,6 @@ do {									\
 })
 #endif
 
-static int phylink_phy_write(struct phylink *pl, unsigned int phy_id,
-			     unsigned int reg, unsigned int val);
-
 /**
  * phylink_set_port_modes() - set the port type modes in the ethtool mask
  * @mask: ethtool link mode mask
@@ -1946,28 +1943,6 @@ void phylink_start(struct phylink *pl)
 		phy_start(pl->phydev);
 	if (pl->sfp_bus)
 		sfp_upstream_start(pl->sfp_bus);
-
-#ifdef CONFIG_CH182H2_LED_TRIGGER_PHY
-	int ret;
-
-	/* Set network indicator light default mode */
-	ret = phylink_phy_write(pl, pl->phydev->mdio.addr, 0x1f, 0x07);
-	if(ret < 0)
-		phylink_err(pl,
-			"Failed to send command 0x07 to PHY chip reg 0x1f failed: %pe\n",
-			ERR_PTR(ret));
-	ret = phylink_phy_write(pl, pl->phydev->mdio.addr, 0x13, 0x08);
-	if(ret < 0)
-		phylink_err(pl,
-			"Failed to send command 0x08 to PHY chip reg 0x13 failed: %pe\n",
-			ERR_PTR(ret));
-	ret = phylink_phy_write(pl, pl->phydev->mdio.addr, 0x11, 0x43);
-	if(ret < 0)
-		phylink_err(pl,
-			"Failed to send command 0x43 to PHY chip reg 0x11 failed: %pe\n",
-			ERR_PTR(ret));
-#endif
-
 }
 EXPORT_SYMBOL_GPL(phylink_start);
 

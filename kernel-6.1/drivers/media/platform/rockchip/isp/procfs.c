@@ -889,11 +889,13 @@ static void isp39_show(struct rkisp_device *dev, struct seq_file *p)
 	seq_printf(p, "%-10s %s(0x%x 0x%x 0x%x) bypass:%d iirsparse:%d size:%d\n",
 		   "BAY3D", (val & 1) ? "ON" : "OFF", val, val1, val2,
 		   !!(val & BIT(1)), !!(val & BIT(2)),
-		   priv ? priv->buf_3dnr_iir.size : 0);
-	val = rkisp_read(dev, ISP39_YUVME_CTRL, false);
-	seq_printf(p, "%-10s %s(0x%x) bypass:%d size:%d\n",
-		   "YUVME", (val & 1) ? "ON" : "OFF", val, !!(val & BIT(1)),
-		   priv ? priv->buf_3dnr_cur.size : 0);
+		   priv->buf_bay3d_iir[0].size);
+	val = rkisp_read(dev, ISP3X_MI_RD_CTRL2, false);
+	seq_printf(p, "%-10s %s(0x%x) iir(idx:%d cnt:%d) gain(idx:%d cnt:%d) aiisp(idx:%d cnt:%d)\n",
+		   "AINR", (val & ISP39_AIISP_EN) ? "ON" : "OFF", val,
+		   priv->bay3d_iir_cur_idx, priv->bay3d_iir_cnt,
+		   priv->gain_cur_idx, priv->gain_cnt,
+		   priv->aiisp_cur_idx, priv->aiisp_cnt);
 	val = rkisp_read(dev, ISP3X_YNR_GLOBAL_CTRL, false);
 	seq_printf(p, "%-10s %s(0x%x) bypass(lospnr:%d hispnr:%d)\n",
 		   "YNR", (val & 1) ? "ON" : "OFF", val,
@@ -1138,6 +1140,7 @@ static int isp_show(struct seq_file *p, void *v)
 	struct rkisp_isp_subdev *sdev = &dev->isp_sdev;
 	struct rkisp_sensor_info *sensor = dev->active_sensor;
 	struct rkisp_stream *stream;
+	char info[128];
 	u32 val = 0;
 
 	seq_printf(p, "%-10s ISP:0x%x Version:v%02x.%02x.%02x\n",
@@ -1169,32 +1172,31 @@ static int isp_show(struct seq_file *p, void *v)
 	if (!(dev->isp_state & ISP_START))
 		return 0;
 
+	if (!dev->is_aiisp_en)
+		snprintf(info, sizeof(info), "time:%dms", sdev->dbg.interval / 1000 / 1000);
+	else
+		snprintf(info, sizeof(info), "time(fe:%dms be:%dms)",
+			 sdev->dbg.interval / 1000 / 1000, sdev->dbg.interval_be / 1000 / 1000);
 	if (IS_HDR_RDBK(dev->hdr.op_mode)) {
 		stream = &dev->dmarx_dev.stream[RKISP_STREAM_RAWRD2];
-		seq_printf(p, "%-10s mode:frame%d (frame:%d rate:%dms state:%s time:%dms frameloss:%d)"
+		seq_printf(p, "%-10s mode:frame%d (frame:%d rate:%dms state:%s %s frameloss:%d)"
 			   " cnt(total:%d X1:%d X2:%d X3:%d) rd_bufcnt:%d\n",
 			   "Isp offline",
 			   dev->rd_mode - 3,
 			   dev->dmarx_dev.cur_frame.id,
 			   (u32)(dev->dmarx_dev.cur_frame.timestamp - dev->dmarx_dev.pre_frame.timestamp) / 1000 / 1000,
 			   (dev->isp_state & ISP_FRAME_END) ? "idle" : "working",
-			   sdev->dbg.interval / 1000 / 1000,
-			   sdev->dbg.frameloss,
-			   dev->rdbk_cnt,
-			   dev->rdbk_cnt_x1,
-			   dev->rdbk_cnt_x2,
-			   dev->rdbk_cnt_x3,
+			   info,  sdev->dbg.frameloss,
+			   dev->rdbk_cnt, dev->rdbk_cnt_x1, dev->rdbk_cnt_x2, dev->rdbk_cnt_x3,
 			   rkisp_stream_buf_cnt(stream));
 		seq_printf(p, "\t   hw link:%d idle:%d vir(mode:%d index:%d)\n",
 			   dev->hw_dev->dev_link_num, dev->hw_dev->is_idle,
 			   dev->multi_mode, dev->multi_index);
 	} else {
-		seq_printf(p, "%-10s frame:%d state:%s time:%dms v-blank:%dus\n",
-			   "Isp online",
-			   sdev->dbg.id,
+		seq_printf(p, "%-10s frame:%d state:%s %s v-blank:%dus\n",
+			   "Isp online", sdev->dbg.id,
 			   (dev->isp_state & ISP_FRAME_END) ? "idle" : "working",
-			   sdev->dbg.interval / 1000 / 1000,
-			   sdev->dbg.delay / 1000);
+			   info, sdev->dbg.delay / 1000);
 	}
 	if (dev->br_dev.en)
 		seq_printf(p, "%-10s rkispp%d Format:%s%s Size:%dx%d (frame:%d rate:%dms frameloss:%d)\n",

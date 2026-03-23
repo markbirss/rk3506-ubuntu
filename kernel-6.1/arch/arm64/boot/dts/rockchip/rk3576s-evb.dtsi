@@ -805,10 +805,6 @@
 	status = "okay";
 };
 
-&u2phy1 {
-	status = "okay";
-};
-
 &u2phy0_otg {
 	status = "okay";
 };

@@ -80,7 +80,8 @@ struct temp_opp_table {
  * @low_temp_min_volt:	Minimum voltage of OPPs when low temperature, in
  *			microvolt
  * @high_temp_max_volt:	Maximum voltage when high temperature, in microvolt
- * @video_4k_freq:	Maximum frequency when paly 4k video, in KHz
+ * @video_1080p_freq:	Maximum frequency when play 1080p video, in KHz
+ * @video_4k_freq:	Maximum frequency when play 4k video, in KHz
  * @reboot_freq:	Limit maximum and minimum frequency when reboot, in KHz
  * @status_min_limit:	Minimum frequency of some status frequency, in KHz
  * @status_max_limit:	Minimum frequency of all status frequency, in KHz
@@ -111,6 +112,7 @@ struct monitor_dev_info {
 	unsigned long low_temp_min_volt;
 	unsigned long high_temp_max_volt;
 	unsigned int early_suspend_freq;
+	unsigned int video_1080p_freq;
 	unsigned int video_4k_freq;
 	unsigned int reboot_freq;
 	unsigned int status_min_limit;

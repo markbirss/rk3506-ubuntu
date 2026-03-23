@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright (C) 2020 Rockchip Electronics Co., Ltd */
+/* Copyright (C) 2020 Rockchip Electronics Co., Ltd. */
 
 #include <linux/clk.h>
 #include <linux/delay.h>
@@ -1387,6 +1387,7 @@ static int rkisp_hw_probe(struct platform_device *pdev)
 	hw_dev->dev_num = 0;
 	hw_dev->dev_link_num = 0;
 	hw_dev->cur_dev_id = 0;
+	hw_dev->cur_be_dev_id = 0;
 	hw_dev->mipi_dev_id = 0;
 	hw_dev->pre_dev_id = -1;
 	hw_dev->is_multi_overflow = false;
@@ -1398,6 +1399,7 @@ static int rkisp_hw_probe(struct platform_device *pdev)
 	INIT_LIST_HEAD(&hw_dev->rpt_list);
 	hw_dev->buf_init_cnt = 0;
 	hw_dev->is_idle = true;
+	hw_dev->is_be_idle = true;
 	hw_dev->is_single = true;
 	hw_dev->is_mi_update = false;
 	hw_dev->is_dma_contig = true;
@@ -1451,6 +1453,7 @@ static int __maybe_unused rkisp_runtime_suspend(struct device *dev)
 	int i;
 
 	hw_dev->is_idle = true;
+	hw_dev->is_be_idle = true;
 	if (dev->power.runtime_status) {
 		hw_dev->dev_link_num = 0;
 		hw_dev->is_single = true;

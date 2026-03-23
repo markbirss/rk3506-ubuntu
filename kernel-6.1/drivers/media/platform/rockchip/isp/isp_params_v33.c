@@ -3956,10 +3956,11 @@ rkisp_params_first_cfg_v33(struct rkisp_isp_params_vdev *params_vdev)
 {
 	struct isp33_isp_params_cfg *params = params_vdev->isp33_params;
 	struct rkisp_device *dev = params_vdev->dev;
+	unsigned long flags = 0;
 	int i;
 
 	rkisp_params_check_bigmode_v33(params_vdev);
-	spin_lock(&params_vdev->config_lock);
+	spin_lock_irqsave(&params_vdev->config_lock, flags);
 	for (i = 0; i < dev->unite_div; i++) {
 		u64 module_cfg_update = params->module_cfg_update;
 		u64 module_en_update = params->module_en_update;
@@ -3975,7 +3976,7 @@ rkisp_params_first_cfg_v33(struct rkisp_isp_params_vdev *params_vdev)
 		__isp_isr_other_en(params_vdev, params + i, RKISP_PARAMS_ALL, i);
 		__isp_isr_meas_en(params_vdev, params + i, RKISP_PARAMS_ALL, i);
 	}
-	spin_unlock(&params_vdev->config_lock);
+	spin_unlock_irqrestore(&params_vdev->config_lock, flags);
 
 	if (dev->hw_dev->is_single && (dev->isp_state & ISP_START)) {
 		rkisp_set_bits(dev, ISP3X_ISP_CTRL0, 0, CIF_ISP_CTRL_ISP_CFG_UPD, true);
@@ -4378,9 +4379,10 @@ rkisp_params_cfg_v33(struct rkisp_isp_params_vdev *params_vdev,
 	struct rkisp_device *dev = params_vdev->dev;
 	struct isp33_isp_params_cfg *new_params = NULL;
 	struct rkisp_buffer *cur_buf = params_vdev->cur_buf;
+	unsigned long flags = 0;
 	int i;
 
-	spin_lock(&params_vdev->config_lock);
+	spin_lock_irqsave(&params_vdev->config_lock, flags);
 	if (!params_vdev->streamon)
 		goto unlock;
 
@@ -4443,7 +4445,7 @@ rkisp_params_cfg_v33(struct rkisp_isp_params_vdev *params_vdev,
 
 unlock:
 	params_vdev->cur_buf = cur_buf;
-	spin_unlock(&params_vdev->config_lock);
+	spin_unlock_irqrestore(&params_vdev->config_lock, flags);
 }
 
 static void

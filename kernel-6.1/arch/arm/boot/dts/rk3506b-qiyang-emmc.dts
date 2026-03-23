@@ -1,0 +1,225 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright (c) 2024 Rockchip Electronics Co., Ltd.
+ */
+
+/dts-v1/;
+
+#include "rk3506.dtsi"
+#include "rk3506-evb1-v10.dtsi"
+
+/ {
+	model = "Rockchip RK3506B(BGA) EVB1 V10 Board";
+	compatible = "rockchip,rk3506b-evb1-v10", "rockchip,rk3506";
+
+	chosen {
+		bootargs = "earlycon=uart8250,mmio32,0xff0a0000 console=ttyFIQ0 root=PARTUUID=614e0000-0000 rw rootwait snd_aloop.index=7 snd_aloop.use_raw_jiffies=1";
+	};
+
+	leds: leds {
+		compatible = "gpio-leds";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_gpio_led>;
+
+		run_led: run {
+			label = "led_run";
+			gpios = <&gpio0 RK_PD0 GPIO_ACTIVE_LOW>;
+			linux,default-trigger = "heartbeat";
+			default-state = "off";
+		};
+	};
+
+	vcc5v0_otg0: vcc5v0-otg0-regulator {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc5v0_otg0";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		enable-active-high;
+		gpio = <&gpio1 RK_PA0 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&vcc5v0_otg0_en>;
+	};
+
+	vcc5v0_5V: vcc5v0-regulator {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc5v0_5V";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		gpio = <&gpio0 RK_PA2 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+        regulator-always-on;
+		regulator-boot-on;
+	};
+
+	spk_pwren: spk_pwren-regulator {
+		compatible = "regulator-fixed";
+		regulator-name = "spk_pwren";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&gpio1 RK_PC0 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+        regulator-always-on;
+		regulator-boot-on;
+	};
+
+	pwr4g_3v3: pwr4g_3v3-regulator {
+		compatible = "regulator-fixed";
+		regulator-name = "pwr4g_3v3";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&gpio1 RK_PA4 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+        regulator-always-on;
+		regulator-boot-on;
+	};
+
+	hub_4g_gpio {
+		compatible = "qiyang,qiyang_usb";
+		pinctrl-names = "default";
+        pinctrl-0 = <&pinctrl_hub_4g>;
+		reset-gpios = <&gpio1 RK_PA1 GPIO_ACTIVE_LOW>;
+		reset-4g-gpios = <&gpio1 RK_PA2 GPIO_ACTIVE_LOW>;
+		reset-duration = <20>;
+		status = "okay";
+	};
+
+	wireless-bluetooth {
+		status = "disabled";
+	};
+
+	wireless-wlan {
+		status = "disabled";
+	};
+};
+
+&cma {
+	size = <0x1600000>;
+};
+
+&dsi {
+	status = "okay";
+};
+
+&dsi_dphy {
+	status = "okay";
+};
+
+&dsi_in_vop {
+	status = "okay";
+};
+
+&es8388 {
+	status = "okay";
+};
+
+&es8388_sound {
+	status = "okay";
+};
+
+&pinctrl {
+	usb {
+		vcc5v0_otg0_en: vcc5v0-otg0-en {
+			rockchip,pins = <1 RK_PA0 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+
+	};
+
+	hub-4g-reset {
+       pinctrl_hub_4g: pinctrl_hub_4g-reset{
+           rockchip,pins =
+          	<1 RK_PA1 RK_FUNC_GPIO &pcfg_pull_none>,
+		  	<1 RK_PA2 RK_FUNC_GPIO &pcfg_pull_none>;
+       };
+	};
+
+	leds {
+		pinctrl_gpio_led: pinctrl_gpio_led {
+			rockchip,pins = <0 RK_PD0 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
+};
+
+&route_dsi {
+	status = "okay";
+};
+
+&sai1 {
+	status = "disabled";
+};
+
+&u2phy_otg0 {
+	vbus-supply = <&vcc5v0_otg0>;
+	status = "okay";
+};
+
+&u2phy_otg1 {
+	status = "okay";
+};
+
+&can0 {
+	pinctrl-names = "default";
+    pinctrl-0 = <&rm_io13_can0_tx &rm_io12_can0_rx>;
+	status = "okay";
+};
+
+&can1 {
+	pinctrl-names = "default";
+    pinctrl-0 = <&rm_io15_can1_tx &rm_io14_can1_rx>;
+	status = "okay";
+};
+
+&i2c2 {
+	rtc_pc8563: pc8563@51 {
+		compatible = "nxp,pcf8563";
+		reg = <0x51>;
+		status = "okay";
+    };
+};
+
+&uart1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&rm_io10_uart1_tx &rm_io9_uart1_rx>;
+	rs485-de-gpios = <&gpio0 RK_PB3 GPIO_ACTIVE_HIGH>;
+	linux,rs485-enabled-at-boot-time;
+	rs485-rts-active-low;
+	status = "okay";
+};
+
+&uart2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&rm_io7_uart2_tx &rm_io6_uart2_rx>;
+	rs485-de-gpios = <&gpio0 RK_PB0 GPIO_ACTIVE_HIGH>;
+	linux,rs485-enabled-at-boot-time;
+	rs485-rts-active-low;
+	status = "okay";
+};
+
+&uart3 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&rm_io5_uart3_tx &rm_io4_uart3_rx>;
+	status = "okay";
+};
+
+&uart4 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&rm_io3_uart4_tx &rm_io0_uart4_rx>;
+	status = "okay";
+};
+
+&uart5 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart5m1_xfer_pins &uart5m1_ctsn_pins &uart5m1_rtsn_pins>;
+	status = "okay";
+};
+
+&mmc {
+	no-sd;
+	non-removable;
+};
+
+&fspi {
+	status = "disabled";
+	flash@0 {
+		status = "disabled";
+	};
+};

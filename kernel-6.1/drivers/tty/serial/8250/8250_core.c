@@ -1014,11 +1014,11 @@ int serial8250_register_8250_port(const struct uart_8250_port *up)
 		uart->capabilities	= up->capabilities;
 		uart->port.throttle	= up->port.throttle;
 		uart->port.unthrottle	= up->port.unthrottle;
-		uart->port.rs485_config	= up->port.rs485_config;
+		uart->port.rs485_config	= serial8250_em485_config;
 		uart->port.rs485_supported = up->port.rs485_supported;
 		uart->port.rs485	= up->port.rs485;
-		uart->rs485_start_tx	= up->rs485_start_tx;
-		uart->rs485_stop_tx	= up->rs485_stop_tx;
+		uart->rs485_start_tx    = serial8250_em485_start_tx;
+		uart->rs485_stop_tx     = serial8250_em485_stop_tx;
 		uart->lsr_save_mask	= up->lsr_save_mask;
 		uart->dma		= up->dma;
 #ifdef CONFIG_ARCH_ROCKCHIP

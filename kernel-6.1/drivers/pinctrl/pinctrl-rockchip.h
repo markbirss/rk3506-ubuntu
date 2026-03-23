@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2020-2021 Rockchip Electronics Co. Ltd.
+ * Copyright (c) 2020-2021 Rockchip Electronics Co., Ltd.
  *
  * Copyright (c) 2013 MundoReader S.L.
  * Author: Heiko Stuebner <heiko@sntech.de>
@@ -183,6 +183,9 @@
 #define RK_GPIO4_D6	158
 #define RK_GPIO4_D7	159
 
+#define RK_GPIO_IRQ_MAX_NUM		4
+#define RK_GPIO_EXP_IRQ_MAX_PIN_NUM	2
+
 enum rockchip_pinctrl_type {
 	PX30,
 	RV1106,
@@ -301,6 +304,9 @@ struct rockchip_drv {
  * @clk: clock of the gpio bank
  * @db_clk: clock of the gpio debounce
  * @irq: interrupt of the gpio bank
+ * @irq_pins: masks of the irq pins
+ * @irq_pin_id: pin number of the irq pin
+ * @cpu_affinity: cpu affinity of the irq pin
  * @saved_masks: Saved content of GPIO_INTEN at suspend time.
  * @pin_base: first pin number
  * @nr_pins: number of pins in this bank
@@ -328,7 +334,10 @@ struct rockchip_pin_bank {
 	struct regmap			*regmap_pull;
 	struct clk			*clk;
 	struct clk			*db_clk;
-	int				irq;
+	int				irq[RK_GPIO_IRQ_MAX_NUM];
+	u32				irq_pins[RK_GPIO_IRQ_MAX_NUM];
+	int				irq_pin_id[RK_GPIO_IRQ_MAX_NUM][RK_GPIO_EXP_IRQ_MAX_PIN_NUM];
+	int				cpu_affinity[RK_GPIO_IRQ_MAX_NUM];
 	u32				saved_masks;
 	u32				pin_base;
 	u8				nr_pins;

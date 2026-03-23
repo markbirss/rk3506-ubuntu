@@ -101,7 +101,7 @@
 		dsmc_clk_pins: dsmc-clk-pins {
 			rockchip,pins =
 				/* dsmc_clkn */
-				<1 RK_PA1 2 &pcfg_pull_up>,
+				<1 RK_PA1 2 &pcfg_pull_up_drv_level_3>,
 				/* dsmc_resetn */
 				<1 RK_PC0 2 &pcfg_pull_up>;
 		};
@@ -123,7 +123,7 @@
 		dsmc_bus16_pins: dsmc-bus16-pins {
 			rockchip,pins =
 				/* dsmc_clkp */
-				<1 RK_PA0 2 &pcfg_pull_down>,
+				<1 RK_PA0 2 &pcfg_pull_down_drv_level_3>,
 				/* dsmc_d0 */
 				<1 RK_PA3 2 &pcfg_pull_down>,
 				/* dsmc_d1 */
@@ -1405,6 +1405,32 @@
 		rm_io12_idle_pins: rm-io12-idle-pins {
 			rockchip,pins =
 				<0 RK_PB4 RK_FUNC_GPIO &pcfg_input_enable_pull_down>;
+		};
+	};
+
+	sai3_idle {
+		sai3_sclk_idle_pins: sai3-sclk-idle-pins {
+			rockchip,pins =
+				/* sai3_sclk */
+				<2 RK_PB4 RK_FUNC_GPIO &pcfg_input_enable_pull_down>;
+		};
+
+		sai3_lrck_idle_pins: sai3-lrck-idle-pins {
+			rockchip,pins =
+				/* sai3_lrck */
+				<2 RK_PB5 RK_FUNC_GPIO &pcfg_input_enable_pull_down>;
+		};
+
+		sai3_sdi_idle_pins: sai3-sdi-idle-pins {
+			rockchip,pins =
+				/* sai3_sdi */
+				<2 RK_PB6 RK_FUNC_GPIO &pcfg_input_enable_pull_down>;
+		};
+
+		sai3_sdo_idle_pins: sai3-sdo-idle-pins {
+			rockchip,pins =
+				/* sai3_sdo */
+				<2 RK_PB7 RK_FUNC_GPIO &pcfg_input_enable_pull_down>;
 		};
 	};
 

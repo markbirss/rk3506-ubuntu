@@ -1369,7 +1369,7 @@ static void rockchip_cpufreq_policy_init(struct interactive_policy *ipolicy)
 }
 #endif
 
-int cpufreq_interactive_init(struct cpufreq_policy *policy)
+static int cpufreq_interactive_init(struct cpufreq_policy *policy)
 {
 	struct interactive_policy *ipolicy;
 	struct interactive_tunables *tunables;
@@ -1460,7 +1460,7 @@ int cpufreq_interactive_init(struct cpufreq_policy *policy)
 	return ret;
 }
 
-void cpufreq_interactive_exit(struct cpufreq_policy *policy)
+static void cpufreq_interactive_exit(struct cpufreq_policy *policy)
 {
 	struct interactive_policy *ipolicy = policy->governor_data;
 	struct interactive_tunables *tunables = ipolicy->tunables;
@@ -1495,7 +1495,7 @@ void cpufreq_interactive_exit(struct cpufreq_policy *policy)
 	interactive_policy_free(ipolicy);
 }
 
-int cpufreq_interactive_start(struct cpufreq_policy *policy)
+static int cpufreq_interactive_start(struct cpufreq_policy *policy)
 {
 	struct interactive_policy *ipolicy = policy->governor_data;
 	struct interactive_cpu *icpu;
@@ -1522,7 +1522,7 @@ int cpufreq_interactive_start(struct cpufreq_policy *policy)
 	return 0;
 }
 
-void cpufreq_interactive_stop(struct cpufreq_policy *policy)
+static void cpufreq_interactive_stop(struct cpufreq_policy *policy)
 {
 	struct interactive_policy *ipolicy = policy->governor_data;
 	struct interactive_cpu *icpu;
@@ -1540,7 +1540,7 @@ void cpufreq_interactive_stop(struct cpufreq_policy *policy)
 	}
 }
 
-void cpufreq_interactive_limits(struct cpufreq_policy *policy)
+static void cpufreq_interactive_limits(struct cpufreq_policy *policy)
 {
 	struct interactive_cpu *icpu;
 	unsigned int cpu;

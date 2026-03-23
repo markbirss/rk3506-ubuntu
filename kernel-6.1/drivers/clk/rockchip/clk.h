@@ -3,7 +3,7 @@
  * Copyright (c) 2014 MundoReader S.L.
  * Author: Heiko Stuebner <heiko@sntech.de>
  *
- * Copyright (c) 2015 Rockchip Electronics Co. Ltd.
+ * Copyright (c) 2015 Rockchip Electronics Co., Ltd.
  * Author: Xing Zheng <zhengxing@rock-chips.com>
  *
  * based on
@@ -20,6 +20,7 @@
 #include <linux/io.h>
 #include <linux/clk-provider.h>
 #include <linux/panic_notifier.h>
+#include <linux/platform_device.h>
 
 struct clk;
 
@@ -774,6 +775,15 @@ struct clk *rockchip_clk_register_ddrclk(const char *name, int flags,
 }
 #endif
 
+#if IS_REACHABLE(CONFIG_ROCKCHIP_CLK_PVTPLL)
+int rockchip_pvtpll_volt_sel_adjust(u32 clock_id, u32 volt_sel);
+#else
+static inline int rockchip_pvtpll_volt_sel_adjust(u32 clock_id, u32 volt_sel)
+{
+	return -ENODEV;
+}
+#endif
+
 #define ROCKCHIP_INVERTER_HIWORD_MASK	BIT(0)
 
 struct clk *rockchip_clk_register_inverter(const char *name,
@@ -1440,4 +1450,11 @@ static inline void rockchip_clk_disable_unused(void)
 {
 }
 #endif
+
+#ifdef CONFIG_CLK_RK312X
+extern void rkclk_cpuclk_div_setting(int div);
+#else
+static inline void rkclk_cpuclk_div_setting(int div) {}
+#endif
+
 #endif

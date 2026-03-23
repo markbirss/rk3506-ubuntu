@@ -67,6 +67,7 @@ struct rkisp_hw_dev {
 	int dev_num;
 	int dev_link_num;
 	int cur_dev_id;
+	int cur_be_dev_id;
 	int pre_dev_id;
 	int mipi_dev_id;
 	struct max_input max_in;
@@ -95,6 +96,7 @@ struct rkisp_hw_dev {
 	bool is_dma_sg_ops;
 	bool is_mmu;
 	bool is_idle;
+	bool is_be_idle;
 	bool is_single;
 	bool is_mi_update;
 	bool is_thunderboot;

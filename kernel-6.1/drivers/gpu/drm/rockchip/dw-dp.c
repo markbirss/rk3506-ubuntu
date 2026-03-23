@@ -2,7 +2,7 @@
 /*
  * Synopsys DesignWare Cores DisplayPort Transmitter Controller
  *
- * Copyright (c) 2021 Rockchip Electronics Co. Ltd.
+ * Copyright (c) 2021 Rockchip Electronics Co., Ltd.
  *
  * Author: Wyon Bi <bivvy.bi@rock-chips.com>
  *	   Zhang Yubing <yubing.zhang@rock-chips.com>
@@ -171,6 +171,9 @@
 #define DPTX_AUX_DATA3				0x0b14
 
 #define DPTX_GENERAL_INTERRUPT			0x0d00
+#define VIDEO_FIFO_OVERFLOW_STREAM3		BIT(26)
+#define VIDEO_FIFO_OVERFLOW_STREAM2		BIT(20)
+#define VIDEO_FIFO_OVERFLOW_STREAM1		BIT(14)
 #define VIDEO_FIFO_OVERFLOW_STREAM0		BIT(6)
 #define AUDIO_FIFO_OVERFLOW_STREAM0		BIT(5)
 #define SDP_EVENT_STREAM0			BIT(4)
@@ -443,7 +446,6 @@ struct dw_dp {
 	struct clk *hclk;
 	struct clk *hdcp_clk;
 	struct reset_control *rstc;
-	struct regmap *grf;
 	struct completion complete;
 	struct completion hdcp_complete;
 	int irq;
@@ -2840,7 +2842,6 @@ static irqreturn_t dw_dp_hpd_irq_handler(int irq, void *arg)
 			dp->hotplug.long_hpd = true;
 			dp->hotplug.status = hpd;
 			dp->hotplug.state = GPIO_STATE_PLUG;
-			schedule_work(&dp->hpd_work);
 		}
 	} else if (dp->hotplug.state == GPIO_STATE_PLUG) {
 		if (!hpd) {
@@ -2855,9 +2856,12 @@ static irqreturn_t dw_dp_hpd_irq_handler(int irq, void *arg)
 			dp->hotplug.long_hpd = false;
 			dp->hotplug.status = hpd;
 			dp->hotplug.state = GPIO_STATE_PLUG;
-			schedule_work(&dp->hpd_work);
 		}
 	}
+
+	if (hpd)
+		schedule_work(&dp->hpd_work);
+
 	mutex_unlock(&dp->irq_lock);
 
 
@@ -2867,6 +2871,10 @@ static irqreturn_t dw_dp_hpd_irq_handler(int irq, void *arg)
 static void dw_dp_hpd_init(struct dw_dp *dp)
 {
 	dp->hotplug.status = dw_dp_detect_no_power(dp);
+	if (dp->hpd_gpio && dp->hotplug.status) {
+		dp->hotplug.state = GPIO_STATE_PLUG;
+		dp->hotplug.long_hpd = true;
+	}
 
 	if (dp->hpd_gpio || dp->force_hpd || dp->usbdp_hpd) {
 		regmap_update_bits(dp->regmap, DPTX_CCTL, FORCE_HPD,
@@ -2900,6 +2908,14 @@ static void dw_dp_init(struct dw_dp *dp)
 
 	dw_dp_hpd_init(dp);
 	dw_dp_aux_init(dp);
+
+	regmap_update_bits(dp->regmap, DPTX_GENERAL_INTERRUPT_ENABLE,
+			   VIDEO_FIFO_OVERFLOW_STREAM0 | VIDEO_FIFO_OVERFLOW_STREAM1 |
+			   VIDEO_FIFO_OVERFLOW_STREAM2 | VIDEO_FIFO_OVERFLOW_STREAM3,
+			   FIELD_PREP(VIDEO_FIFO_OVERFLOW_STREAM0, 1) |
+			   FIELD_PREP(VIDEO_FIFO_OVERFLOW_STREAM1, 1) |
+			   FIELD_PREP(VIDEO_FIFO_OVERFLOW_STREAM2, 1) |
+			   FIELD_PREP(VIDEO_FIFO_OVERFLOW_STREAM3, 1));
 }
 
 static void dw_dp_encoder_enable(struct drm_encoder *encoder)
@@ -2907,20 +2923,25 @@ static void dw_dp_encoder_enable(struct drm_encoder *encoder)
 
 }
 
-static void dw_dp_encoder_disable(struct drm_encoder *encoder)
+static void dw_dp_encoder_atomic_disable(struct drm_encoder *encoder,
+					 struct drm_atomic_state *state)
 {
 	struct dw_dp *dp = encoder_to_dp(encoder);
-	struct drm_crtc *crtc = encoder->crtc;
-	struct rockchip_crtc_state *s = to_rockchip_crtc_state(crtc->state);
+	struct drm_crtc *old_crtc, *new_crtc;
+	struct rockchip_crtc_state *s;
 
-	if (!crtc->state->active_changed)
-		return;
+	old_crtc = drm_atomic_get_old_crtc_for_encoder(state, encoder);
+	new_crtc = drm_atomic_get_new_crtc_for_encoder(state, encoder);
 
-	if (dp->split_mode)
-		s->output_if &= ~(VOP_OUTPUT_IF_DP0 | VOP_OUTPUT_IF_DP1);
-	else
-		s->output_if &= ~(dp->id ? VOP_OUTPUT_IF_DP1 : VOP_OUTPUT_IF_DP0);
-	s->output_if_left_panel &= ~(dp->id ? VOP_OUTPUT_IF_DP1 : VOP_OUTPUT_IF_DP0);
+	if (old_crtc && old_crtc != new_crtc) {
+		s = to_rockchip_crtc_state(old_crtc->state);
+
+		if (dp->split_mode)
+			s->output_if &= ~(VOP_OUTPUT_IF_DP0 | VOP_OUTPUT_IF_DP1);
+		else
+			s->output_if &= ~(dp->id ? VOP_OUTPUT_IF_DP1 : VOP_OUTPUT_IF_DP0);
+		s->output_if_left_panel &= ~(dp->id ? VOP_OUTPUT_IF_DP1 : VOP_OUTPUT_IF_DP0);
+	}
 }
 
 static void dw_dp_mode_fixup(struct dw_dp *dp, struct drm_display_mode *adjusted_mode)
@@ -3038,7 +3059,10 @@ static enum drm_mode_status dw_dp_encoder_mode_valid(struct drm_encoder *encoder
 	struct drm_device *dev = encoder->dev;
 	struct rockchip_crtc_state *s;
 
-	if (!crtc) {
+	if (crtc) {
+		s = to_rockchip_crtc_state(crtc->state);
+		s->output_type = DRM_MODE_CONNECTOR_DisplayPort;
+	} else {
 		drm_for_each_crtc(crtc, dev) {
 			if (!drm_encoder_crtc_ok(encoder, crtc))
 				continue;
@@ -3053,7 +3077,7 @@ static enum drm_mode_status dw_dp_encoder_mode_valid(struct drm_encoder *encoder
 
 static const struct drm_encoder_helper_funcs dw_dp_encoder_helper_funcs = {
 	.enable			= dw_dp_encoder_enable,
-	.disable		= dw_dp_encoder_disable,
+	.atomic_disable		= dw_dp_encoder_atomic_disable,
 	.atomic_check		= dw_dp_encoder_atomic_check,
 	.mode_valid		= dw_dp_encoder_mode_valid,
 };
@@ -5083,6 +5107,30 @@ static irqreturn_t dw_dp_irq_handler(int irq, void *data)
 
 	if (value & HDCP_EVENT)
 		dw_dp_handle_hdcp_event(dp);
+
+	if (value & VIDEO_FIFO_OVERFLOW_STREAM0) {
+		dev_err_ratelimited(dp->dev, "video fifo overflow stream0\n");
+		regmap_write(dp->regmap, DPTX_GENERAL_INTERRUPT,
+			     VIDEO_FIFO_OVERFLOW_STREAM0);
+	}
+
+	if (value & VIDEO_FIFO_OVERFLOW_STREAM1) {
+		dev_err_ratelimited(dp->dev, "video fifo overflow stream1\n");
+		regmap_write(dp->regmap, DPTX_GENERAL_INTERRUPT,
+			     VIDEO_FIFO_OVERFLOW_STREAM1);
+	}
+
+	if (value & VIDEO_FIFO_OVERFLOW_STREAM2) {
+		dev_err_ratelimited(dp->dev, "video fifo overflow stream2\n");
+		regmap_write(dp->regmap, DPTX_GENERAL_INTERRUPT,
+			     VIDEO_FIFO_OVERFLOW_STREAM2);
+	}
+
+	if (value & VIDEO_FIFO_OVERFLOW_STREAM3) {
+		dev_err_ratelimited(dp->dev, "video fifo overflow stream3\n");
+		regmap_write(dp->regmap, DPTX_GENERAL_INTERRUPT,
+			     VIDEO_FIFO_OVERFLOW_STREAM3);
+	}
 
 	return IRQ_HANDLED;
 }

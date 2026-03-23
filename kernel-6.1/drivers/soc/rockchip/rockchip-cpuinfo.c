@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Rockchip Electronics Co. Ltd.
+ * Copyright (C) 2017 Rockchip Electronics Co., Ltd.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of version 2 of the GNU General Public License as
@@ -29,19 +29,33 @@ static int rockchip_cpuinfo_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct nvmem_cell *cell;
 	unsigned char *efuse_buf, buf[16];
+	bool is_cpu_code1_valid = false;
 	size_t len = 0;
 	int i;
 
-	cell = nvmem_cell_get(dev, "cpu-code");
+	cell = nvmem_cell_get(dev, "cpu-code1");
 	if (!IS_ERR(cell)) {
 		efuse_buf = nvmem_cell_read(cell, &len);
 		nvmem_cell_put(cell);
 		if (IS_ERR(efuse_buf))
 			return PTR_ERR(efuse_buf);
-
-		if (len == 2)
+		if (len == 2 && efuse_buf[0] && efuse_buf[1]) {
 			rockchip_set_cpu((efuse_buf[0] << 8 | efuse_buf[1]));
+			is_cpu_code1_valid = true;
+		}
 		kfree(efuse_buf);
+	}
+	if (!is_cpu_code1_valid) {
+		cell = nvmem_cell_get(dev, "cpu-code");
+		if (!IS_ERR(cell)) {
+			efuse_buf = nvmem_cell_read(cell, &len);
+			nvmem_cell_put(cell);
+			if (IS_ERR(efuse_buf))
+				return PTR_ERR(efuse_buf);
+			if (len == 2)
+				rockchip_set_cpu((efuse_buf[0] << 8 | efuse_buf[1]));
+			kfree(efuse_buf);
+		}
 	}
 
 	cell = nvmem_cell_get(dev, "cpu-version");

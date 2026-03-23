@@ -187,7 +187,7 @@ rkisp_stats_update_buf(struct rkisp_isp_stats_vdev *stats_vdev)
 {
 	struct rkisp_device *dev = stats_vdev->dev;
 	struct rkisp_buffer *buf;
-	unsigned long flags;
+	unsigned long flags = 0;
 	u32 size = stats_vdev->vdev_fmt.fmt.meta.buffersize / dev->unite_div;
 	u32 val, addr = 0, offset = 0;
 	int i, ret = 0;
@@ -328,7 +328,7 @@ rkisp_stats_send_meas_v33(struct rkisp_isp_stats_vdev *stats_vdev,
 	u32 size = stats_vdev->vdev_fmt.fmt.meta.buffersize;
 	u32 val, w3a_int, cur_frame_id = meas_work->frame_id;
 	bool is_dummy = false;
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	w3a_int = isp3_stats_read(stats_vdev, ISP39_W3A_INT_STAT);
 	if (w3a_int)

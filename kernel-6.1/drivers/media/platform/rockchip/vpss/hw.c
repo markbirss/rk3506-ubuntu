@@ -1,26 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright (C) 2023 Rockchip Electronics Co., Ltd */
+/* Copyright (C) 2023 Rockchip Electronics Co., Ltd. */
 
-#include <linux/clk.h>
-#include <linux/delay.h>
-#include <linux/interrupt.h>
-#include <linux/io.h>
-#include <linux/iommu.h>
-#include <linux/module.h>
-#include <linux/of.h>
-#include <linux/of_graph.h>
-#include <linux/of_platform.h>
-#include <linux/of_reserved_mem.h>
-#include <linux/pinctrl/consumer.h>
-#include <linux/pm_runtime.h>
-#include <linux/reset.h>
-#include <media/videobuf2-cma-sg.h>
-#include <media/videobuf2-dma-sg.h>
-#include <soc/rockchip/rockchip_iommu.h>
-
+#include "vpss.h"
 #include "common.h"
+#include "stream.h"
 #include "dev.h"
+#include "vpss_offline.h"
 #include "hw.h"
+#include "procfs.h"
 #include "regs.h"
 
 struct irqs_data {
@@ -695,10 +682,12 @@ static const struct vpss_match_data rk3576_vpss_match_data = {
 };
 
 static const struct of_device_id rkvpss_hw_of_match[] = {
+#ifdef CONFIG_VIDEO_ROCKCHIP_VPSS_V10
 	{
 		.compatible = "rockchip,rk3576-rkvpss",
 		.data = &rk3576_vpss_match_data,
 	},
+#endif
 	{},
 };
 
@@ -895,7 +884,7 @@ static int rkvpss_hw_probe(struct platform_device *pdev)
 	spin_lock_init(&hw_dev->reg_lock);
 	atomic_set(&hw_dev->refcnt, 0);
 	INIT_LIST_HEAD(&hw_dev->list);
-	for (i = 0; i < RKVPSS_OUTPUT_MAX; i++)
+	for (i = 0; i < vpss_outchn_max(hw_dev->vpss_ver); i++)
 		hw_dev->is_ofl_ch[i] = false;
 	hw_dev->is_ofl_cmsc = false;
 	hw_dev->is_single = true;

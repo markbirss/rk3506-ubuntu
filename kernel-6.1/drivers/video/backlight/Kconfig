@@ -424,10 +424,6 @@ config BACKLIGHT_SKY81452
 	  To compile this driver as a module, choose M here: the module will
 	  be called sky81452-backlight
 
-config BACKLIGHT_WAVESHARE
-	tristate "Backlight driver for Waveshare"
-	depends on I2C
-
 config BACKLIGHT_TPS65217
 	tristate "TPS65217 Backlight"
 	depends on MFD_TPS65217

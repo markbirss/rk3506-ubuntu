@@ -436,7 +436,7 @@ static void update_rawrd(struct rkisp_stream *stream)
 			};
 
 			if (!vbuf->sequence)
-				trigger.frame_id = atomic_inc_return(&dev->isp_sdev.frm_sync_seq) - 1;
+				trigger.frame_id = ++dev->dmarx_dev.cur_frame.id;
 			rkisp_rdbk_trigger_event(dev, T_CMD_QUEUE, &trigger);
 		}
 	} else if (dev->dmarx_dev.trigger == T_AUTO) {
@@ -979,7 +979,7 @@ static int rkisp_querycap(struct file *file, void *priv,
 	struct device *dev = stream->ispdev->dev;
 	struct video_device *vdev = video_devdata(file);
 
-	strlcpy(cap->card, vdev->name, sizeof(cap->card));
+	strscpy(cap->card, vdev->name, sizeof(cap->card));
 	snprintf(cap->driver, sizeof(cap->driver),
 		 "%s_v%d", dev->driver->name,
 		 stream->ispdev->isp_ver >> 4);
@@ -1158,25 +1158,25 @@ static int dmarx_init(struct rkisp_device *dev, u32 id)
 
 	switch (id) {
 	case RKISP_STREAM_DMARX:
-		strlcpy(vdev->name, DMA_VDEV_NAME,
+		strscpy(vdev->name, DMA_VDEV_NAME,
 			sizeof(vdev->name));
 		stream->ops = &rkisp_dmarx_streams_ops;
 		stream->config = &rkisp_dmarx_stream_config;
 		break;
 	case RKISP_STREAM_RAWRD0:
-		strlcpy(vdev->name, DMARX0_VDEV_NAME,
+		strscpy(vdev->name, DMARX0_VDEV_NAME,
 			sizeof(vdev->name));
 		stream->ops = &rkisp2_dmarx_streams_ops;
 		stream->config = &rkisp2_dmarx0_stream_config;
 		break;
 	case RKISP_STREAM_RAWRD1:
-		strlcpy(vdev->name, DMARX1_VDEV_NAME,
+		strscpy(vdev->name, DMARX1_VDEV_NAME,
 			sizeof(vdev->name));
 		stream->ops = &rkisp2_dmarx_streams_ops;
 		stream->config = &rkisp2_dmarx1_stream_config;
 		break;
 	case RKISP_STREAM_RAWRD2:
-		strlcpy(vdev->name, DMARX2_VDEV_NAME,
+		strscpy(vdev->name, DMARX2_VDEV_NAME,
 			sizeof(vdev->name));
 		stream->ops = &rkisp2_dmarx_streams_ops;
 		stream->config = &rkisp2_dmarx2_stream_config;
@@ -1232,30 +1232,24 @@ void rkisp_rawrd_set_pic_size(struct rkisp_device *dev,
 
 void rkisp_dmarx_get_frame(struct rkisp_device *dev, u32 *id,
 			   u64 *sof_timestamp, u64 *timestamp,
-			   bool sync)
+			   bool is_cur_frame)
 {
 	unsigned long flag = 0;
 	u64 sof_time = 0, frame_timestamp = 0;
 	u32 frame_id = 0;
 
-	if (!IS_HDR_RDBK(dev->rd_mode)) {
-		frame_id = atomic_read(&dev->isp_sdev.frm_sync_seq) - 1;
-		frame_timestamp = dev->isp_sdev.frm_timestamp;
-		goto end;
-	}
-
 	spin_lock_irqsave(&dev->rdbk_lock, flag);
-	if (sync) {
+	if (is_cur_frame) {
 		frame_id = dev->dmarx_dev.cur_frame.id;
 		sof_time = dev->dmarx_dev.cur_frame.sof_timestamp;
 		frame_timestamp = dev->dmarx_dev.cur_frame.timestamp;
 	} else {
-		frame_id = dev->dmarx_dev.pre_frame.id;
-		sof_time = dev->dmarx_dev.pre_frame.sof_timestamp;
-		frame_timestamp = dev->dmarx_dev.pre_frame.timestamp;
+		frame_id = dev->dmarx_dev.cur_be_frame.id;
+		sof_time = dev->dmarx_dev.cur_be_frame.sof_timestamp;
+		frame_timestamp = dev->dmarx_dev.cur_be_frame.timestamp;
 	}
 	spin_unlock_irqrestore(&dev->rdbk_lock, flag);
-end:
+
 	if (id)
 		*id = frame_id;
 	if (sof_timestamp)
@@ -1290,7 +1284,8 @@ int rkisp_register_dmarx_vdev(struct rkisp_device *dev)
 		if (ret < 0)
 			goto err_free_dmarx2;
 	}
-
+	dmarx_dev->cur_be_frame.id = -1;
+	dmarx_dev->cur_frame.id = -1;
 	return 0;
 err_free_dmarx2:
 	rkisp_unregister_dmarx_video(&dmarx_dev->stream[RKISP_STREAM_RAWRD2]);

@@ -12,7 +12,6 @@ obj-$(CONFIG_OF_RESERVED_MEM) += of_reserved_mem.o
 obj-$(CONFIG_OF_RESOLVE)  += resolver.o
 obj-$(CONFIG_OF_OVERLAY) += overlay.o
 obj-$(CONFIG_OF_NUMA) += of_numa.o
-obj-$(CONFIG_OF_DTBO) += dtbocfg.o
 
 ifdef CONFIG_KEXEC_FILE
 ifdef CONFIG_OF_FLATTREE

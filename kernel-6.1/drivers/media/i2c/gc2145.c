@@ -2528,10 +2528,10 @@ static void gc2145_get_module_inf(struct gc2145 *gc2145,
 				  struct rkmodule_inf *inf)
 {
 	memset(inf, 0, sizeof(*inf));
-	strlcpy(inf->base.sensor, DRIVER_NAME, sizeof(inf->base.sensor));
-	strlcpy(inf->base.module, gc2145->module_name,
+	strscpy(inf->base.sensor, DRIVER_NAME, sizeof(inf->base.sensor));
+	strscpy(inf->base.module, gc2145->module_name,
 		sizeof(inf->base.module));
-	strlcpy(inf->base.lens, gc2145->len_name, sizeof(inf->base.lens));
+	strscpy(inf->base.lens, gc2145->len_name, sizeof(inf->base.lens));
 }
 
 static long gc2145_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)

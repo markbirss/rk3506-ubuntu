@@ -2649,8 +2649,12 @@ rockchip_usb2phy_low_power_enable(struct rockchip_usb2phy *rphy,
 		if (ret)
 			return ret;
 
-		ret = property_enable(rphy->grf, &rport->port_cfg->vbus_det_en,
-				      !value);
+		if (rphy->phy_cfg->vbus_detect)
+			rphy->phy_cfg->vbus_detect(rphy, &rport->port_cfg->vbus_det_en,
+						   !value);
+		else
+			ret = property_enable(rphy->grf, &rport->port_cfg->vbus_det_en,
+					      !value);
 	} else if (rport->port_id == USB2PHY_PORT_HOST) {
 		dev_info(&rport->phy->dev, "set host port low power state %d\n",
 			 value);
@@ -4030,7 +4034,7 @@ static const struct rockchip_usb2phy_cfg rk3506_phy_cfgs[] = {
 				.utmi_iddig	= { 0x0118, 6, 6, 0, 1 },
 				.utmi_ls	= { 0x0118, 5, 4, 0, 1 },
 				.utmi_hstdet	= { 0x0118, 7, 7, 0, 1 },
-				.vbus_det_en	= { 0x003c, 15, 15, 1, 0 },
+				.vbus_det_en	= { 0x003c, 7, 7, 0, 1 },
 				.port_ls_filter_con = { 0x0160, 19, 0, 0x30100, 0x20 },
 			},
 			[USB2PHY_PORT_HOST] = {
@@ -4062,7 +4066,7 @@ static const struct rockchip_usb2phy_cfg rk3506_phy_cfgs[] = {
 				.utmi_iddig	= { 0x0118, 14, 14, 0, 1 },
 				.utmi_ls	= { 0x0118, 13, 12, 0, 1 },
 				.utmi_hstdet	= { 0x0118, 15, 15, 0, 1 },
-				.vbus_det_en	= { 0x043c, 15, 15, 1, 0 },
+				.vbus_det_en	= { 0x043c, 7, 7, 0, 1 },
 				.port_ls_filter_con = { 0x0180, 19, 0, 0x30100, 0x20 },
 			}
 		},

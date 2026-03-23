@@ -36,7 +36,7 @@
 		io-channel-names = "buttons";
 		keyup-threshold-microvolt = <1800000>;
 		poll-interval = <100>;
-
+		status = "disabled";
 		vol-up-key {
 			label = "volume up";
 			linux,code = <KEY_VOLUMEUP>;
@@ -64,7 +64,7 @@
 
 	backlight: backlight {
 		compatible = "pwm-backlight";
-		pwms = <&pwm0_4ch_2 0 25000 0>;
+		pwms = <&pwm0_4ch_2 0 25000 1>;
 		brightness-levels = <
 			  0  20  20  21  21  22  22  23
 			 23  24  24  25  25  26  26  27
@@ -123,22 +123,20 @@
 		status = "disabled";
 		compatible = "rockchip,multicodecs-card";
 		rockchip,card-name = "rockchip-es8388";
-		spk-con-gpio = <&gpio1 RK_PC6 GPIO_ACTIVE_HIGH>;
+		spk-con-gpio = <&gpio1 RK_PB7 GPIO_ACTIVE_HIGH>;
 		rockchip,pre-power-on-delay-ms = <30>;
 		rockchip,post-power-down-delay-ms = <40>;
 		rockchip,format = "i2s";
 		rockchip,mclk-fs = <256>;
-		rockchip,cpu = <&sai1>;
+		rockchip,cpu = <&sai2>;
 		rockchip,codec = <&es8388>;
 		rockchip,audio-routing =
-			"Speaker", "LOUT1",
-			"Speaker", "ROUT1",
+			"Speaker", "LOUT2",
+			"Speaker", "ROUT2",
 			"Speaker", "Speaker Power",
 			"Speaker", "Speaker Power",
 			"LINPUT1", "Main Mic",
-			"LINPUT2", "Main Mic",
-			"RINPUT1", "Main Mic",
-			"RINPUT2", "Main Mic";
+			"RINPUT1", "Main Mic";
 		pinctrl-names = "default";
 		pinctrl-0 = <&spk_ctrl>;
 	};
@@ -148,20 +146,21 @@
 		rockchip,serial-id = <0>;
 		rockchip,wake-irq = <0>;
 		rockchip,irq-mode-enable = <1>;
-		rockchip,baudrate = <1500000>;	/* Only 115200 and 1500000 */
+		rockchip,baudrate = <115200>;	/* Only 115200 and 1500000 */
 		interrupts = <GIC_SPI 115 IRQ_TYPE_LEVEL_HIGH>;
 	};
 
 	gpio_keys: gpio-keys {
 		compatible = "gpio-keys";
-		pinctrl-names = "default";
-		pinctrl-0 = <&key_wake_up>;
-
+		//pinctrl-names = "default";
+		//pinctrl-0 = <&key_wake_up>;
+		status = "disabled";
 		wake_up: wake-up {
 			label = "Wake-up";
-			gpios = <&gpio0 RK_PC1 GPIO_ACTIVE_LOW>;
+			//gpios = <&gpio0 RK_PC1 GPIO_ACTIVE_LOW>;
 			linux,code = <KEY_WAKEUP>;
 			wakeup-source;
+			status = "disabled";
 		};
 	};
 
@@ -227,8 +226,8 @@
 
 	sdio_pwrseq: sdio-pwrseq {
 		compatible = "mmc-pwrseq-simple";
-		pinctrl-names = "default";
-		pinctrl-0 = <&wifi_enable_h>;
+		//pinctrl-names = "default";
+		//pinctrl-0 = <&wifi_enable_h>;
 
 		/*
 		 * On the module itself this is one of these (depending
@@ -236,26 +235,26 @@
 		 * - SDIO_RESET_L_WL_REG_ON
 		 * - PDN (power down when low)
 		 */
-		reset-gpios = <&gpio0 RK_PB7 GPIO_ACTIVE_LOW>;
+		//reset-gpios = <&gpio0 RK_PB7 GPIO_ACTIVE_LOW>;
 	};
 
 	wireless-bluetooth {
 		compatible = "bluetooth-platdata";
-		uart_rts_gpios = <&gpio3 RK_PB5 GPIO_ACTIVE_LOW>;
-		pinctrl-names = "default", "rts_gpio";
-		pinctrl-0 = <&uart5m0_rtsn_pins>;
-		pinctrl-1 = <&uart5_gpios>;
-		BT,power_gpio    = <&gpio3 RK_PB6 GPIO_ACTIVE_HIGH>;
+		//uart_rts_gpios = <&gpio3 RK_PB5 GPIO_ACTIVE_LOW>;
+		//pinctrl-names = "default", "rts_gpio";
+		//pinctrl-0 = <&uart5m0_rtsn_pins>;
+		//pinctrl-1 = <&uart5_gpios>;
+		//BT,power_gpio    = <&gpio3 RK_PB6 GPIO_ACTIVE_HIGH>;
 		status = "okay";
 	};
 
 	wireless-wlan {
 		compatible = "wlan-platdata";
 		rockchip,grf = <&grf>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&wifi_wake_host>;
+		//pinctrl-names = "default";
+		//pinctrl-0 = <&wifi_wake_host>;
 		wifi_chip_type = "cyw43455";
-		WIFI,host_wake_irq = <&gpio0 RK_PC0 GPIO_ACTIVE_HIGH>;
+		//WIFI,host_wake_irq = <&gpio0 RK_PC0 GPIO_ACTIVE_HIGH>;
 		status = "okay";
 	};
 };
@@ -300,71 +299,51 @@
 	};
 };
 
-&i2c0 {
-	status = "okay";
-	pinctrl-names = "default";
-	pinctrl-0 = <&rm_io13_i2c0_scl
-		     &rm_io14_i2c0_sda>;
-
-	es8388: es8388@11 {
-		status = "disabled";
-		#sound-dai-cells = <0>;
-		compatible = "everest,es8388", "everest,es8323";
-		reg = <0x11>;
-		clocks = <&mclkout_sai1>;
-		clock-names = "mclk";
-		assigned-clocks = <&mclkout_sai1>;
-		assigned-clock-rates = <12288000>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&rm_io8_sai1_mclk>;
-	};
-};
-
 &mmc {
 	bus-width = <4>;
 	cap-sd-highspeed;
-	no-sd;
-	no-mmc;
+	//no-sd;
+	//no-mmc;
 	pinctrl-names = "default";
 	pinctrl-0 = <&sdmmc_clk_pins &sdmmc_cmd_pins &sdmmc_bus4_pins>;
 	ignore-pm-notify;
 	keep-power-in-suspend;
-	non-removable;
+	//non-removable;
 	mmc-pwrseq = <&sdio_pwrseq>;
 	sd-uhs-sdr104;
 	status = "okay";
 };
 
 &pinctrl {
-	gpio-keys {
-		key_wake_up: key-wake-up {
-			rockchip,pins = <0 RK_PC1 RK_FUNC_GPIO &pcfg_pull_none>;
-		};
-	};
+	// gpio-keys {
+	// 	key_wake_up: key-wake-up {
+	// 		rockchip,pins = <0 RK_PC1 RK_FUNC_GPIO &pcfg_pull_none>;
+	// 	};
+	// };
 
-	sdio-pwrseq {
-		wifi_enable_h: wifi-enable-h {
-			rockchip,pins = <0 RK_PB7 RK_FUNC_GPIO &pcfg_pull_none>;
-		};
-	};
+	// sdio-pwrseq {
+	// 	wifi_enable_h: wifi-enable-h {
+	// 		rockchip,pins = <0 RK_PB7 RK_FUNC_GPIO &pcfg_pull_none>;
+	// 	};
+	// };
 
 	speaker {
 		spk_ctrl: spk-ctrl {
-			rockchip,pins = <1 RK_PC6 RK_FUNC_GPIO &pcfg_pull_none>;
+			rockchip,pins = <1 RK_PB7 RK_FUNC_GPIO &pcfg_pull_none>;
 		};
 	};
 
-	wireless-bluetooth {
-		uart5_gpios: uart5-gpios {
-			rockchip,pins = <3 RK_PB5 RK_FUNC_GPIO &pcfg_pull_none>;
-		};
-	};
+	// wireless-bluetooth {
+	// 	uart5_gpios: uart5-gpios {
+	// 		rockchip,pins = <3 RK_PB5 RK_FUNC_GPIO &pcfg_pull_none>;
+	// 	};
+	// };
 
-	wireless-wlan {
-		wifi_wake_host: wifi-wake-host {
-			rockchip,pins = <0 RK_PC0 RK_FUNC_GPIO &pcfg_pull_up>;
-		};
-	};
+	// wireless-wlan {
+	// 	wifi_wake_host: wifi-wake-host {
+	// 		rockchip,pins = <0 RK_PC0 RK_FUNC_GPIO &pcfg_pull_up>;
+	// 	};
+	// };
 };
 
 &pwm0_4ch_0 {
@@ -381,7 +360,7 @@
 
 &pwm0_4ch_2 {
 	pinctrl-names = "active";
-	pinctrl-0 = <&rm_io3_pwm0_ch2>;
+	pinctrl-0 = <&rm_io18_pwm0_ch2>;
 	status = "okay";
 };
 
@@ -414,29 +393,33 @@
 #define GPIO0_IOC_GPIO0A_PULL_REG	0xff950200
 #define GPIO0_IOC_GPIO0B_PULL_REG	0xff950204
 #define GPIO0_IOC_GPIO0C_PULL_REG	0xff950208
+#define IOC0_GPIO0C5_SMT_REG		0xff950408
+
+#define GPIO0A02_PULL_Z			0x00330000
 #define GPIO0A3_PULL_DOWN		0x00c00080
 #define GPIO0B0_PULL_DOWN		0x00030002
-#define GPIO0C5_PULL_DOWN		0x0c000800
+#define GPIO0C5_PULL_Z			0x0c000000
+#define GPIO0C5_SMT_DISABLE		0x00200000
 
 	/* Note: support max 16 pairs */
 	rockchip,sleep-io-config = <
-		GPIO0_IOC_GPIO0C_PULL_REG GPIO0C5_PULL_DOWN /* PWM0_CH0_CPU */
+		GPIO0_IOC_GPIO0C_PULL_REG GPIO0C5_PULL_Z    /* PWM0_CH0_CPU */
+		IOC0_GPIO0C5_SMT_REG GPIO0C5_SMT_DISABLE    /* PWM0_CH0_CPU */
+		GPIO0_IOC_GPIO0A_PULL_REG GPIO0A02_PULL_Z   /* PWRCTRL0, PWRCTRL1 */
 		GPIO0_IOC_GPIO0A_PULL_REG GPIO0A3_PULL_DOWN /* PWM0_CH2_LCD_BL */
 		GPIO0_IOC_GPIO0B_PULL_REG GPIO0B0_PULL_DOWN /* SAI1_MCLK */
 	>;
 };
 
-&sai1 {
-	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&rm_io9_sai1_sclk
-		     &rm_io10_sai1_lrck
-		     &rm_io11_sai1_sdi
-		     &rm_io12_sai1_sdo0>;
-	pinctrl-1 = <&rm_io9_idle_pins
-		     &rm_io10_idle_pins
-		     &rm_io11_idle_pins
-		     &rm_io12_idle_pins>;
+&sai2{
+	pinctrl-names = "default";
+	pinctrl-0 = <&sai2m1_lrck_pins
+			     &sai2m1_sclk_pins
+			     &sai2m1_sdi_pins
+			     &sai2m1_sdo_pins>;
+	status = "okay";
 };
+
 
 &sai4 {
 	status = "okay";
@@ -444,7 +427,7 @@
 
 &saradc {
 	vref-supply = <&vcc_1v8>;
-	status = "okay";
+	status = "disabled";
 };
 
 &tsadc {
@@ -452,8 +435,8 @@
 };
 
 &uart5 {
-	pinctrl-0 = <&uart5m0_xfer_pins &uart5m0_ctsn_pins>;
-	status = "okay";
+	// pinctrl-0 = <&uart5m0_xfer_pins &uart5m0_ctsn_pins>;
+	// status = "okay";
 };
 
 &u2phy_otg0 {

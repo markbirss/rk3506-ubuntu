@@ -474,12 +474,12 @@ static struct clk *pcf8563_clkout_register_clk(struct pcf8563 *pcf8563)
 	int ret;
 	unsigned char buf;
 
-	/* disable the clkout output */
-	buf = 0;
+	/* enable the clkout output */
+	buf = 0x80;
 	ret = pcf8563_write_block_data(client, PCF8563_REG_CLKO, 1, &buf);
 	if (ret < 0)
 		return ERR_PTR(ret);
-
+return 0;
 	init.name = "pcf8563-clkout";
 	init.ops = &pcf8563_clkout_ops;
 	init.flags = 0;

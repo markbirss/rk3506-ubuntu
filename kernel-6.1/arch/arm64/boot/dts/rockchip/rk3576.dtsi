@@ -2495,6 +2495,7 @@
 		rockchip,temp-hysteresis = <5000>;
 		rockchip,low-temp = <15000>;
 		rockchip,low-temp-min-volt = <750000>;
+		rockchip,init-freq = <950000>;
 
 		opp-300000000 {
 			opp-supported-hw = <0xf9 0xffff>;
@@ -3399,6 +3400,12 @@
 			      "dclk_src_vp0",
 			      "dclk_src_vp1",
 			      "dclk_src_vp2";
+		resets = <&cru SRST_D_VP0>,
+			 <&cru SRST_D_VP1>,
+			 <&cru SRST_D_VP2>;
+		reset-names = "dclk_vp0",
+			      "dclk_vp1",
+			      "dclk_vp2";
 		rockchip,aclk-normal-mode-rates = <500000000>;
 		rockchip,aclk-reset-mode-rates = <594000000>;
 		rockchip,aclk-advanced-mode-rates = <702000000>;
@@ -4784,7 +4791,6 @@
 			 <&cru CLK_REF_UFS_CLKOUT>;
 		clock-names = "core", "pclk", "pclk_mphy",
 			      "ref_out";
-		freq-table-hz = <50000000 250000000>, <0 0>, <0 0>, <0 0>;
 		assigned-clocks = <&cru CLK_REF_OSC_MPHY>;
 		assigned-clock-parents = <&cru CLK_REF_MPHY_26M>;
 		interrupts = <GIC_SPI 361 IRQ_TYPE_LEVEL_HIGH>;
@@ -5441,8 +5447,6 @@
 		clock-names = "baudclk", "apb_pclk";
 		resets = <&cru SRST_CAN0>, <&cru SRST_H_CAN0>;
 		reset-names = "can", "can-apb";
-		dmas = <&dmac0 20>;
-		dma-names = "rx";
 		status = "disabled";
 	};
 
@@ -5454,8 +5458,6 @@
 		clock-names = "baudclk", "apb_pclk";
 		resets = <&cru SRST_CAN1>, <&cru SRST_H_CAN1>;
 		reset-names = "can", "can-apb";
-		dmas = <&dmac1 21>;
-		dma-names = "rx";
 		status = "disabled";
 	};
 
@@ -6391,7 +6393,10 @@
 		gpio0: gpio@27320000 {
 			compatible = "rockchip,gpio-bank";
 			reg = <0x0 0x27320000 0x0 0x200>;
-			interrupts = <GIC_SPI 153 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts = <GIC_SPI 153 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 154 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 155 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 156 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&cru PCLK_GPIO0>, <&cru DBCLK_GPIO0>;
 
 			gpio-controller;
@@ -6404,7 +6409,10 @@
 		gpio1: gpio@2ae10000 {
 			compatible = "rockchip,gpio-bank";
 			reg = <0x0 0x2ae10000 0x0 0x200>;
-			interrupts = <GIC_SPI 157 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts = <GIC_SPI 157 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 158 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 159 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 160 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&cru PCLK_GPIO1>, <&cru DBCLK_GPIO1>;
 
 			gpio-controller;
@@ -6417,7 +6425,10 @@
 		gpio2: gpio@2ae20000 {
 			compatible = "rockchip,gpio-bank";
 			reg = <0x0 0x2ae20000 0x0 0x200>;
-			interrupts = <GIC_SPI 161 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts = <GIC_SPI 161 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 162 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 163 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 164 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&cru PCLK_GPIO2>, <&cru DBCLK_GPIO2>;
 
 			gpio-controller;
@@ -6430,7 +6441,10 @@
 		gpio3: gpio@2ae30000 {
 			compatible = "rockchip,gpio-bank";
 			reg = <0x0 0x2ae30000 0x0 0x200>;
-			interrupts = <GIC_SPI 165 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts = <GIC_SPI 165 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 166 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 167 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 168 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&cru PCLK_GPIO3>, <&cru DBCLK_GPIO3>;
 
 			gpio-controller;
@@ -6443,7 +6457,10 @@
 		gpio4: gpio@2ae40000 {
 			compatible = "rockchip,gpio-bank";
 			reg = <0x0 0x2ae40000 0x0 0x200>;
-			interrupts = <GIC_SPI 169 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts = <GIC_SPI 169 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 170 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 171 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 172 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&cru PCLK_GPIO4>, <&cru DBCLK_GPIO4>;
 
 			gpio-controller;

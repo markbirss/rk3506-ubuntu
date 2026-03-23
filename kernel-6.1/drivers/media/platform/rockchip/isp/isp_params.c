@@ -61,8 +61,8 @@ static int rkisp_params_querycap(struct file *file,
 	snprintf(cap->driver, sizeof(cap->driver),
 		 "%s_v%d", DRIVER_NAME,
 		 params_vdev->dev->isp_ver >> 4);
-	strlcpy(cap->card, vdev->name, sizeof(cap->card));
-	strlcpy(cap->bus_info, "platform: " DRIVER_NAME, sizeof(cap->bus_info));
+	strscpy(cap->card, vdev->name, sizeof(cap->card));
+	strscpy(cap->bus_info, "platform: " DRIVER_NAME, sizeof(cap->bus_info));
 	cap->version = RKISP_DRIVER_VERSION;
 	return 0;
 }
@@ -163,6 +163,7 @@ static int rkisp_params_vb2_queue_setup(struct vb2_queue *vq,
 	params_vdev->ops->get_param_size(params_vdev, sizes);
 
 	INIT_LIST_HEAD(&params_vdev->params);
+	INIT_LIST_HEAD(&params_vdev->params_be);
 
 	if (params_vdev->first_cfg_params) {
 		params_vdev->first_cfg_params = false;
@@ -182,15 +183,12 @@ static void rkisp_params_vb2_buf_queue(struct vb2_buffer *vb)
 	struct rkisp_isp_params_vdev *params_vdev = vq->drv_priv;
 	struct rkisp_device *dev = params_vdev->dev;
 	void *first_param;
-	unsigned long flags;
-	unsigned int cur_frame_id = -1;
+	unsigned long flags = 0;
 
-	cur_frame_id = atomic_read(&dev->isp_sdev.frm_sync_seq) - 1;
 	if (params_vdev->first_params) {
 		first_param = vb2_plane_vaddr(vb, 0);
 		params_vdev->ops->save_first_param(params_vdev, first_param);
 		params_vdev->is_first_cfg = true;
-		vbuf->sequence = cur_frame_id;
 		vb2_buffer_done(&params_buf->vb.vb2_buf, VB2_BUF_STATE_DONE);
 		params_vdev->first_params = false;
 		wake_up(&params_vdev->dev->sync_onoff);
@@ -269,7 +267,9 @@ static void rkisp_params_vb2_stop_streaming(struct vb2_queue *vq)
 	struct rkisp_isp_params_vdev *params_vdev = vq->drv_priv;
 	struct rkisp_device *dev = params_vdev->dev;
 	struct rkisp_buffer *buf;
-	unsigned long flags;
+	unsigned long flags = 0;
+	LIST_HEAD(local_list);
+	LIST_HEAD(local_list_be);
 
 	v4l2_dbg(1, rkisp_debug, &dev->v4l2_dev,
 		 "%s state:0x%x\n", __func__, dev->isp_state);
@@ -277,18 +277,24 @@ static void rkisp_params_vb2_stop_streaming(struct vb2_queue *vq)
 	spin_lock_irqsave(&params_vdev->config_lock, flags);
 	params_vdev->streamon = false;
 	wake_up(&dev->sync_onoff);
-	while (!list_empty(&params_vdev->params)) {
-		buf = list_first_entry(&params_vdev->params,
-				       struct rkisp_buffer, queue);
+	if (params_vdev->cur_buf) {
+		buf = params_vdev->cur_buf;
+		list_add_tail(&buf->queue, &params_vdev->params);
+		params_vdev->cur_buf = NULL;
+	}
+	list_replace_init(&params_vdev->params, &local_list);
+	list_replace_init(&params_vdev->params_be, &local_list_be);
+	spin_unlock_irqrestore(&params_vdev->config_lock, flags);
+	while (!list_empty(&local_list)) {
+		buf = list_first_entry(&local_list, struct rkisp_buffer, queue);
 		list_del(&buf->queue);
 		vb2_buffer_done(&buf->vb.vb2_buf, VB2_BUF_STATE_ERROR);
 	}
-	if (params_vdev->cur_buf) {
-		buf = params_vdev->cur_buf;
+	while (!list_empty(&local_list_be)) {
+		buf = list_first_entry(&local_list_be, struct rkisp_buffer, queue);
+		list_del(&buf->queue);
 		vb2_buffer_done(&buf->vb.vb2_buf, VB2_BUF_STATE_ERROR);
-		params_vdev->cur_buf = NULL;
 	}
-	spin_unlock_irqrestore(&params_vdev->config_lock, flags);
 
 	if (dev->is_pre_on) {
 		params_vdev->first_cfg_params = true;
@@ -313,7 +319,7 @@ static int
 rkisp_params_vb2_start_streaming(struct vb2_queue *queue, unsigned int count)
 {
 	struct rkisp_isp_params_vdev *params_vdev = queue->drv_priv;
-	unsigned long flags;
+	unsigned long flags = 0;
 
 	v4l2_dbg(1, rkisp_debug, &params_vdev->dev->v4l2_dev,
 		 "%s cnt:%d\n", __func__, count);
@@ -458,10 +464,11 @@ static void rkisp_uninit_params_vdev(struct rkisp_isp_params_vdev *params_vdev)
 		rkisp_uninit_params_vdev_v33(params_vdev);
 }
 
-void rkisp_params_cfg(struct rkisp_isp_params_vdev *params_vdev, u32 frame_id)
+void rkisp_params_cfg(struct rkisp_isp_params_vdev *params_vdev,
+		      u32 frame_id, enum rkisp_params_type type)
 {
 	if (params_vdev->ops->param_cfg)
-		params_vdev->ops->param_cfg(params_vdev, frame_id, RKISP_PARAMS_IMD);
+		params_vdev->ops->param_cfg(params_vdev, frame_id, type);
 }
 
 void rkisp_params_cfgsram(struct rkisp_isp_params_vdev *params_vdev,
@@ -581,6 +588,32 @@ void rkisp_params_get_bay3d_buffd(struct rkisp_isp_params_vdev *params_vdev,
 		params_vdev->ops->get_bay3d_buffd(params_vdev, bay3dbuf);
 }
 
+int rkisp_params_init_bnr_buf(struct rkisp_isp_params_vdev *params_vdev,
+			      struct rkisp_bnr_buf_info *bnrbuf)
+{
+	int ret = -EINVAL;
+
+	if (params_vdev->ops->init_bnr_buf)
+		ret = params_vdev->ops->init_bnr_buf(params_vdev, bnrbuf);
+	return ret;
+}
+
+void rkisp_params_aiisp_event(struct rkisp_isp_params_vdev *params_vdev, u32 irq)
+{
+	if (params_vdev->ops->aiisp_event)
+		params_vdev->ops->aiisp_event(params_vdev, irq);
+}
+
+int rkisp_params_aiisp_start(struct rkisp_isp_params_vdev *params_vdev,
+			     struct rkisp_aiisp_st *st)
+{
+	int ret = -EINVAL;
+
+	if (params_vdev->ops->aiisp_start)
+		ret = params_vdev->ops->aiisp_start(params_vdev, st);
+	return ret;
+}
+
 int rkisp_register_params_vdev(struct rkisp_isp_params_vdev *params_vdev,
 				struct v4l2_device *v4l2_dev,
 				struct rkisp_device *dev)
@@ -594,7 +627,7 @@ int rkisp_register_params_vdev(struct rkisp_isp_params_vdev *params_vdev,
 	params_vdev->is_subs_evt = false;
 	spin_lock_init(&params_vdev->config_lock);
 
-	strlcpy(vdev->name, PARAMS_NAME, sizeof(vdev->name));
+	strscpy(vdev->name, PARAMS_NAME, sizeof(vdev->name));
 
 	vdev->ioctl_ops = &rkisp_params_ioctl;
 	vdev->fops = &rkisp_params_fops;

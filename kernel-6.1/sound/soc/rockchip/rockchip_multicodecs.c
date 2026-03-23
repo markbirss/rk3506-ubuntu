@@ -83,9 +83,9 @@ struct multicodecs_data {
 	unsigned int rx_slot_mask;
 };
 
-static const unsigned int headset_extcon_cable[] = {
-	EXTCON_JACK_MICROPHONE,
-	EXTCON_JACK_HEADPHONE,
+static unsigned int headset_extcon_cable[] = {
+	EXTCON_NONE,
+	EXTCON_NONE,
 	EXTCON_NONE,
 };
 
@@ -740,6 +740,16 @@ static int rk_multicodecs_probe_keys(struct platform_device *pdev,
 	return ret;
 }
 
+static int rk_multicodecs_resume_post(struct snd_soc_card *card)
+{
+	struct multicodecs_data *mc_data = dev_get_drvdata(card->dev);
+
+	if (gpiod_to_irq(mc_data->hp_det_gpio) >= 0)
+		queue_delayed_work(system_power_efficient_wq, &mc_data->handler,
+				   msecs_to_jiffies(200));
+	return 0;
+}
+
 static int rk_multicodecs_probe(struct platform_device *pdev)
 {
 	struct snd_soc_card *card;
@@ -752,6 +762,7 @@ static int rk_multicodecs_probe(struct platform_device *pdev)
 	int count, irq;
 	int ret = 0, i = 0, idx = 0;
 	const char *prefix = "rockchip,";
+	int cable = 0;
 
 	ret = wait_locked_card(np, &pdev->dev);
 	if (ret < 0) {
@@ -898,6 +909,7 @@ static int rk_multicodecs_probe(struct platform_device *pdev)
 		ret = rk_multicodecs_probe_keys(pdev, mc_data);
 		if (ret)
 			dev_warn(&pdev->dev, "Has no input keys\n");
+		headset_extcon_cable[cable++] = EXTCON_JACK_MICROPHONE;
 	}
 
 	INIT_DEFERRABLE_WORK(&mc_data->handler, adc_jack_handler);
@@ -917,6 +929,10 @@ static int rk_multicodecs_probe(struct platform_device *pdev)
 	mc_data->hp_det_gpio = devm_gpiod_get_optional(&pdev->dev, "hp-det", GPIOD_IN);
 	if (IS_ERR(mc_data->hp_det_gpio))
 		return PTR_ERR(mc_data->hp_det_gpio);
+	if (gpiod_to_irq(mc_data->hp_det_gpio) >= 0) {
+		headset_extcon_cable[cable++] = EXTCON_JACK_HEADPHONE;
+		card->resume_post = &rk_multicodecs_resume_post;
+	}
 
 	mc_data->extcon = devm_extcon_dev_allocate(&pdev->dev, headset_extcon_cable);
 	if (IS_ERR(mc_data->extcon)) {

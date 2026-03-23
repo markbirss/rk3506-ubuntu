@@ -95,10 +95,48 @@ void rkisp_sditf_reset_notify_vpss(struct rkisp_device *dev)
 	v4l2_subdev_call(sditf->remote_sd, core, ioctl, RKISP_VPSS_RESET_NOTIFY_VPSS, NULL);
 }
 
+static void rkisp_config_frame_info(struct rkisp_device *dev, struct rkisp_vpss_frame_info *info)
+{
+	struct sensor_exposure_cfg *exp = &dev->params_vdev.exposure;
+	u32 seq = 0;
+	u64 ns = 0;
+
+	rkisp_dmarx_get_frame(dev, &seq, NULL, &ns, true);
+
+	if (!ns)
+		ns = ktime_get_ns();
+
+	info->seq = seq;
+	info->hdr = 0;
+	info->timestamp = IS_HDR_RDBK(dev->rd_mode) ? ns : dev->vicap_sof.timestamp;
+	info->rolling_shutter_skew = exp->linear_exp.rolling_shutter_skew;
+	info->sensor_exposure_time = exp->linear_exp.coarse_integration_time;
+	info->sensor_analog_gain = exp->linear_exp.analog_gain_code_global;
+	info->sensor_digital_gain = exp->linear_exp.digital_gain_global;
+	info->isp_digital_gain = exp->linear_exp.isp_digital_gain;
+	if (dev->rd_mode == HDR_RDBK_FRAME2 ||
+		dev->rd_mode == HDR_FRAMEX2_DDR ||
+		dev->rd_mode == HDR_LINEX2_DDR) {
+		info->hdr = 1;
+		info->rolling_shutter_skew = exp->hdr_exp[0].rolling_shutter_skew;
+
+		info->sensor_exposure_time = exp->hdr_exp[0].coarse_integration_time;
+		info->sensor_analog_gain = exp->hdr_exp[0].analog_gain_code_global;
+		info->sensor_digital_gain = exp->hdr_exp[0].digital_gain_global;
+		info->isp_digital_gain = exp->hdr_exp[0].isp_digital_gain;
+
+		info->sensor_exposure_time_l = exp->hdr_exp[1].coarse_integration_time;
+		info->sensor_analog_gain_l = exp->hdr_exp[1].analog_gain_code_global;
+		info->sensor_digital_gain_l = exp->hdr_exp[1].digital_gain_global;
+		info->isp_digital_gain_l = exp->hdr_exp[1].isp_digital_gain;
+	}
+}
+
 void rkisp_sditf_sof(struct rkisp_device *dev, u32 irq)
 {
 	struct rkisp_sditf_device *sditf = dev->sditf_dev;
 	struct rkisp_vpss_sof info;
+	struct rkisp_vpss_frame_info frame_info;
 
 	if (!sditf || !sditf->is_on || !sditf->remote_sd)
 		return;
@@ -106,6 +144,10 @@ void rkisp_sditf_sof(struct rkisp_device *dev, u32 irq)
 	rkisp_dmarx_get_frame(dev, &info.seq, NULL, &info.timestamp, true);
 	info.unite_index = dev->unite_index;
 	v4l2_subdev_call(sditf->remote_sd, core, ioctl, RKISP_VPSS_CMD_SOF, &info);
+
+	rkisp_config_frame_info(dev, &frame_info);
+
+	v4l2_subdev_call(sditf->remote_sd, core, ioctl, RKISP_VPSS_CMD_FRAME_INFO, &frame_info);
 }
 
 static long rkisp_sditf_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)

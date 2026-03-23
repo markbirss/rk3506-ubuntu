@@ -44,9 +44,6 @@ config LED_TRIGGER_PHY
 		<Speed in megabits>Mbps OR <Speed in gigabits>Gbps OR link
 		for any speed known to the PHY.
 
-config CH182H2_LED_TRIGGER_PHY
-	bool "Support CH182H2 LED Trigger for tracking link state"
-	depends on PHYLINK
 
 config FIXED_PHY
 	tristate "MDIO Bus/PHY emulation with fixed speed/link PHYs"
@@ -379,7 +376,7 @@ config JLSEMI_PHY
     tristate "JLSEMI PHYs"
     default y
     help
-                Currently has a driver for the jlsemi
+		Currently has a driver for the jlsemi
 
 endif # PHYLIB
 

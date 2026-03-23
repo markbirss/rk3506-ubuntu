@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * Rockchip Successive Approximation Register (SAR) A/D Converter
- * Copyright (C) 2014 ROCKCHIP, Inc.
+ * Copyright (C) 2014 Rockchip Electronics Co., Ltd.
  */
 
+#include <linux/bitfield.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/platform_device.h>
@@ -52,6 +53,8 @@
 #define SARADC2_START			BIT(4)
 #define SARADC2_SINGLE_MODE		BIT(5)
 
+#define SARADC2_CONV_CHANNELS GENMASK(3, 0)
+
 struct rockchip_saradc;
 
 struct rockchip_saradc_data {
@@ -80,10 +83,10 @@ struct rockchip_saradc {
 	bool			suspended;
 #ifdef CONFIG_ROCKCHIP_SARADC_TEST_CHN
 	bool			test;
-	u32			chn;
-	spinlock_t		lock;
-	struct workqueue_struct *wq;
-	struct delayed_work	work;
+	u32			test_chn;
+	spinlock_t		test_lock;
+	struct workqueue_struct *test_wq;
+	struct delayed_work	test_work;
 #endif
 };
 
@@ -112,10 +115,14 @@ static void rockchip_saradc_start_v2(struct rockchip_saradc *info,
 
 	writel_relaxed(0xc, info->regs + SARADC_T_DAS_SOC);
 	writel_relaxed(0x20, info->regs + SARADC_T_PD_SOC);
-	val = SARADC2_EN_END_INT << 16 | SARADC2_EN_END_INT;
+	val = FIELD_PREP(SARADC2_EN_END_INT, 1);
+	val |= SARADC2_EN_END_INT << 16;
 	writel_relaxed(val, info->regs + SARADC2_END_INT_EN);
-	val = SARADC2_START | SARADC2_SINGLE_MODE | chn;
-	writel(val << 16 | val, info->regs + SARADC2_CONV_CON);
+	val = FIELD_PREP(SARADC2_START, 1) |
+	      FIELD_PREP(SARADC2_SINGLE_MODE, 1) |
+	      FIELD_PREP(SARADC2_CONV_CHANNELS, chn);
+	val |= (SARADC2_START | SARADC2_SINGLE_MODE | SARADC2_CONV_CHANNELS) << 16;
+	writel(val, info->regs + SARADC2_CONV_CON);
 }
 
 static void rockchip_saradc_start(struct rockchip_saradc *info,
@@ -138,7 +145,7 @@ static int rockchip_saradc_read_v2(struct rockchip_saradc *info)
 	writel_relaxed(0x1, info->regs + SARADC2_END_INT_ST);
 
 #ifdef CONFIG_ROCKCHIP_SARADC_TEST_CHN
-	channel = info->chn;
+	channel = info->test_chn;
 #else
 	channel = info->last_chan->channel;
 #endif
@@ -229,6 +236,10 @@ static irqreturn_t rockchip_saradc_isr(int irq, void *dev_id)
 	unsigned long flags;
 #endif
 
+	/* Nothing need to do if info->last_chan not ready */
+	if (!info->last_chan)
+		return IRQ_HANDLED;
+
 	/* Read value */
 	info->last_val = rockchip_saradc_read(info);
 #ifndef CONFIG_ROCKCHIP_SARADC_TEST_CHN
@@ -239,12 +250,13 @@ static irqreturn_t rockchip_saradc_isr(int irq, void *dev_id)
 
 	complete(&info->completion);
 #ifdef CONFIG_ROCKCHIP_SARADC_TEST_CHN
-	spin_lock_irqsave(&info->lock, flags);
+	spin_lock_irqsave(&info->test_lock, flags);
 	if (info->test) {
-		pr_info("chn[%d] val = %d\n", info->chn, info->last_val);
-		mod_delayed_work(info->wq, &info->work, msecs_to_jiffies(100));
+		pr_info("chn[%d] val = %d\n", info->test_chn, info->last_val);
+		mod_delayed_work(info->test_wq, &info->test_work,
+				 msecs_to_jiffies(100));
 	}
-	spin_unlock_irqrestore(&info->lock, flags);
+	spin_unlock_irqrestore(&info->test_lock, flags);
 #endif
 	return IRQ_HANDLED;
 }
@@ -538,22 +550,23 @@ static ssize_t saradc_test_chn_store(struct device *dev,
 	if (err)
 		return err;
 
-	spin_lock_irqsave(&info->lock, flags);
+	spin_lock_irqsave(&info->test_lock, flags);
 
 	if (val > SARADC_CTRL_CHN_MASK && info->test) {
 		info->test = false;
-		spin_unlock_irqrestore(&info->lock, flags);
-		cancel_delayed_work_sync(&info->work);
+		spin_unlock_irqrestore(&info->test_lock, flags);
+		cancel_delayed_work_sync(&info->test_work);
 		return size;
 	}
 
 	if (!info->test && val <= SARADC_CTRL_CHN_MASK) {
 		info->test = true;
-		info->chn = val;
-		mod_delayed_work(info->wq, &info->work, msecs_to_jiffies(100));
+		info->test_chn = val;
+		mod_delayed_work(info->test_wq, &info->test_work,
+				 msecs_to_jiffies(100));
 	}
 
-	spin_unlock_irqrestore(&info->lock, flags);
+	spin_unlock_irqrestore(&info->test_lock, flags);
 
 	return size;
 }
@@ -580,15 +593,15 @@ static void rockchip_saradc_destroy_wq(void *data)
 {
 	struct rockchip_saradc *info = data;
 
-	destroy_workqueue(info->wq);
+	destroy_workqueue(info->test_wq);
 }
 
 static void rockchip_saradc_test_work(struct work_struct *work)
 {
 	struct rockchip_saradc *info = container_of(work,
-					struct rockchip_saradc, work.work);
+					struct rockchip_saradc, test_work.work);
 
-	rockchip_saradc_start(info, info->chn);
+	rockchip_saradc_start(info, info->test_chn);
 }
 #endif
 
@@ -646,17 +659,6 @@ static int rockchip_saradc_probe(struct platform_device *pdev)
 	}
 
 	init_completion(&info->completion);
-
-	irq = platform_get_irq(pdev, 0);
-	if (irq < 0)
-		return dev_err_probe(&pdev->dev, irq, "failed to get irq\n");
-
-	ret = devm_request_irq(&pdev->dev, irq, rockchip_saradc_isr,
-			       0, dev_name(&pdev->dev), info);
-	if (ret < 0) {
-		dev_err(&pdev->dev, "failed requesting irq %d\n", irq);
-		return ret;
-	}
 
 	info->pclk = devm_clk_get(&pdev->dev, "apb_pclk");
 	if (IS_ERR(info->pclk))
@@ -759,9 +761,9 @@ static int rockchip_saradc_probe(struct platform_device *pdev)
 		return ret;
 
 #ifdef CONFIG_ROCKCHIP_SARADC_TEST_CHN
-	info->wq = create_singlethread_workqueue("adc_wq");
-	INIT_DELAYED_WORK(&info->work, rockchip_saradc_test_work);
-	spin_lock_init(&info->lock);
+	info->test_wq = create_singlethread_workqueue("adc_wq");
+	INIT_DELAYED_WORK(&info->test_work, rockchip_saradc_test_work);
+	spin_lock_init(&info->test_lock);
 	ret = sysfs_create_group(&pdev->dev.kobj, &rockchip_saradc_attr_group);
 	if (ret)
 		return ret;
@@ -783,6 +785,17 @@ static int rockchip_saradc_probe(struct platform_device *pdev)
 	}
 #endif
 	mutex_init(&info->lock);
+
+	irq = platform_get_irq(pdev, 0);
+	if (irq < 0)
+		return dev_err_probe(&pdev->dev, irq, "failed to get irq\n");
+
+	ret = devm_request_irq(&pdev->dev, irq, rockchip_saradc_isr,
+			       0, dev_name(&pdev->dev), info);
+	if (ret < 0) {
+		dev_err(&pdev->dev, "failed requesting irq %d\n", irq);
+		return ret;
+	}
 
 	return devm_iio_device_register(&pdev->dev, indio_dev);
 }

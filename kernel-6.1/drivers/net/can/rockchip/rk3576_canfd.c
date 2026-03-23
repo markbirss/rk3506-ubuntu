@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (c) 2023 Rockchip Electronics Co. Ltd.
+ * Copyright (c) 2023 Rockchip Electronics Co., Ltd.
  * Rk3576 CANFD driver
  */
 
@@ -1207,23 +1207,18 @@ static int rk3576_canfd_probe(struct platform_device *pdev)
 	}
 	rcan = netdev_priv(ndev);
 
-	/* register interrupt handler */
-	err = devm_request_irq(&pdev->dev, irq, rk3576_canfd_interrupt,
-			       0, ndev->name, ndev);
-	if (err) {
-		dev_err(&pdev->dev, "request_irq err: %d\n", err);
-		return err;
-	}
-
 	rcan->reset = devm_reset_control_array_get(&pdev->dev, false, false);
 	if (IS_ERR(rcan->reset)) {
 		if (PTR_ERR(rcan->reset) != -EPROBE_DEFER)
 			dev_err(&pdev->dev, "failed to get canfd reset lines\n");
-		return PTR_ERR(rcan->reset);
+		err = PTR_ERR(rcan->reset);
+		goto err_free;
 	}
 	rcan->num_clks = devm_clk_bulk_get_all(&pdev->dev, &rcan->clks);
-	if (rcan->num_clks < 1)
-		return -ENODEV;
+	if (rcan->num_clks < 1) {
+		err = rcan->num_clks;
+		goto err_free;
+	}
 
 	rcan->mode = (unsigned long)of_device_get_match_data(&pdev->dev);
 
@@ -1293,11 +1288,22 @@ static int rk3576_canfd_probe(struct platform_device *pdev)
 			DRV_NAME, err);
 		goto err_disableclks;
 	}
+
+	/* register interrupt handler */
+	err = devm_request_irq(&pdev->dev, irq, rk3576_canfd_interrupt,
+			       0, ndev->name, ndev);
+	if (err) {
+		dev_err(&pdev->dev, "request_irq err: %d\n", err);
+		goto err_unregister;
+	}
 	dev_info(&pdev->dev, "CAN info: use_dma = %d, rx_max_data = %d, fifo_depth = %d\n",
 		 rcan->use_dma, rcan->rx_max_data, rcan->rx_fifo_depth);
 	return 0;
 
+err_unregister:
+	unregister_candev(ndev);
 err_disableclks:
+	netif_napi_del(&rcan->napi);
 	pm_runtime_put(&pdev->dev);
 err_pmdisable:
 	if (rcan->rxbuf) {
@@ -1308,6 +1314,7 @@ err_pmdisable:
 	if (rcan->rxchan)
 		dma_release_channel(rcan->rxchan);
 	pm_runtime_disable(&pdev->dev);
+err_free:
 	free_candev(ndev);
 
 	return err;

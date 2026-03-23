@@ -1,23 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright (C) 2023 Rockchip Electronics Co., Ltd */
+/* Copyright (C) 2023 Rockchip Electronics Co., Ltd. */
 
-#include <linux/clk.h>
-#include <linux/delay.h>
-#include <linux/interrupt.h>
-#include <linux/io.h>
-#include <linux/module.h>
-#include <linux/of.h>
-#include <linux/of_graph.h>
-#include <linux/of_platform.h>
-#include <linux/of_reserved_mem.h>
-#include <linux/pinctrl/consumer.h>
-#include <linux/pm_runtime.h>
-#include <linux/reset.h>
-#include <linux/regmap.h>
-#include <media/v4l2-fwnode.h>
-
+#include "vpss.h"
+#include "common.h"
+#include "stream.h"
 #include "dev.h"
+#include "vpss_offline.h"
+#include "hw.h"
+#include "procfs.h"
 #include "regs.h"
+
 #include "version.h"
 
 #define RKVPSS_VERNO_LEN 10
@@ -33,6 +25,14 @@ MODULE_PARM_DESC(clk_dbg, "rkvpss clk set by user");
 static char rkvpss_version[RKVPSS_VERNO_LEN];
 module_param_string(version, rkvpss_version, RKVPSS_VERNO_LEN, 0444);
 MODULE_PARM_DESC(version, "version number");
+
+static unsigned int rkvpss_wrap_line;
+module_param_named(wrap_line, rkvpss_wrap_line, uint, 0644);
+MODULE_PARM_DESC(wrap_line, "rkvpss wrap line");
+
+char rkvpss_regfile[RKVPSS_REGFILE_LEN];
+module_param_string(reg_file, rkvpss_regfile, RKVPSS_REGFILE_LEN, 0644);
+MODULE_PARM_DESC(reg_file, "dump reg file");
 
 int rkvpss_cfginfo_num = 5;
 
@@ -72,7 +72,7 @@ void rkvpss_pipeline_default_fmt(struct rkvpss_device *dev)
 
 	w = dev->vpss_sdev.out_fmt.width;
 	h = dev->vpss_sdev.out_fmt.height;
-	for (i = 0; i < RKVPSS_OUTPUT_MAX; i++)
+	for (i = 0; i < vpss_outchn_max(dev->hw_dev->vpss_ver); i++)
 		rkvpss_stream_default_fmt(dev, i, w, h, V4L2_PIX_FMT_NV12);
 }
 
@@ -134,7 +134,7 @@ static int rkvpss_create_links(struct rkvpss_device *dev)
 	struct media_entity *source, *sink;
 	struct rkvpss_stream *stream;
 	unsigned int flags = 0;
-	int ret;
+	int ret, i;
 
 	if (!dev->remote_sd)
 		return -EINVAL;
@@ -152,33 +152,14 @@ static int rkvpss_create_links(struct rkvpss_device *dev)
 	flags = MEDIA_LNK_FL_ENABLED;
 	source = &dev->vpss_sdev.sd.entity;
 
-	stream = &stream_vdev->stream[RKVPSS_OUTPUT_CH0];
-	stream->linked = flags;
-	sink = &stream->vnode.vdev.entity;
-	ret = media_create_pad_link(source, RKVPSS_PAD_SOURCE, sink, 0, flags);
-	if (ret < 0)
-		goto end;
-
-	stream = &stream_vdev->stream[RKVPSS_OUTPUT_CH1];
-	stream->linked = flags;
-	sink = &stream->vnode.vdev.entity;
-	ret = media_create_pad_link(source, RKVPSS_PAD_SOURCE, sink, 0, flags);
-	if (ret < 0)
-		goto end;
-
-	stream = &stream_vdev->stream[RKVPSS_OUTPUT_CH2];
-	stream->linked = flags;
-	sink = &stream->vnode.vdev.entity;
-	ret = media_create_pad_link(source, RKVPSS_PAD_SOURCE, sink, 0, flags);
-	if (ret < 0)
-		goto end;
-
-	stream = &stream_vdev->stream[RKVPSS_OUTPUT_CH3];
-	stream->linked = flags;
-	sink = &stream->vnode.vdev.entity;
-	ret = media_create_pad_link(source, RKVPSS_PAD_SOURCE, sink, 0, flags);
-	if (ret < 0)
-		goto end;
+	for (i = 0; i < vpss_outchn_max(dev->hw_dev->vpss_ver); i++) {
+		stream = &stream_vdev->stream[i];
+		stream->linked = flags;
+		sink = &stream->vnode.vdev.entity;
+		ret = media_create_pad_link(source, RKVPSS_PAD_SOURCE, sink, 0, flags);
+		if (ret < 0)
+			goto end;
+	}
 
 end:
 	return ret;
