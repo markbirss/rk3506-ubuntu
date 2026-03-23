@@ -9,6 +9,7 @@
 
 <img width="760" height="695" alt="image" src="https://github.com/user-attachments/assets/2a4baff5-b6d1-4fc5-a5bb-7b703dc43c21" />
 
+
 RK3506(256MB+256MB) WiP
 
 in order to boot directly from SDCard not SPI nand set 3V3 jumper J28 (close by sdcard slot)
