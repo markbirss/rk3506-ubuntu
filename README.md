@@ -12,7 +12,7 @@
 
 RK3506(256MB+256MB) WiP
 
-in order to boot directly from SDCard not SPI nand set 3V3 jumper J28 (close by sdcard slot)
+in order to boot directly from SDCard move and set to 3V3 jumper position (default is 1V8 for SPI Nand Boot) J28 (close by sdcard slot)
 
 <img width="1449" height="1269" alt="Boot_with_sdcard_instead_of_spi_nand_move_jumper_to_3v3" src="https://github.com/user-attachments/assets/e9a89622-3c97-4542-b90b-0af648462dd2" />
 
