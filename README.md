@@ -8,7 +8,7 @@
 
 
 ```
-git clone -b hd-rk3506-mini https://github.com/markbirss/rk3506-ubuntu.git
+git clone -b hd-rk3506g-mini https://github.com/markbirss/rk3506-ubuntu.git
 
 cd rk3506-ubuntu/device/rockchip/.chips/rk3506
 ln -s .chips/rk3506 ../../rk3506
