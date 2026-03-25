@@ -40,7 +40,7 @@
 
 /**********display**********/
 &cma {
-	size = <0x2000000>;
+	size = <0x1000000>;
 };
 
 &dsi {
@@ -61,11 +61,25 @@
 
 /**********ethernet**********/
 &gmac1 {
-	status = "disabled";
+	phy-mode = "rmii";
+	clock_in_out = "output";
+
+	snps,reset-gpio = <&gpio1 RK_PD0 GPIO_ACTIVE_LOW>;
+	snps,reset-active-low;
+	snps,reset-delays-us = <0 20000 100000>;
+
+	pinctrl-names = "default";
+	pinctrl-0 = <&eth_rmii1_miim_pins &eth_rmii1_tx_bus2_pins &eth_rmii1_rx_bus2_pins &eth_rmii1_clk_pins>;
+
+	phy-handle = <&rmii_phy1>;
+	status = "okay";
 };
 
 &mdio1 {
-	status = "disabled";
+	rmii_phy1: phy@1 {
+		compatible = "ethernet-phy-ieee802.3-c22";
+		reg = <0x1>;
+	};
 };
 
 /**********usb**********/
