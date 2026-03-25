@@ -1,0 +1,130 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright (c) 2024 Rockchip Electronics Co., Ltd.
+ */
+
+/dts-v1/;
+
+#include "rk3506-luckfox-lyra.dtsi"
+
+/ {
+	model = "Rockchip RK3506 EVB1 V10 Board";
+	compatible = "rockchip,rk3506g-demo-display-control", "rockchip,rk3506";
+
+	chosen {
+		bootargs = "earlycon=uart8250,mmio32,0xff0a0000 console=tty1 console=ttyFIQ0 storagemedia=sd root=/dev/mmcblk0p3 rootfstype=ext4 rootwait snd_aloop.index=7 snd_aloop.use_raw_jiffies=1";
+	};
+	
+	// KEY
+	adc_keys: adc-keys {
+		compatible = "adc-keys";
+		io-channels = <&saradc 2>;
+		io-channel-names = "buttons";
+		keyup-threshold-microvolt = <1800000>;
+		poll-interval = <100>;
+
+		vol-up-key {
+			label = "key 1";
+			linux,code = <KEY_1>;
+			press-threshold-microvolt = <575000>;
+		};
+
+		vol-down-key {
+			label = "key 2";
+			linux,code = <KEY_2>;
+			press-threshold-microvolt = <1125000>;
+		};
+	};
+		
+};
+
+/**********display**********/
+&cma {
+	size = <0x2000000>;
+};
+
+&dsi {
+	status = "okay";
+};
+
+&dsi_dphy {
+	status = "okay";
+};
+
+&dsi_in_vop {
+	status = "okay";
+};
+
+&route_dsi {
+	status = "okay";
+};
+
+/**********ethernet**********/
+&gmac1 {
+	status = "disabled";
+};
+
+&mdio1 {
+	status = "disabled";
+};
+
+/**********usb**********/
+&usb20_otg0 {
+	dr_mode = "peripheral";
+	status = "okay";
+};
+
+&usb20_otg1 {
+	dr_mode = "host";
+	status = "okay";
+};
+
+&saradc {
+	vref-supply = <&vcc_1v8>;
+	status = "okay";
+};
+
+// UART1 - JP3
+&uart1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&rm_io16_uart1_rx &rm_io17_uart1_tx>;
+	status = "okay";
+};
+
+// UART1 - JP4
+&uart2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&rm_io0_uart2_rx &rm_io2_uart2_tx>;
+	status = "okay";
+};
+
+// UART1 - JP5
+&uart3 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&rm_io15_uart3_rx &rm_io14_uart3_tx>;
+	status = "okay";
+};
+
+// CAN0 - JP6
+&can0 {
+	rockchip,rx-max-data = <18>;
+	assigned-clocks = <&cru CLK_CAN0>;
+	assigned-clock-rates = <200000000>;
+	pinctrl-0 = <&rm_io19_can0_tx &rm_io20_can0_rx>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&i2c2 {
+	clock-frequency = <400000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&rm_io4_i2c2_scl &rm_io5_i2c2_sda>;
+	status = "okay";
+
+	// RTC
+	rtc_bmf8563: rtc@51 {
+		compatible = "haoyu,hym8563";
+		reg = <0x51>;
+		status = "okay";
+	};
+};
