@@ -37,6 +37,17 @@ mv ubuntu_24.04.4.tar.gz ubuntu/ubuntu_24.04.3.tar.gz
 # sudo ./rkflash.sh update
 ```
 
+# IMPORTANT NOTE ENABLE WIFI
+```
+adb shell "cd /home/lyra/aic800/ && make install; reboot"
+
+#test
+adb shell nmcli dev wifi list
+
+#connect
+nmtui
+```
+
 # Linux Host Internet Connection Sharing over USB
 
 <img width="696" height="694" alt="image" src="https://github.com/user-attachments/assets/aecd01fe-b5cf-411b-ad0d-a4eb04512c07" />
