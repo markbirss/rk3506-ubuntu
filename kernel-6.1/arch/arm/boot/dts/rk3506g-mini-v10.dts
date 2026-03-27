@@ -8,7 +8,7 @@
 #include "rk3506-luckfox-lyra.dtsi"
 
 / {
-	model = "Rockchip RK3506 EVB1 V10 Board";
+	model = "HD-RK3506G-MINI V1.0";
 	compatible = "rockchip,rk3506g-demo-display-control", "rockchip,rk3506";
 
 	chosen {
