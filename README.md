@@ -13,7 +13,7 @@ Pinout
 
 <img width="1155" height="867" alt="image" src="https://github.com/user-attachments/assets/0eff3aa9-748f-41e2-a781-4c4912a3535c" />
 
-<img width="645" height="576" alt="image" src="https://github.com/user-attachments/assets/c9490b26-abbc-41b1-903c-bd1a94e279cc" />
+<img width="645" height="576" alt="image" src="https://github.com/user-attachments/assets/a66c63ee-760b-42aa-815d-20143f3d0e09" />
 
 
 ```
