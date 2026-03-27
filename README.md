@@ -17,6 +17,11 @@ Product
 RK3506 Dev Board -  ECB41-PGE1N2-N
 ```
 
+Pinout
+
+<img width="745" height="778" alt="image" src="https://github.com/user-attachments/assets/ff795d86-14d0-4e9d-810f-c5a5f29bd334" />
+
+
 SDK Usage
 
 ```
