@@ -13,7 +13,7 @@ Pinout
 
 <img width="1155" height="867" alt="image" src="https://github.com/user-attachments/assets/0eff3aa9-748f-41e2-a781-4c4912a3535c" />
 
-<img width="656" height="572" alt="image" src="https://github.com/user-attachments/assets/0d841d59-fda6-4407-9738-bf04ad01be16" />
+<img width="656" height="572" alt="image" src="https://github.com/user-attachments/assets/fd990797-b89d-46f2-9c3f-225ed8937bc1" />
 
 ```
 git clone -b hd-rk3506g-mini https://github.com/markbirss/rk3506-ubuntu.git
