@@ -6,7 +6,10 @@
 
 <img width="4239" height="3003" alt="image" src="https://github.com/user-attachments/assets/e535f1d6-3b87-47ca-9fc3-8c0bf0ec35a6" />
 
+Pinout
 <img width="1227" height="534" alt="image" src="https://github.com/user-attachments/assets/bcbc2913-c405-48e1-b12f-f4ac71b19c71" />
+
+<img width="1155" height="867" alt="image" src="https://github.com/user-attachments/assets/cea89eee-59c2-4e2e-813c-0d1463763863" />
 
 
 ```
