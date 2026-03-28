@@ -299,7 +299,7 @@ libmpc-dev bc python-is-python3 python2
 sudo ln -sf /usr/bin/python2 /usr/bin/python 
 
 [build instructions]
-git clone https://github.com/markbirss/rk3506-ubuntu.git
+git clone luckfox-bpi -b https://github.com/markbirss/rk3506-ubuntu.git
 
 cd rk3506-ubuntu/device/rockchip/.chips/rk3506
 ln -s .chips/rk3506 ../../rk3506
