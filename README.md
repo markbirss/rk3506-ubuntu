@@ -1,6 +1,4 @@
 # rk3506-ubuntu
-<img width="1024" height="576" alt="image" src="https://github.com/user-attachments/assets/6295b83a-7a8e-4d2b-b0ba-6c5242364663" />
-
 
 Ubuntu 24.04.x OS image builder for various RK3506 SBC
 
@@ -13,7 +11,7 @@ Board Name | SD/EMMC |  Repo |
 | Luckfox Lyra | SDCard | https://github.com/markbirss/rk3506-ubuntu/tree/luckfox-bpi |
 | Luckfox Lyra PLUS | SDCard | https://github.com/markbirss/rk3506-ubuntu/tree/luckfox-bpi |
 | Luckfox Lyra Ultra W | eMMC | https://github.com/markbirss/rk3506-ubuntu/tree/luckfox-bpi |
-| Luckfox Zero W | SDCard | 6. https://github.com/markbirss/rk3506-ubuntu/tree/luckfox-bpi |
+| Luckfox Zero W | SDCard | https://github.com/markbirss/rk3506-ubuntu/tree/luckfox-bpi |
 | Luckfox Lyra Pi W | SDCard | https://github.com/markbirss/rk3506-ubuntu/tree/luckfox-bpi |
 | Luckfox Lyra Pi W | eMMC | https://github.com/markbirss/rk3506-ubuntu/tree/luckfox-bpi |
 | ArmSom Forge (BPI Forge1) | SDCard | https://github.com/markbirss/rk3506-ubuntu/tree/luckfox-bpi |
