@@ -20,8 +20,6 @@ Board Name | SD/EMMC |  Repo |
 | Qiyang RK3506B(STAMP) Kit | SDCard | https://github.com/markbirss/rk3506-ubuntu/tree/qiyang |
 | Luckfox Lyra with ST7305 300x400 RCLD Display | SDCard | https://github.com/markbirss/rk3506-ubuntu/tree/st7305 |
 
-```
-
 #IMPORTANT NOTE
 This SDK is provided for non commercial use only
 
