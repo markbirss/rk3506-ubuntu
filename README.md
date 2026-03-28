@@ -2,7 +2,7 @@
 
 Ubuntu 24.04.x OS image builder for various RK3506 SBC
 
-(based off the Luckfox Lyra SDK when it could still build Ubuntu 22.04 OS Images but further modified to include updated Ubuntu 24.04.3 OS and support for the later Luckfox Lyra SBC boards with ability to run luckfox-config) 
+(based off the Luckfox Lyra SDK when it could still build Ubuntu 22.04 OS Images but further modified to include updated Ubuntu 24.04.x OS and support for the later Luckfox Lyra SBC boards with ability to run luckfox-config) 
 
 Supported Boards
 
