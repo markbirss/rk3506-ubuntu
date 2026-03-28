@@ -17,7 +17,7 @@ Board Name | SD/EMMC |  Repo |
 | ArmSom Forge (BPI Forge1) | SDCard | https://github.com/markbirss/rk3506-ubuntu/tree/luckfox-bpi |
 | HD-RK3506G-MINI V1.0 | SDCard | https://github.com/markbirss/rk3506-ubuntu/tree/hd-rk3506g-mini |
 | eByte ECB41-PGE1N2-N | SDCard | https://github.com/markbirss/rk3506-ubuntu/tree/e-byte |
-| Qiyang RK3506B(STAMP) Kit | SDCard | https://github.com/markbirss/rk3506-ubuntu/tree/qiyang |
+| Qiyang RK3506B( 256MB STAMP) Dev Kit | SDCard | https://github.com/markbirss/rk3506-ubuntu/tree/qiyang |
 | Luckfox Lyra with ST7305 300x400 RCLD Display | SDCard | https://github.com/markbirss/rk3506-ubuntu/tree/st7305 |
 
 #IMPORTANT NOTE
