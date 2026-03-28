@@ -15,6 +15,69 @@
 		bootargs = "earlycon=uart8250,mmio32,0xff0a0000 console=tty1 console=ttyFIQ0 storagemedia=sd root=/dev/mmcblk0p3 rootfstype=ext4 rootwait snd_aloop.index=7 snd_aloop.use_raw_jiffies=1";
 	};
 
+	acodec_sound: acodec-sound {
+		compatible = "simple-audio-card";
+		simple-audio-card,name = "rockchip,acodec";
+		simple-audio-card,format = "i2s";
+		simple-audio-card,mclk-fs = <1024>;
+		simple-audio-card,bitclock-master = <&codec_master>;
+		simple-audio-card,frame-master = <&codec_master>;
+		simple-audio-card,cpu {
+			sound-dai = <&sai4>;
+		};
+		codec_master: simple-audio-card,codec {
+			sound-dai = <&audio_codec>;
+		};
+	};
+
+	adc_keys: adc-keys {
+		compatible = "adc-keys";
+		io-channels = <&saradc 1>;
+		io-channel-names = "buttons";
+		keyup-threshold-microvolt = <1800000>;
+		poll-interval = <100>;
+		status = "disabled";
+		vol-up-key {
+			label = "volume up";
+			linux,code = <KEY_VOLUMEUP>;
+			press-threshold-microvolt = <16000>;
+		};
+
+		vol-down-key {
+			label = "volume down";
+			linux,code = <KEY_VOLUMEDOWN>;
+			press-threshold-microvolt = <420000>;
+		};
+
+		menu-key {
+			label = "menu";
+			linux,code = <KEY_MENU>;
+			press-threshold-microvolt = <800000>;
+		};
+
+		esc-key {
+			label = "esc";
+			linux,code = <KEY_ESC>;
+			press-threshold-microvolt = <1200000>;
+		};
+	};
+
+	dsm_sound: dsm-sound {
+		status = "disabled";
+		compatible = "simple-audio-card";
+		simple-audio-card,format = "i2s";
+		simple-audio-card,mclk-fs = <256>;
+		simple-audio-card,name = "rockchip,dsm-sound";
+		simple-audio-card,bitclock-master = <&sndcodec>;
+		simple-audio-card,frame-master = <&sndcodec>;
+		sndcpu: simple-audio-card,cpu {
+			sound-dai = <&sai3>;
+		};
+		sndcodec: simple-audio-card,codec {
+			sound-dai = <&acdcdig_dsm>;
+		};
+	};
+
 	es8388_sound: es8388-sound {
 		status = "disabled";
 		compatible = "rockchip,multicodecs-card";
@@ -172,6 +235,7 @@
 &dsi_in_vop {
 	status = "okay";
 };
+
 &pinctrl {
 	usb {
 		vcc5v0_otg0_en: vcc5v0-otg0-en {
@@ -416,4 +480,123 @@
 			rockchip,pins = <1 RK_PB5 RK_FUNC_GPIO &pcfg_pull_none>;
 		};
 	};
+
+	// gpio-keys {
+	// 	key_wake_up: key-wake-up {
+	// 		rockchip,pins = <0 RK_PC1 RK_FUNC_GPIO &pcfg_pull_none>;
+	// 	};
+	// };
+
+	// sdio-pwrseq {
+	// 	wifi_enable_h: wifi-enable-h {
+	// 		rockchip,pins = <0 RK_PB7 RK_FUNC_GPIO &pcfg_pull_none>;
+	// 	};
+	// };
+
+	speaker {
+		spk_ctrl: spk-ctrl {
+			rockchip,pins = <1 RK_PB7 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
+
+	// wireless-bluetooth {
+	// 	uart5_gpios: uart5-gpios {
+	// 		rockchip,pins = <3 RK_PB5 RK_FUNC_GPIO &pcfg_pull_none>;
+	// 	};
+	// };
+
+	// wireless-wlan {
+	// 	wifi_wake_host: wifi-wake-host {
+	// 		rockchip,pins = <0 RK_PC0 RK_FUNC_GPIO &pcfg_pull_up>;
+	// 	};
+	// };
+
+};
+
+&pwm0_4ch_0 {
+	pinctrl-names = "active";
+	pinctrl-0 = <&rm_io21_pwm0_ch0>;
+	status = "okay";
+};
+
+&pwm0_4ch_1 {
+	pinctrl-names = "active";
+	pinctrl-0 = <&rm_io20_pwm0_ch1>;
+	status = "okay";
+};
+
+&pwm0_4ch_2 {
+	pinctrl-names = "active";
+	pinctrl-0 = <&rm_io18_pwm0_ch2>;
+	status = "okay";
+};
+
+&rga2 {
+	status = "okay";
+};
+
+&rng {
+	status = "okay";
+};
+
+&rockchip_suspend {
+	rockchip,sleep-mode-config = <
+		(0
+		| RKPM_ARMOFF_DDRPD
+		| RKPM_24M_OSC_DIS
+		| RKPM_32K_CLK
+		| RKPM_32K_SRC_RC
+		| RKPM_PWM0_CH0_REGULATOR
+		)
+	>;
+
+	rockchip,apios-suspend = <
+		(0
+		| RKPM_PWREN_CORE_GPIO0A2 | RKPM_PWREN_CORE_ACT_LOW
+		| RKPM_PWREN_SLEEP_GPIO0A0 | RKPM_PWREN_SLEEP_ACT_LOW
+		)
+	>;
+
+#define GPIO0_IOC_GPIO0A_PULL_REG	0xff950200
+#define GPIO0_IOC_GPIO0B_PULL_REG	0xff950204
+#define GPIO0_IOC_GPIO0C_PULL_REG	0xff950208
+#define IOC0_GPIO0C5_SMT_REG		0xff950408
+
+#define GPIO0A02_PULL_Z			0x00330000
+#define GPIO0A3_PULL_DOWN		0x00c00080
+#define GPIO0B0_PULL_DOWN		0x00030002
+#define GPIO0C5_PULL_Z			0x0c000000
+#define GPIO0C5_SMT_DISABLE		0x00200000
+
+	/* Note: support max 16 pairs */
+	rockchip,sleep-io-config = <
+		GPIO0_IOC_GPIO0C_PULL_REG GPIO0C5_PULL_Z    /* PWM0_CH0_CPU */
+		IOC0_GPIO0C5_SMT_REG GPIO0C5_SMT_DISABLE    /* PWM0_CH0_CPU */
+		GPIO0_IOC_GPIO0A_PULL_REG GPIO0A02_PULL_Z   /* PWRCTRL0, PWRCTRL1 */
+		GPIO0_IOC_GPIO0A_PULL_REG GPIO0A3_PULL_DOWN /* PWM0_CH2_LCD_BL */
+		GPIO0_IOC_GPIO0B_PULL_REG GPIO0B0_PULL_DOWN /* SAI1_MCLK */
+	>;
+};
+
+&sai2{
+	pinctrl-names = "default";
+	pinctrl-0 = <&sai2m1_lrck_pins
+			     &sai2m1_sclk_pins
+			     &sai2m1_sdi_pins
+			     &sai2m1_sdo_pins>;
+	status = "okay";
+};
+
+
+&sai4 {
+	status = "okay";
+};
+
+&saradc {
+	vref-supply = <&vcc_1v8>;
+	status = "disabled";
+};
+
+&tsadc {
+	status = "okay";
 };
