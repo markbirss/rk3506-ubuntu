@@ -10,6 +10,11 @@
 <img width="760" height="695" alt="image" src="https://github.com/user-attachments/assets/2a4baff5-b6d1-4fc5-a5bb-7b703dc43c21" />
 
 
+Hardware Manual
+
+https://github.com/markbirss/rk3506-ubuntu/releases/tag/1.2
+
+
 RK3506(256MB+256MB) WiP
 
 in order to boot directly from SDCard move and set to 3V3 jumper position (default is 1V8 for SPI Nand Boot) J28 (close by sdcard slot)
