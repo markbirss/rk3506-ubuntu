@@ -109,6 +109,7 @@ Flash Info:
 sudo ./rkflash.sh update
 or
 upgrade_tool uf rockdev/update.img
+upgrade_tool rd
 
 ```
 
