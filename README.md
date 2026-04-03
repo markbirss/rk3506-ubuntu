@@ -85,7 +85,8 @@ Flash Info:
         Access Time: 40
         Flash CS: Flash<0>
 
-erase the 256MB Onboard SPI Nand Flash
+#erase the 256MB Onboard SPI Nand Flash
+rkdeveloptool ef
 
 #insert a sdcard into the dev board
 rkdeveloptool cs 1
