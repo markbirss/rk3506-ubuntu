@@ -9,6 +9,8 @@
 
 <img width="760" height="695" alt="image" src="https://github.com/user-attachments/assets/2a4baff5-b6d1-4fc5-a5bb-7b703dc43c21" />
 
+<img width="994" height="631" alt="image" src="https://github.com/user-attachments/assets/7d31978d-cfa9-402c-be57-af54b155b2e0" />
+
 
 Hardware Manual & Test Manual
 
