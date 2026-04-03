@@ -59,7 +59,7 @@ mv ubuntu_24.04.4.tar.gz ubuntu/ubuntu_24.04.3.tar.gz
 
 ```
 
-Installatioin steps (Connect UART and USB Cable, baud rate 1500000)
+Installatioin steps (Connect UART and USB Cable, baud rate now is 1500000 not 115200)
 ```
 Set Jumpber J28 to 3V3 position
 
