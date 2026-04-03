@@ -10,12 +10,19 @@
 <img width="760" height="695" alt="image" src="https://github.com/user-attachments/assets/2a4baff5-b6d1-4fc5-a5bb-7b703dc43c21" />
 
 
-Hardware Manual
+Hardware Manual & Test Manual
 
 https://github.com/markbirss/rk3506-ubuntu/releases/tag/1.2
 
 
-RK3506(256MB+256MB) WiP
+Important Note: ( pg 21 2.7 Test Manual )
+
+The WLAN function shares interface with TF card and eMMC, only one can be used at a time
+
+RK3506(256MB+256MB) WiP ( still to test all functions)
+
+eg
+watchdog ( not enabled in device tree yet)
 
 in order to boot directly from SDCard move and set to 3V3 jumper position (default is 1V8 for SPI Nand Boot) J28 (close by sdcard slot)
 
