@@ -95,7 +95,7 @@ Flash Info:
 #erase the 256MB Onboard SPI Nand Flash
 rkdeveloptool ef
 
-#insert a sdcard into the dev board
+#insert a sdcard into the dev board and change default storage device to sdcard
 rkdeveloptool cs 1
 
 # Confirm your sdcard is detected
