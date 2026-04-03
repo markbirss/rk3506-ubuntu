@@ -59,6 +59,60 @@ mv ubuntu_24.04.4.tar.gz ubuntu/ubuntu_24.04.3.tar.gz
 
 ```
 
+Installatioin steps (Connect UART and USB Cable, baud rate 1500000)
+```
+Set Jumpber J28 to 3V3 position
+
+Hold down MaskROM Button while insering Power
+or
+Hold down MaskROM Button, press Reset Button, Release Reset Button, while still holding down MaskRom Button, then release MaskRom Button
+
+Confirm board is in MaskRom Mode
+lsusb
+Bus 003 Device 041: ID 2207:350f Fuzhou Rockchip Electronics Company
+
+# https://github.com/markbirss/rkdeveloptool
+rkdeveloptool db rockdev/MiniLoaderAll.bin
+
+rkdeveloptool rfi
+Flash Info:
+        Manufacturer: SAMSUNG, value=00
+        Flash Size: 255 MB
+        Flash Size: 523264 Sectors
+        Block Size: 128 KB
+        Page Size: 2 KB
+        ECC Bits: 0
+        Access Time: 40
+        Flash CS: Flash<0>
+
+erase the 256MB Onboard SPI Nand Flash
+
+#insert a sdcard into the dev board
+rkdeveloptool cs 1
+
+# Confirm your sdcard is detected
+rkdeveloptool rfi
+
+Flash Info:
+        Manufacturer: SAMSUNG, value=00
+        Flash Size: 15193 MB
+        Flash Size: 31116288 Sectors
+        Block Size: 512 KB
+        Page Size: 2 KB
+        ECC Bits: 0
+        Access Time: 40
+        Flash CS: Flash<0> 
+
+#flash Ubuntu OS to sdcard
+
+sudo ./rkflash.sh update
+or
+upgrade_tool uf rockdev/update.img
+
+```
+
+
+
 #IMPORTANT NOTE
 This SDK is provided for non commercial use only
 
