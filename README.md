@@ -61,7 +61,7 @@ mv ubuntu_24.04.4.tar.gz ubuntu/ubuntu_24.04.3.tar.gz
 
 Installation steps (Connect UART and USB Cable, baud rate now is 1500000 not 115200)
 ```
-Set Jumpber J28 to 3V3 position
+Set Jumpber J28 to 3V3 position ( close by sdcard slot )
 
 Hold down MaskROM Button while insering Power
 or
