@@ -71,6 +71,13 @@ Confirm board is in MaskRom Mode
 lsusb
 Bus 003 Device 041: ID 2207:350f Fuzhou Rockchip Electronics Company
 
+or
+
+upgrade_tool ld
+List of rockusb connected(1)
+DevNo=1 Vid=0x2207,Pid=0x350f,LocationID=391    Mode=Maskrom    SerialNo=
+
+
 # https://github.com/markbirss/rkdeveloptool
 rkdeveloptool db rockdev/MiniLoaderAll.bin
 
