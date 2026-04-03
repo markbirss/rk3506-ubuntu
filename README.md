@@ -120,6 +120,16 @@ upgrade_tool rd
 
 ```
 
+```
+To be able to compile kernel drivers on the board, install
+
+https://github.com/markbirss/rk3506-ubuntu/releases/tag/1.2
+
+wget -c https://github.com/markbirss/linux-6.1.118/releases/download/1/linux-headers-6.1.118_6.1.118-17_armhf.deb
+sudo dpkg -i linux-headers-6.1.118_6.1.118-17_armhf.deb
+
+
+```
 
 
 #IMPORTANT NOTE
