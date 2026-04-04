@@ -131,6 +131,18 @@ sudo dpkg -i linux-headers-6.1.118_6.1.118-17_armhf.deb
 
 ```
 
+```
+Default User Login Credentials
+
+User:     root
+Password: root
+
+User:     lyra
+Password: luckfox
+
+ADB shell requires no password and can be used to set or change existing passwords
+
+```
 
 #IMPORTANT NOTE
 This SDK is provided for non commercial use only
