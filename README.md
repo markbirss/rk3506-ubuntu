@@ -23,7 +23,7 @@ Board Name | SD/EMMC |  Repo |
 WIP Boards
 Board Name | USB |  Repo |
 |:--|:--|:--|
-| U7-RK3506-128+256HMI | USB | https://github.com/markbirss/u7.git |
+| U7-RK3506-128+256HMI 1024x600 7" | USB | https://github.com/markbirss/u7.git |
 
 #IMPORTANT NOTE
 This SDK is provided for non commercial use only
