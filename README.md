@@ -21,6 +21,7 @@ Board Name | SD/EMMC |  Repo |
 | Luckfox Lyra with ST7305 300x400 RCLD Display | SDCard | https://github.com/markbirss/rk3506-ubuntu/tree/st7305 |
 
 WIP Boards
+Board Name | SD/EMMC |  Repo |
 |:--|:--|:--|
 | U7-RK3506-128+256HMI | USB | https://github.com/markbirss/u7.git |
 
