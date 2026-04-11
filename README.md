@@ -19,6 +19,9 @@ Board Name | SD/EMMC |  Repo |
 | eByte ECB41-PGE1N2-N | SDCard | https://github.com/markbirss/rk3506-ubuntu/tree/e-byte |
 | Qiyang RK3506B ( 256MB STAMP ) Dev Kit | SDCard | https://github.com/markbirss/rk3506-ubuntu/tree/qiyang |
 | Luckfox Lyra with ST7305 300x400 RCLD Display | SDCard | https://github.com/markbirss/rk3506-ubuntu/tree/st7305 |
+
+WIP Boards
+|:--|:--|:--|
 | U7-RK3506-128+256HMI | USB | https://github.com/markbirss/u7.git |
 
 #IMPORTANT NOTE
