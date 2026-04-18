@@ -13,6 +13,11 @@ adb shell "systemctl enable display.service"
 adb shell reboot
 ```
 
+BootArgs fbcon rotate will rotate the display framebuffer
+```
+bootargs = "earlycon=uart8250,mmio32,0xff0a0000 console=tty1 console=ttyFIQ0 fbcon=rotate:3 root=/dev/mmcblk0p3 rootfstype=ext4 rootwait snd_aloop.index=7 snd_aloop.use_raw_jiffies=1";
+```
+
 <img width="1168" height="1866" alt="image" src="https://github.com/user-attachments/assets/17a31d34-b958-4719-9ed5-9efc46df19c4" />
 
 <img width="1598" height="2444" alt="image" src="https://github.com/user-attachments/assets/81583579-d62e-4e32-9148-6f658c093045" />
