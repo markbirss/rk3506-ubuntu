@@ -25,6 +25,10 @@ Board Name | USB |  Repo |
 |:--|:--|:--|
 | U7-RK3506-128+256HMI 1024x600 7" | USB | https://github.com/markbirss/u7.git |
 
+<img width="600" height="1024" alt="image" src="https://github.com/user-attachments/assets/53e3861a-1731-40b9-84bd-127ab81d78d7" />
+
+
+
 #IMPORTANT NOTE
 This SDK is provided for non commercial use only
 
