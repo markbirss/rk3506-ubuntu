@@ -8,12 +8,14 @@
 <img width="1014" height="732" alt="image" src="https://github.com/user-attachments/assets/2813c5c0-5395-42e9-b252-179bc68a3b8d" />
 
 Enable Console Display Rotation (Does not affect Framebuffer Display Rotation)
+
 ```
 adb shell "systemctl enable display.service"
 adb shell reboot
 ```
 
-BootArgs fbcon rotate will rotate the display framebuffer
+Changing bootargs fbcon rotate will rotate the display framebuffer
+
 ```
 bootargs = "earlycon=uart8250,mmio32,0xff0a0000 console=tty1 console=ttyFIQ0 fbcon=rotate:3 root=/dev/mmcblk0p3 rootfstype=ext4 rootwait snd_aloop.index=7 snd_aloop.use_raw_jiffies=1";
 ```
