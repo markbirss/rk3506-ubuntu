@@ -27,6 +27,7 @@ Board Name | USB |  Repo |
 
 <img width="600" height="1024" alt="image" src="https://github.com/user-attachments/assets/53e3861a-1731-40b9-84bd-127ab81d78d7" />
 
+<img width="1234" height="628" alt="image" src="https://github.com/user-attachments/assets/ddfacd8a-06e0-4ca7-875a-d475b33d90d4" />
 
 
 #IMPORTANT NOTE
